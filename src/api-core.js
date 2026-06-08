@@ -1,0 +1,524 @@
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
+
+const QUIZ_TYPE_LABELS = {
+  vocab: 'Từ vựng',
+  listening: 'Nghe',
+  dialogue: 'Hội thoại',
+  reading: 'Đọc hiểu',
+  translation: 'Dịch đoạn',
+  cloze: 'Điền từ',
+};
+
+async function request(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+function shuffle(items) {
+  return [...items].sort(() => Math.random() - 0.5);
+}
+
+// LƯU Ý ĐỒNG BỘ: các hàm dựng câu/đoạn dưới đây (richParagraph, dialogueLine,
+// listeningLine) là bản offline song song với backend question_generator.py.
+// Khi đổi template ở một bên, cập nhật bên còn lại để tránh lệch nội dung.
+
+function richParagraph(card, index = 0) {
+  const sentence = card.exampleSentence || `${card.character}。`;
+  const vi = card.exampleVi || card.meaning;
+  const meaning = card.meaning || 'nghĩa chính';
+  const variants = [
+    {
+      cn: `今天上午，我在学校学习中文。老师先说：“${sentence}” 然后让我们解释“${card.character}”的意思。下课以后，我把这个词、拼音和例句写在本子上，晚上再复习一遍。`,
+      vi: `Sáng nay, tôi học tiếng Trung ở trường. Giáo viên nói trước: “${vi}” Sau đó, giáo viên yêu cầu chúng tôi giải thích nghĩa của “${card.character}”. Sau giờ học, tôi ghi từ này, pinyin và câu ví dụ vào vở, buổi tối ôn lại một lần nữa.`,
+    },
+    {
+      cn: `昨天晚上，我和朋友练习口语。我们用“${card.character}”造了一个句子：“${sentence}” 因为这个词和日常生活有关，所以我觉得它很容易记住，也很适合在聊天时使用。`,
+      vi: `Tối hôm qua, tôi luyện nói với bạn. Chúng tôi dùng “${card.character}” để đặt một câu: “${vi}” Vì từ này liên quan đến đời sống hằng ngày, nên tôi thấy nó dễ nhớ và cũng phù hợp để dùng khi trò chuyện.`,
+    },
+    {
+      cn: `这周我给自己定了一个小目标：每天记十个汉语词。今天的重点词是“${card.character}”，意思是“${meaning}”。我先读例句“${sentence}”，再听发音，最后用自己的话说一遍。`,
+      vi: `Tuần này tôi đặt cho mình một mục tiêu nhỏ: mỗi ngày ghi nhớ mười từ tiếng Trung. Từ trọng tâm hôm nay là “${card.character}”, nghĩa là “${meaning}”. Tôi đọc câu ví dụ “${vi}” trước, sau đó nghe phát âm, cuối cùng nói lại bằng lời của mình.`,
+    },
+  ];
+  return variants[index % variants.length];
+}
+
+function listeningLine(card) {
+  return {
+    cn: card.exampleSentence || card.character,
+    vi: card.exampleVi || card.meaning,
+  };
+}
+
+function dialogueLine(card, index = 0) {
+  const line = listeningLine(card);
+  const meaning = card.meaning || 'nghĩa chính';
+  const variants = [
+    {
+      cn: `A：你今天在学习什么？B：我在学习“${card.character}”。老师说：“${line.cn}” A：这个词是什么意思？B：它的意思是“${meaning}”，我晚上还会复习。`,
+      vi: `A hỏi hôm nay học gì. B nói đang học “${card.character}”, nghe câu “${line.vi}”, giải thích nghĩa là “${meaning}” và tối sẽ ôn lại.`,
+      optionVi: `B học “${card.character}” và sẽ ôn lại.`,
+    },
+    {
+      cn: `A：刚才老师说了哪个句子？B：老师说：“${line.cn}” A：你听懂了吗？B：听懂了，重点词是“${card.character}”，意思是“${meaning}”。`,
+      vi: `A hỏi giáo viên vừa nói câu nào. B nhắc lại “${line.vi}”, nói đã nghe hiểu, từ trọng tâm là “${card.character}”, nghĩa là “${meaning}”.`,
+      optionVi: `B nghe hiểu câu về “${card.character}”.`,
+    },
+  ];
+  return variants[index % variants.length];
+}
+
+async function localQuestions({ level, quiz_type, limit }) {
+  const { loadAllFlashcards } = await import('./vocab-loader');
+  const cards = (await loadAllFlashcards()).filter(card => card.hskLevel === Number(level));
+  const pool = cards.length >= 4 ? cards : (await loadAllFlashcards()).slice(0, 80);
+  const typeSeed = [...String(quiz_type)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
+  return shuffle(pool).slice(0, limit).map((card, index) => {
+    const distractors = shuffle(pool.filter(item => item.id !== card.id)).slice(0, 3);
+    const paragraph = richParagraph(card, index);
+    const byType = quiz_type === 'vocab'
+      ? [card.meaning, ...distractors.map(item => item.meaning)]
+      : quiz_type === 'listening'
+        ? [listeningLine(card).vi, ...distractors.map(item => listeningLine(item).vi)]
+        : quiz_type === 'dialogue'
+          ? [dialogueLine(card, index).optionVi, ...distractors.map((item, itemIndex) => dialogueLine(item, itemIndex).optionVi)]
+      : quiz_type === 'translation'
+        ? [paragraph.vi, ...distractors.map((item, itemIndex) => richParagraph(item, itemIndex).vi)]
+        : quiz_type === 'cloze'
+          ? [card.character, ...distractors.map(item => item.character)]
+        : [card.character, ...distractors.map(item => item.character)];
+    const correctValue = byType[0];
+    const options = shuffle([...new Set(byType)]).slice(0, 4);
+    return {
+      id: Number(`${level}${typeSeed}${index + 1}${Date.now().toString().slice(-4)}`),
+      level: Number(level),
+      local: true,
+      offline: true,
+      quiz_type,
+      prompt: quiz_type === 'vocab'
+        ? `Chọn nghĩa đúng của: ${card.character}`
+        : quiz_type === 'listening'
+          ? 'Nghe câu và chọn nghĩa tiếng Việt đúng'
+          : quiz_type === 'dialogue'
+            ? 'Nghe đoạn hội thoại và chọn ý đúng'
+          : quiz_type === 'translation'
+            ? `Dịch đoạn nói sau sang tiếng Việt: ${paragraph.cn}`
+            : quiz_type === 'cloze'
+              ? `Chọn từ còn thiếu để hoàn chỉnh câu: ${paragraph.cn.replace(card.character, '____')}`
+            : `Đọc nghĩa và chọn từ phù hợp: ${card.meaning}`,
+      options,
+      audio_text: quiz_type === 'listening'
+        ? listeningLine(card).cn
+        : quiz_type === 'dialogue'
+          ? dialogueLine(card, index).cn
+          : quiz_type === 'translation'
+            ? paragraph.cn
+            : '',
+      explanation: quiz_type === 'translation'
+        ? `${paragraph.cn} · ${paragraph.vi}`
+        : quiz_type === 'dialogue'
+          ? `${dialogueLine(card, index).cn} · ${dialogueLine(card, index).vi}`
+          : quiz_type === 'listening'
+            ? `${listeningLine(card).cn} · ${listeningLine(card).vi}`
+            : `${card.character} · ${card.pinyin} · ${card.meaning}`,
+      correct_index: Math.max(0, options.indexOf(correctValue)),
+      word: {
+        level: card.hskLevel,
+        hanzi: card.character,
+        pinyin: card.pinyin || '',
+        meaning_vi: card.meaning || '',
+      },
+    };
+  }).filter(q => q.options.length === 4);
+}
+
+export async function startQuiz(payload) {
+  try {
+    const data = await request('/api/quiz', { method: 'POST', body: JSON.stringify(payload) });
+    if (Array.isArray(data.questions) && data.questions.length) return data;
+    const questions = await localQuestions(payload);
+    return { questions, offline: true, empty_remote: true };
+  } catch {
+    const questions = await localQuestions(payload);
+    return { questions, offline: true };
+  }
+}
+
+export async function getTodaySession({ userId = 'local-user', focusLevel = 1, mode = 'standard' } = {}) {
+  const params = new URLSearchParams({
+    user_id: userId,
+    focus_level: String(focusLevel),
+    mode,
+  });
+  return request(`/api/session/today?${params.toString()}`);
+}
+
+export async function startLearningSession(payload) {
+  try {
+    return await request('/api/session/start', { method: 'POST', body: JSON.stringify(payload) });
+  } catch {
+    return {
+      id: Number(`9${Date.now().toString().slice(-8)}`),
+      user_id: payload.user_id || 'local-user',
+      session_type: payload.session_type || 'standard',
+      behavior_state: payload.behavior_state || 'maintenance',
+      estimated_minutes: payload.estimated_minutes || 20,
+      reason: payload.reason || '',
+      offline: true,
+    };
+  }
+}
+
+function localLearningEvent(payload, question = null) {
+  const correctIndex = question?.correct_index ?? 0;
+  const correct = payload.selected_index === correctIndex;
+  return {
+    event_id: null,
+    question_id: payload.question_id,
+    correct,
+    correct_index: correctIndex,
+    explanation: question?.explanation || '',
+    error_tag: correct ? '' : payload.error_tag || (question?.quiz_type === 'listening' || question?.quiz_type === 'dialogue' ? 'sound_error' : 'meaning_error'),
+    next_review_at: new Date(Date.now() + (correct ? 24 : 1) * 60 * 60 * 1000).toISOString(),
+    offline: true,
+  };
+}
+
+export async function recordLearningEvent(payload, question = null) {
+  if (question?.local || question?.offline) return localLearningEvent(payload, question);
+  try {
+    return await request('/api/session/event', { method: 'POST', body: JSON.stringify(payload) });
+  } catch {
+    return localLearningEvent(payload, question);
+  }
+}
+
+export async function completeLearningSession(payload) {
+  try {
+    return await request('/api/session/complete', { method: 'POST', body: JSON.stringify(payload) });
+  } catch {
+    return {
+      id: payload.session_id,
+      completed_at: new Date().toISOString(),
+      offline: true,
+    };
+  }
+}
+
+const CHINESE_CHAR_PATTERN = /[\u3400-\u9fff]/g;
+const SENTENCE_PUNCTUATION_PATTERN = /[。！？!?]/;
+
+function localOutputAssessment(responseText, targetWord) {
+  const text = String(responseText || '').replace(/\s+/g, ' ').trim();
+  const target = String(targetWord || '').trim();
+  const chineseCount = text.match(CHINESE_CHAR_PATTERN)?.length || 0;
+  const usedTarget = Boolean(target && text.includes(target));
+  const chineseOnly = text.replace(/[\s“”"'，,。！？!?]/g, '');
+  const onlyTarget = Boolean(target && chineseOnly === target);
+  const enoughContext = chineseCount >= Math.max(4, target.length + 2);
+  const sentenceShape = SENTENCE_PUNCTUATION_PATTERN.test(text) || chineseCount >= Math.max(6, target.length + 4);
+  const score = Math.min(100,
+    (usedTarget ? 45 : 0)
+    + (chineseCount ? 15 : 0)
+    + (enoughContext ? 22 : 0)
+    + (sentenceShape ? 10 : 0)
+    + (!/[A-Za-zÀ-ỹ]/.test(text) || chineseCount >= 4 ? 8 : 0)
+  );
+  let feedback;
+  if (!text) feedback = 'Nhập một câu tiếng Trung có từ mục tiêu.';
+  else if (!chineseCount) feedback = 'Câu cần viết bằng chữ Hán, không phải pinyin hoặc tiếng Việt.';
+  else if (!usedTarget) feedback = `Câu chưa dùng từ mục tiêu ${target}.`;
+  else if (onlyTarget || !enoughContext) feedback = `Mới có ${target}, chưa thành câu có ngữ cảnh.`;
+  else if (!sentenceShape) feedback = 'Câu còn cụt, hãy thêm kết thúc câu hoặc ngữ cảnh rõ hơn.';
+  else feedback = `Đã dùng ${target} trong câu tiếng Trung có ngữ cảnh.`;
+  return {
+    correct: usedTarget && chineseCount > 0 && enoughContext && sentenceShape && !onlyTarget,
+    score,
+    usedTarget,
+    feedback,
+  };
+}
+
+export async function submitOutputEvent(payload) {
+  try {
+    return await request('/api/session/output', { method: 'POST', body: JSON.stringify(payload) });
+  } catch {
+    const target = payload.target_word || '';
+    const assessment = localOutputAssessment(payload.response_text, target);
+    return {
+      event_id: null,
+      correct: assessment.correct,
+      score: assessment.score,
+      target_word: target,
+      used_target: assessment.usedTarget,
+      production_score: assessment.score,
+      feedback: assessment.feedback,
+      next_practice_at: assessment.correct ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      offline: true,
+    };
+  }
+}
+
+export async function submitQuiz(payload, questions = []) {
+  const hasLocalQuestions = questions.some(question => question?.local || question?.offline);
+  try {
+    if (hasLocalQuestions) throw new Error('Local quiz questions');
+    const submitted = await request('/api/quiz/submit', { method: 'POST', body: JSON.stringify(payload) });
+    if (!questions.length || (submitted.total || 0) >= payload.answers.length) return submitted;
+    throw new Error('Remote submit missed local questions');
+  } catch {
+    const byId = new Map(questions.map(q => [q.id, q]));
+    const results = payload.answers.map(answer => {
+      const q = byId.get(answer.question_id);
+      const correct = q ? answer.selected_index === q.correct_index : false;
+      return {
+        question_id: answer.question_id,
+        correct,
+        correct_index: q?.correct_index ?? 0,
+        explanation: q?.explanation || '',
+      };
+    });
+    const score = results.filter(r => r.correct).length;
+    const stats = readLocalStats();
+    const next = {
+      attempts: stats.attempts + 1,
+      answered: stats.answered + results.length,
+      correct: stats.correct + score,
+    };
+    const answerDetails = payload.answers.map(answer => {
+      const q = byId.get(answer.question_id);
+      return {
+        question_id: answer.question_id,
+        selected_index: answer.selected_index,
+        latency_ms: answer.latency_ms ?? null,
+        confidence: answer.confidence ?? null,
+        error_tag: answer.error_tag ?? null,
+        correct: q ? answer.selected_index === q.correct_index : false,
+        prompt: q?.prompt || '',
+        word: q?.word || null,
+      };
+    });
+    localStorage.setItem('coreStats', JSON.stringify(next));
+    writeLocalHistory({
+      id: Date.now(),
+      created_at: new Date().toISOString(),
+      level: payload.level,
+      quiz_type: payload.quiz_type,
+      score,
+      total: results.length,
+      answers: answerDetails,
+    });
+    return { score, total: results.length, results, offline: true };
+  }
+}
+
+function readLocalStats() {
+  try { return JSON.parse(localStorage.getItem('coreStats')) || { attempts: 0, answered: 0, correct: 0 }; }
+  catch { return { attempts: 0, answered: 0, correct: 0 }; }
+}
+
+function readLocalHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem('coreHistory'));
+    return Array.isArray(history) ? history : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalHistory(attempt) {
+  const history = readLocalHistory();
+  const next = [...history, attempt].slice(-80);
+  localStorage.setItem('coreHistory', JSON.stringify(next));
+}
+
+function pct(correct, total) {
+  return total ? Math.round((correct / total) * 100) : 0;
+}
+
+function buildTypeBreakdown(history) {
+  const rows = Object.entries(QUIZ_TYPE_LABELS).map(([quizType, label]) => ({
+    quiz_type: quizType,
+    label,
+    attempts: 0,
+    answered: 0,
+    correct: 0,
+    accuracy: 0,
+  }));
+  const byType = new Map(rows.map(row => [row.quiz_type, row]));
+  history.forEach(attempt => {
+    const row = byType.get(attempt.quiz_type);
+    if (!row) return;
+    row.attempts += 1;
+    row.answered += attempt.total || 0;
+    row.correct += attempt.score || 0;
+  });
+  rows.forEach(row => { row.accuracy = pct(row.correct, row.answered); });
+  return rows;
+}
+
+function buildLevelBreakdown(history) {
+  const rows = Array.from({ length: 6 }, (_, index) => ({
+    level: index + 1,
+    attempts: 0,
+    answered: 0,
+    correct: 0,
+    accuracy: 0,
+  }));
+  history.forEach(attempt => {
+    const row = rows[Number(attempt.level) - 1];
+    if (!row) return;
+    row.attempts += 1;
+    row.answered += attempt.total || 0;
+    row.correct += attempt.score || 0;
+  });
+  rows.forEach(row => { row.accuracy = pct(row.correct, row.answered); });
+  return rows;
+}
+
+function buildWeakWords(history) {
+  const words = new Map();
+  history.flatMap(attempt => attempt.answers || []).forEach(answer => {
+    if (!answer.word?.hanzi) return;
+    const key = `${answer.word.level || 1}-${answer.word.hanzi}`;
+    const row = words.get(key) || {
+      level: answer.word.level || 1,
+      hanzi: answer.word.hanzi,
+      pinyin: answer.word.pinyin || '',
+      meaning_vi: answer.word.meaning_vi || '',
+      seen: 0,
+      wrong: 0,
+      correct: 0,
+      accuracy: 0,
+      mastery: 0,
+    };
+    row.seen += 1;
+    row.correct += answer.correct ? 1 : 0;
+    row.wrong += answer.correct ? 0 : 1;
+    words.set(key, row);
+  });
+  return [...words.values()]
+    .map(row => ({ ...row, accuracy: pct(row.correct, row.seen), mastery: Math.max(0, Math.min(100, row.correct * 14 - row.wrong * 18)) }))
+    .sort((a, b) => a.accuracy - b.accuracy || a.mastery - b.mastery || b.wrong - a.wrong || b.seen - a.seen)
+    .slice(0, 6);
+}
+
+function buildLocalAnalytics() {
+  const stats = readLocalStats();
+  const history = readLocalHistory();
+  const typeBreakdown = buildTypeBreakdown(history);
+  const levelBreakdown = buildLevelBreakdown(history);
+  const weakWordList = buildWeakWords(history);
+  const answered = stats.answered || history.reduce((sum, attempt) => sum + (attempt.total || 0), 0);
+  const correct = stats.correct || history.reduce((sum, attempt) => sum + (attempt.score || 0), 0);
+  const accuracy = pct(correct, answered);
+  const practicedTypes = typeBreakdown.filter(item => item.answered > 0);
+  const practicedLevels = levelBreakdown.filter(item => item.answered > 0);
+  const weakestType = practicedTypes.sort((a, b) => a.accuracy - b.accuracy || b.answered - a.answered)[0];
+  const weakestLevel = practicedLevels.sort((a, b) => a.accuracy - b.accuracy || b.answered - a.answered)[0];
+  const recommendedLevel = weakWordList[0]?.level || weakestLevel?.level || 1;
+  const recommendedType = weakestType?.accuracy < 72 ? weakestType.quiz_type : 'vocab';
+  const weakCount = weakWordList.filter(item => item.accuracy < 60).length;
+  const recommendedStrategy = weakCount ? 'repair' : practicedTypes.length >= 2 && accuracy >= 70 ? 'interleaved' : 'targeted';
+  const eventCount = history.reduce((sum, attempt) => sum + (attempt.total || 0), 0);
+  const confidenceValues = history.flatMap(attempt => attempt.answers || []).map(answer => answer.confidence).filter(Boolean);
+  const latencyValues = history.flatMap(attempt => attempt.answers || []).map(answer => answer.latency_ms).filter(value => value !== null && value !== undefined);
+  const confidenceAvg = confidenceValues.length ? Number((confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length).toFixed(2)) : 0;
+  const latencyAvgMs = latencyValues.length ? Math.round(latencyValues.reduce((sum, value) => sum + value, 0) / latencyValues.length) : 0;
+  const focusWords = weakWordList.slice(0, 4).map(item => item.hanzi);
+  const reason = focusWords.length
+    ? `Nhóm từ ${focusWords.join(', ')} đang sai nhiều, nên luyện lại bằng câu hỏi mới.`
+    : weakestType
+      ? `Dạng ${weakestType.label} đang thấp hơn các phần còn lại.`
+      : 'Chưa đủ dữ liệu, nên bắt đầu bằng từ vựng HSK 1 để tạo đường chuẩn.';
+
+  return {
+    attempts: stats.attempts || history.length,
+    answered,
+    accuracy,
+    mastery_label: accuracy >= 80 ? 'Bền vững' : accuracy >= 55 ? 'Ổn định' : answered ? 'Đang xây' : 'Khởi động',
+    weak_words: weakCount,
+    memory_stability: accuracy,
+    listening_readiness: typeBreakdown.find(item => item.quiz_type === 'listening')?.accuracy || 0,
+    context_transfer: Math.round(((typeBreakdown.find(item => item.quiz_type === 'reading')?.accuracy || 0) + (typeBreakdown.find(item => item.quiz_type === 'cloze')?.accuracy || 0) + (typeBreakdown.find(item => item.quiz_type === 'translation')?.accuracy || 0)) / 3),
+    production_readiness: readLocalProductionReadiness(),
+    event_count: eventCount,
+    due_count: weakCount,
+    confidence_avg: confidenceAvg,
+    latency_avg_ms: latencyAvgMs,
+    type_breakdown: typeBreakdown,
+    level_breakdown: levelBreakdown,
+    recent_trend: history.slice(-8).map((attempt, index, rows) => ({
+      label: `P${history.length - rows.length + index + 1}`,
+      level: attempt.level,
+      quiz_type: attempt.quiz_type,
+      score: attempt.score,
+      total: attempt.total,
+      accuracy: pct(attempt.score, attempt.total),
+    })),
+    weak_word_list: weakWordList,
+    recommendation: {
+      level: recommendedLevel,
+      quiz_type: recommendedType,
+      title: `HSK ${recommendedLevel} · ${QUIZ_TYPE_LABELS[recommendedType] || 'Từ vựng'}`,
+      reason,
+      target_accuracy: 80,
+      focus_words: focusWords,
+      recommended_strategy: recommendedStrategy,
+    },
+    offline: true,
+  };
+}
+
+function readLocalProductionReadiness() {
+  try {
+    const summaries = JSON.parse(localStorage.getItem('learningSessionSummaries')) || [];
+    const outputs = summaries.flatMap(session => session.answers || []).filter(answer => answer.item_type === 'guided_output');
+    if (!outputs.length) return 0;
+    return Math.round((outputs.filter(answer => answer.correct).length / outputs.length) * 100);
+  } catch {
+    return 0;
+  }
+}
+
+function localStatsOut(extra = {}) {
+  const stats = readLocalStats();
+  const accuracy = stats.answered ? Math.round((stats.correct / stats.answered) * 100) : 0;
+  return {
+    attempts: stats.attempts,
+    answered: stats.answered,
+    accuracy,
+    mastery_label: accuracy >= 80 ? 'Bền vững' : accuracy >= 55 ? 'Ổn định' : stats.answered ? 'Đang xây' : 'Khởi động',
+    weak_words: accuracy && accuracy < 60 ? 1 : 0,
+    offline: true,
+    ...extra,
+  };
+}
+
+export async function getStats(userId = 'local-user') {
+  try {
+    const remote = await request(`/api/stats?user_id=${encodeURIComponent(userId)}`);
+    const local = localStatsOut({ backend_empty: true });
+    if ((!remote.answered || remote.answered < local.answered) && local.answered) return local;
+    return remote;
+  } catch {
+    return localStatsOut();
+  }
+}
+
+export async function getAnalytics(userId = 'local-user') {
+  const local = buildLocalAnalytics();
+  try {
+    const remote = await request(`/api/analytics?user_id=${encodeURIComponent(userId)}`);
+    if ((!remote.answered || remote.answered < local.answered) && local.answered) {
+      return { ...local, backend_empty: true };
+    }
+    return remote;
+  } catch {
+    return local;
+  }
+}

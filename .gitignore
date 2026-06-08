@@ -11,10 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+*.db
+backend/.venv/
+backend/server*.log
+__pycache__/
+*.py[cod]
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+.vs/
 .idea
 .DS_Store
 *.suo
