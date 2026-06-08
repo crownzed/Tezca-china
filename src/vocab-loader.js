@@ -5,6 +5,19 @@
 
 let cachedAllCards = null;
 
+function isReliableCard(card) {
+  const level = Number(card.hskLevel ?? card.level);
+  return Boolean(
+    level >= 1
+    && level <= 6
+    && card.character
+    && card.pinyin
+    && card.pinyin !== '...'
+    && card.meaning
+    && card.meaning !== 'Từ ghép'
+  );
+}
+
 export async function loadAllFlashcards() {
   if (cachedAllCards) return cachedAllCards;
 
@@ -26,12 +39,19 @@ export async function loadAllFlashcards() {
       console.warn('Mega vocab failed, using smaller pool:', e.message);
     }
 
-    const existingChars = new Set(richCards.map(c => c.character));
-    bankCards.forEach(c => existingChars.add(c.character));
+    const byLevelAndChar = new Map();
+    const addCard = (card) => {
+      if (!isReliableCard(card)) return;
+      const key = `${card.hskLevel}-${card.character}`;
+      const current = byLevelAndChar.get(key);
+      const score = (Array.isArray(card.examples) ? card.examples.length * 3 : 0) + (card.exampleSentence ? 2 : 0) + (card.mnemonic ? 1 : 0);
+      const currentScore = current ? (Array.isArray(current.examples) ? current.examples.length * 3 : 0) + (current.exampleSentence ? 2 : 0) + (current.mnemonic ? 1 : 0) : -1;
+      if (!current || score > currentScore) byLevelAndChar.set(key, card);
+    };
 
-    const newMega = megaCards.filter(c => !existingChars.has(c.character));
+    [...richCards, ...bankCards, ...megaCards].forEach(addCard);
 
-    cachedAllCards = [...richCards, ...bankCards, ...newMega];
+    cachedAllCards = [...byLevelAndChar.values()].sort((a, b) => Number(a.hskLevel) - Number(b.hskLevel));
     return cachedAllCards;
   } catch (err) {
     console.error('Vocab loader error:', err);
