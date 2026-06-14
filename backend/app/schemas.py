@@ -241,3 +241,76 @@ class SessionOutputOut(BaseModel):
     production_score: int
     feedback: str
     next_practice_at: str | None = None
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    email: str = Field(min_length=5, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
+    display_name: str | None = Field(default=None, max_length=64)
+
+
+class LoginRequest(BaseModel):
+    login: str = Field(min_length=3, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class UserOut(BaseModel):
+    id: str
+    username: str
+    email: str
+    display_name: str
+    leaderboard_opt_in: bool
+    created_at: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserOut
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: str | None = Field(default=None, max_length=64)
+    leaderboard_opt_in: bool | None = None
+
+
+class LeaderboardEntryOut(BaseModel):
+    rank: int | None = None
+    user_id: str
+    display_name: str
+    points: int
+    quiz_count: int = 0
+    session_count: int = 0
+    mastery_count: int = 0
+
+
+class LeaderboardOut(BaseModel):
+    period: str
+    entries: list[LeaderboardEntryOut]
+    me: LeaderboardEntryOut | None = None
+
+
+class TitleOut(BaseModel):
+    id: str
+    label: str
+    description: str
+    earned: bool
+
+
+class ProfileStatsOut(BaseModel):
+    study_days: int
+    current_streak: int
+    longest_streak: int
+    studied_today: bool = False
+    quiz_count: int = 0
+    session_count: int = 0
+    mastery_count: int = 0
+    points: int = 0
+    accuracy: int = 0
+    earned_titles: int = 0
+    titles: list[TitleOut]
+
+
+class ProfileOut(BaseModel):
+    user: UserOut
+    stats: ProfileStatsOut

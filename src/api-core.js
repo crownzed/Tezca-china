@@ -1,4 +1,28 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000');
+
+let authToken = null;
+
+export function setAuthToken(token) {
+  authToken = token || null;
+}
+
+async function request(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers,
+    ...options,
+  });
+  if (!res.ok) {
+    let detail = `API ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+    } catch { /* ignore */ }
+    throw new Error(detail);
+  }
+  return res.json();
+}
 
 const QUIZ_TYPE_LABELS = {
   vocab: 'Từ vựng',
@@ -9,17 +33,13 @@ const QUIZ_TYPE_LABELS = {
   cloze: 'Điền từ',
 };
 
-async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
-}
-
 function shuffle(items) {
-  return [...items].sort(() => Math.random() - 0.5);
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
 }
 
 // LƯU Ý ĐỒNG BỘ: các hàm dựng câu/đoạn dưới đây (richParagraph, dialogueLine,
@@ -74,8 +94,9 @@ function dialogueLine(card, index = 0) {
 
 async function localQuestions({ level, quiz_type, limit }) {
   const { loadAllFlashcards } = await import('./vocab-loader');
-  const cards = (await loadAllFlashcards()).filter(card => card.hskLevel === Number(level));
-  const pool = cards.length >= 4 ? cards : (await loadAllFlashcards()).slice(0, 80);
+  const allCards = await loadAllFlashcards();
+  const cards = allCards.filter(card => card.hskLevel === Number(level));
+  const pool = cards.length >= 4 ? cards : allCards.slice(0, 80);
   const typeSeed = [...String(quiz_type)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
   return shuffle(pool).slice(0, limit).map((card, index) => {
     const distractors = shuffle(pool.filter(item => item.id !== card.id)).slice(0, 3);
@@ -111,11 +132,9 @@ async function localQuestions({ level, quiz_type, limit }) {
               ? `Chọn từ còn thiếu để hoàn chỉnh câu: ${paragraph.cn.replace(card.character, '____')}`
             : `Đọc nghĩa và chọn từ phù hợp: ${card.meaning}`,
       options,
-      audio_text: quiz_type === 'listening'
+      audio_text: quiz_type === 'listening' || quiz_type === 'dialogue'
         ? listeningLine(card).cn
-        : quiz_type === 'dialogue'
-          ? dialogueLine(card, index).cn
-          : quiz_type === 'translation'
+        : quiz_type === 'translation'
             ? paragraph.cn
             : '',
       explanation: quiz_type === 'translation'
@@ -520,5 +539,152 @@ export async function getAnalytics(userId = 'local-user') {
     return remote;
   } catch {
     return local;
+  }
+}
+
+export async function registerUser(payload) {
+  return request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function loginUser(payload) {
+  return request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function getMe() {
+  return request('/api/auth/me');
+}
+
+export async function updateProfile(payload) {
+  return request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function getLeaderboard(period = 'all_time') {
+  return request(`/api/leaderboard?period=${encodeURIComponent(period)}&limit=50`);
+}
+
+function toLocalDate(iso) {
+  if (!iso) return null;
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return null;
+  return value.toISOString().slice(0, 10);
+}
+
+function computeLocalStreaks(dateKeys) {
+  const activeDates = new Set(dateKeys.filter(Boolean));
+  const studyDays = activeDates.size;
+  if (!studyDays) {
+    return { study_days: 0, current_streak: 0, longest_streak: 0, studied_today: false };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const studiedToday = activeDates.has(today);
+
+  let current = 0;
+  const anchor = studiedToday ? today : (activeDates.has(yesterday) ? yesterday : null);
+  if (anchor) {
+    let cursor = new Date(`${anchor}T00:00:00Z`);
+    while (activeDates.has(cursor.toISOString().slice(0, 10))) {
+      current += 1;
+      cursor = new Date(cursor.getTime() - 86400000);
+    }
+  }
+
+  const sorted = [...activeDates].sort();
+  let longest = 1;
+  let run = 1;
+  for (let index = 1; index < sorted.length; index += 1) {
+    const prev = new Date(`${sorted[index - 1]}T00:00:00Z`);
+    const currentDate = new Date(`${sorted[index]}T00:00:00Z`);
+    if ((currentDate.getTime() - prev.getTime()) / 86400000 === 1) run += 1;
+    else run = 1;
+    longest = Math.max(longest, run);
+  }
+
+  return {
+    study_days: studyDays,
+    current_streak: current,
+    longest_streak: longest,
+    studied_today: studiedToday,
+  };
+}
+
+function buildLocalTitles(metrics) {
+  const checks = {
+    first_quiz: metrics.quiz_count >= 1,
+    quiz_10: metrics.quiz_count >= 10,
+    streak_3: metrics.longest_streak >= 3,
+    streak_7: metrics.longest_streak >= 7,
+    streak_30: metrics.longest_streak >= 30,
+    days_7: metrics.study_days >= 7,
+    days_30: metrics.study_days >= 30,
+    mastery_10: metrics.mastery_count >= 10,
+    mastery_50: metrics.mastery_count >= 50,
+    session_5: metrics.session_count >= 5,
+    points_500: metrics.points >= 500,
+    points_2000: metrics.points >= 2000,
+  };
+  const defs = [
+    { id: 'first_quiz', label: 'Bước đầu', description: 'Hoàn thành 1 bài luyện' },
+    { id: 'quiz_10', label: 'Cần cù', description: 'Hoàn thành 10 bài luyện' },
+    { id: 'streak_3', label: 'Ba ngày liên tiếp', description: 'Học liên tục 3 ngày' },
+    { id: 'streak_7', label: 'Tuần vàng', description: 'Học liên tục 7 ngày' },
+    { id: 'streak_30', label: 'Tháng sắt', description: 'Học liên tục 30 ngày' },
+    { id: 'days_7', label: 'Khám phá', description: 'Học trong 7 ngày khác nhau' },
+    { id: 'days_30', label: 'Người ham học', description: 'Học trong 30 ngày khác nhau' },
+    { id: 'mastery_10', label: 'Từ vựng tinh', description: 'Thuộc 10 từ (mastery ≥ 80)' },
+    { id: 'mastery_50', label: 'Từ điển sống', description: 'Thuộc 50 từ (mastery ≥ 80)' },
+    { id: 'session_5', label: 'Phiên học đều', description: 'Hoàn thành 5 phiên học' },
+    { id: 'points_500', label: '500 điểm', description: 'Đạt 500 điểm xếp hạng' },
+    { id: 'points_2000', label: 'Cao thủ', description: 'Đạt 2000 điểm xếp hạng' },
+  ];
+  return defs.map(item => ({ ...item, earned: Boolean(checks[item.id]) }));
+}
+
+function buildLocalProfileStats() {
+  const history = readLocalHistory();
+  const stats = readLocalStats();
+  const dateKeys = history.map(item => toLocalDate(item.created_at)).filter(Boolean);
+  try {
+    const summaries = JSON.parse(localStorage.getItem('learningSessionSummaries')) || [];
+    summaries.forEach(item => {
+      const key = toLocalDate(item.completed_at || item.started_at);
+      if (key) dateKeys.push(key);
+    });
+  } catch { /* ignore */ }
+
+  const streaks = computeLocalStreaks(dateKeys);
+  const answered = stats.answered || history.reduce((sum, item) => sum + (item.total || 0), 0);
+  const correct = stats.correct || history.reduce((sum, item) => sum + (item.score || 0), 0);
+  const metrics = {
+    ...streaks,
+    quiz_count: stats.attempts || history.length,
+    session_count: 0,
+    mastery_count: 0,
+    points: (stats.correct || 0) * 10,
+    accuracy: answered ? Math.round((correct / answered) * 100) : 0,
+  };
+  try {
+    const summaries = JSON.parse(localStorage.getItem('learningSessionSummaries')) || [];
+    metrics.session_count = summaries.filter(item => item.completed_at).length;
+  } catch { /* ignore */ }
+  const titles = buildLocalTitles(metrics);
+  return {
+    ...metrics,
+    earned_titles: titles.filter(item => item.earned).length,
+    titles,
+    offline: true,
+  };
+}
+
+export async function getUserProfile() {
+  try {
+    return await request('/api/auth/profile');
+  } catch {
+    return {
+      user: null,
+      stats: buildLocalProfileStats(),
+      offline: true,
+    };
   }
 }

@@ -34,7 +34,7 @@ export async function loadAllFlashcards() {
 
     let megaCards = [];
     try {
-      megaCards = megaModule.generateMegaVocab(20000) || [];
+      megaCards = megaModule.generateMegaVocab(5000) || [];
     } catch (e) {
       console.warn('Mega vocab failed, using smaller pool:', e.message);
     }

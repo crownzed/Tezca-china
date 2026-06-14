@@ -46,6 +46,39 @@ uvicorn app.main:app --reload
 
 Cấu hình API base qua biến môi trường `VITE_API_BASE` (mặc định `http://127.0.0.1:8000`).
 
+## Deploy online
+
+**Frontend (Firebase Hosting):** https://tiengtrung-49e13.web.app
+
+```bash
+npm run deploy
+```
+
+**Backend online** — chọn một trong hai cách:
+
+### Cách 1: Google Cloud Run (cùng project Firebase)
+
+1. Bật billing cho project `tiengtrung-49e13`: [Google Cloud Billing](https://console.cloud.google.com/billing/linkedaccount?project=tiengtrung-49e13)
+2. Deploy API:
+   ```bash
+   npm run deploy:api
+   ```
+3. Bật proxy `/api` trên Hosting và deploy lại:
+   ```bash
+   npm run deploy:all
+   ```
+
+### Cách 2: Render (miễn phí, không cần billing GCP)
+
+1. Đẩy repo lên GitHub, tạo **Blueprint** từ file `render.yaml` trên [Render](https://render.com)
+2. Sau khi có URL API (vd. `https://tiengtrung-api.onrender.com`), sửa `.env.production`:
+   ```
+   VITE_API_BASE=https://tiengtrung-api.onrender.com
+   ```
+3. Deploy lại frontend: `npm run deploy`
+
+> Khi chưa có backend online, app vẫn chạy được ở chế độ offline trên Firebase.
+
 ## Công nghệ
 
 React 19 + Vite · FastAPI · SQLAlchemy · SQLite

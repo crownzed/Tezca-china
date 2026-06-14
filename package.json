@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/generate-audio.mjs && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy --only hosting",
+    "deploy:api": "gcloud run deploy tiengtrung-api --source backend --region asia-southeast1 --allow-unauthenticated --project tiengtrung-49e13",
+    "deploy:all": "npm run deploy:api && copy firebase.cloudrun.json firebase.json && npm run deploy",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",
