@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, GraduationCap, Headphones, Languages, LineChart, Loader2, MessagesSquare, Moon, PenTool, Play, RotateCcw, Search, Send, ScrollText, ShieldCheck, Sun, Trophy, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessagesSquare, Moon, PenTool, Play, RotateCcw, Search, Send, ScrollText, ShieldCheck, Sun, Trophy, User, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
+import { AuthControls, AuthModalHost, LeaderboardPanel, ProfilePanel } from './auth-ui';
+import { useAuth } from './auth-context';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
 import { strategyFlags } from './strategy-flags';
+import { bindSpeechUnlock, getLocalAudioSrc, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
 
-const USER_ID = 'local-user';
 const THEME_PALETTE_VERSION = 'modern-zen-v1';
 const LEVELS = [1, 2, 3, 4, 5, 6];
 const QUIZ_TYPES = [
@@ -33,11 +35,12 @@ function quizTypeDescription(typeId) {
 
 const NAV = [
   { id: 'dashboard', label: 'Trang chính', icon: BarChart3 },
-  { id: 'lessons', label: 'Bài học', icon: GraduationCap },
-  { id: 'quiz', label: 'Quiz', icon: Play },
+  { id: 'quiz', label: 'Luyện tập', icon: Play },
   { id: 'vocab', label: 'Từ vựng', icon: Search },
   { id: 'apply', label: 'Luyện dùng', icon: Languages },
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
+  { id: 'leaderboard', label: 'Xếp hạng', icon: Trophy },
+  { id: 'profile', label: 'Hồ sơ', icon: User },
   { id: 'progress', label: 'Tiến độ', icon: LineChart },
 ];
 
@@ -59,176 +62,20 @@ function getInitialGeneralCheckState() {
   return window.localStorage.getItem('hskGeneralCheckState') || '';
 }
 
-let speechRunId = 0;
-let speechVoicesReadyPromise = null;
-
-function hasSpeechSupport() {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+function QuizAudioPanel({ audioText, audioPlaying, audioPlayed, audioError, isListeningMode, playAudio }) {
+  const src = getLocalAudioSrc(audioText);
+  return (
+    <div className={`audio-panel audio-panel--compact ${isListeningMode ? 'audio-panel--focus' : ''} ${audioError ? 'audio-panel--error' : ''}`}>
+      {src && <audio className="audio-native" controls preload="auto" src={src} key={src} />}
+      <button className="btn-primary audio-play-btn" type="button" onClick={() => playAudio(0.82)} disabled={audioPlaying}>
+        <Headphones size={16} />
+        {audioPlaying ? 'Đang phát...' : audioPlayed ? 'Nghe lại' : 'Nghe'}
+      </button>
+      {audioError && <p className="audio-error-text">Bấm nút play trên thanh âm thanh.</p>}
+    </div>
+  );
 }
 
-function stopSpeech() {
-  speechRunId += 1;
-  if (hasSpeechSupport()) window.speechSynthesis.cancel();
-}
-
-function getSpeechVoices() {
-  if (!hasSpeechSupport()) return [];
-  return window.speechSynthesis.getVoices() || [];
-}
-
-function loadSpeechVoices(timeout = 900) {
-  if (!hasSpeechSupport()) return Promise.resolve([]);
-  const current = getSpeechVoices();
-  if (current.length) return Promise.resolve(current);
-  if (speechVoicesReadyPromise) return speechVoicesReadyPromise;
-  speechVoicesReadyPromise = new Promise(resolve => {
-    const synth = window.speechSynthesis;
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      resolve(getSpeechVoices());
-    };
-    const timer = window.setTimeout(finish, timeout);
-    const onVoices = () => {
-      window.clearTimeout(timer);
-      finish();
-    };
-    if (typeof synth.addEventListener === 'function') {
-      synth.addEventListener('voiceschanged', onVoices, { once: true });
-    } else {
-      synth.onvoiceschanged = onVoices;
-    }
-  }).finally(() => {
-    speechVoicesReadyPromise = null;
-  });
-  return speechVoicesReadyPromise;
-}
-
-function scoreMandarinVoice(voice) {
-  const name = `${voice.name || ''} ${voice.voiceURI || ''}`.toLowerCase();
-  let score = 0;
-  if (/zh-cn|cmn-hans|zh_hans/i.test(voice.lang)) score += 8;
-  else if (/^zh/i.test(voice.lang)) score += 5;
-  if (/xiaoxiao|xiaoyi|huihui|yunxi|yunyang|tingting|meijia|google|microsoft|natural|premium|mandarin|普通话/i.test(name)) score += 5;
-  if (voice.localService) score += 1;
-  if (/compact|eloquence|novelty/i.test(name)) score -= 3;
-  return score;
-}
-
-function pickMandarinVoice(voices = getSpeechVoices()) {
-  return [...voices]
-    .filter(voice => /^zh/i.test(voice.lang) || /mandarin|普通话|xiaoxiao|huihui|yunxi|google/i.test(`${voice.name} ${voice.voiceURI}`))
-    .sort((a, b) => scoreMandarinVoice(b) - scoreMandarinVoice(a))[0] || null;
-}
-
-function getVoiceStatus() {
-  if (!hasSpeechSupport()) return { supported: false, ready: false, label: 'Không hỗ trợ voice', quality: 'none' };
-  const voices = getSpeechVoices();
-  const voice = pickMandarinVoice(voices);
-  if (!voices.length) return { supported: true, ready: false, label: 'Đang nạp voice', quality: 'loading' };
-  if (!voice) return { supported: true, ready: true, label: 'Voice mặc định', quality: 'fallback' };
-  const score = scoreMandarinVoice(voice);
-  return {
-    supported: true,
-    ready: true,
-    label: `${voice.name} · ${voice.lang}`,
-    quality: score >= 10 ? 'natural' : 'standard',
-  };
-}
-
-function useVoiceStatus() {
-  const [, setVersion] = useState(0);
-  useEffect(() => {
-    if (!hasSpeechSupport()) return undefined;
-    let alive = true;
-    const refresh = () => {
-      if (alive) setVersion(value => value + 1);
-    };
-    loadSpeechVoices().then(refresh);
-    const synth = window.speechSynthesis;
-    if (typeof synth.addEventListener === 'function') synth.addEventListener('voiceschanged', refresh);
-    else synth.onvoiceschanged = refresh;
-    return () => {
-      alive = false;
-      if (typeof synth.removeEventListener === 'function') synth.removeEventListener('voiceschanged', refresh);
-    };
-  }, []);
-  return getVoiceStatus();
-}
-
-function VoiceMeta() {
-  const status = useVoiceStatus();
-  return <small className={`voice-meta voice-meta--${status.quality}`}>{status.label}</small>;
-}
-
-function splitSpeechText(text, mode = 'sentence') {
-  const clean = String(text || '')
-    .replace(/\s+/g, ' ')
-    .replace(/([。！？!?])/g, '$1|')
-    .trim();
-  if (!clean) return [];
-  if (mode === 'dialogue' || /[AB]：/.test(clean)) {
-    return clean
-      .replace(/\|/g, '')
-      .split(/(?=[AB]：)/)
-      .map(item => item.trim())
-      .filter(Boolean);
-  }
-  if (mode === 'chunk') {
-    return clean
-      .replace(/[，,、；;：:]/g, '$&|')
-      .split('|')
-      .map(item => item.trim())
-      .filter(Boolean);
-  }
-  return clean.split('|').map(item => item.trim()).filter(Boolean);
-}
-
-function speak(text, rate = 0.82, onDone, mode = 'sentence') {
-  if (!text || !hasSpeechSupport()) {
-    onDone?.();
-    return;
-  }
-  const runId = ++speechRunId;
-  const startSpeech = (voices = []) => {
-    if (runId !== speechRunId) return;
-    const synth = window.speechSynthesis;
-    synth.cancel();
-    synth.resume?.();
-    const voice = pickMandarinVoice(voices);
-    const segments = splitSpeechText(text, mode);
-    const pause = mode === 'dialogue' ? 460 : mode === 'chunk' ? 620 : 190;
-    if (!segments.length) {
-      onDone?.();
-      return;
-    }
-
-    const speakNext = (segmentIndex = 0) => {
-      if (runId !== speechRunId) return;
-      const segment = segments[segmentIndex];
-      if (!segment) {
-        onDone?.();
-        return;
-      }
-      const utter = new SpeechSynthesisUtterance(segment);
-      utter.lang = voice?.lang || 'zh-CN';
-      utter.voice = voice;
-      utter.rate = Math.max(0.45, Math.min(1.05, rate));
-      utter.pitch = 1.02;
-      utter.volume = 1;
-      utter.onend = () => window.setTimeout(() => speakNext(segmentIndex + 1), pause);
-      utter.onerror = () => onDone?.();
-      synth.speak(utter);
-    };
-
-    speakNext();
-  };
-
-  const voices = getSpeechVoices();
-  if (voices.length) startSpeech(voices);
-  else loadSpeechVoices().then(startSpeech);
-}
 function StatCard({ icon: Icon, label, value, tone = 'jade' }) {
   return (
     <article className={`core-card core-stat core-stat--${tone}`}>
@@ -314,6 +161,15 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Number(value) || 0));
 }
 
+function shuffleItems(items) {
+  const rows = [...items];
+  for (let index = rows.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [rows[index], rows[swapIndex]] = [rows[swapIndex], rows[index]];
+  }
+  return rows;
+}
+
 function skillTone(value) {
   if (value >= 80) return 'strong';
   if (value >= 55) return 'steady';
@@ -358,15 +214,14 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
     <section className="analytics-panel page-enter" aria-label="Phân tích dữ liệu người học">
       <div className="analytics-head">
         <div>
-          <span className="core-eyebrow">Learning Analytics</span>
-          <h2>Trung tâm phân tích</h2>
-          <p>{hasData ? `Nguồn: ${dataSourceLabel}. Skill map dùng event học thật, không chỉ điểm quiz cuối phiên.` : 'Chưa có lịch sử học, hệ thống đang dùng lộ trình khởi động.'}</p>
+          <h2>Phân tích</h2>
+          <p className="hide-mobile">{hasData ? `Nguồn: ${dataSourceLabel}.` : 'Chưa có lịch sử học.'}</p>
         </div>
         <div className="analytics-kpis">
-          <span><strong>{analytics?.accuracy || 0}%</strong>Chính xác</span>
-          <span><strong>{dueCount}</strong>Đến hạn</span>
-          <span><strong>{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</strong>Confidence</span>
-          <span><strong>{eventCount || analytics?.attempts || 0}</strong>Events</span>
+          <span><strong>{analytics?.accuracy || 0}%</strong>Đúng</span>
+          <span><strong>{dueCount}</strong>Ôn</span>
+          <span className="hide-mobile"><strong>{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</strong>Tự tin</span>
+          <span className="hide-mobile"><strong>{eventCount || analytics?.attempts || 0}</strong>Lượt</span>
         </div>
       </div>
 
@@ -377,7 +232,7 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
               <span className="core-eyebrow">Skill Map</span>
               <h3>Hiệu suất theo dạng bài</h3>
             </div>
-            <span>{bestType ? `Mạnh: ${bestType.label}` : 'Đang đo'}</span>
+            <span className="metric-badge metric-badge--strong">{bestType ? `Mạnh: ${bestType.label}` : 'Đang đo'}</span>
           </div>
           <div className="skill-bars">
             {typeRows.map(item => {
@@ -405,11 +260,18 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
                 <span className="core-eyebrow">Trend</span>
                 <h3>8 phiên gần nhất</h3>
               </div>
-              <span>{weakType ? `Yếu: ${weakType.label}` : 'Chưa có'}</span>
+              <span className="metric-badge metric-badge--weak">{weakType ? `Yếu: ${weakType.label}` : 'Chưa có'}</span>
             </div>
             <svg className="trend-chart" viewBox="0 0 200 100" role="img" aria-label="Xu hướng độ chính xác">
+              <defs>
+                <linearGradient id="trendAreaGradient" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="var(--jade)" stopOpacity="0.18" />
+                  <stop offset="100%" stopColor="var(--jade)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
               <line x1="8" y1="92" x2="192" y2="92" />
               <line x1="8" y1="14" x2="8" y2="92" />
+              <polygon className="trend-area" points={`8,92 ${trendPoints} 192,92`} />
               <polyline points={trendPoints} />
               {chartRows.map((item, index) => {
                 const x = 8 + (index / maxIndex) * 184;
@@ -430,7 +292,7 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
                 return (
                   <div key={item.level}>
                     <span>HSK {item.level}</span>
-                    <strong style={{ height: `${Math.max(8, value)}%` }} />
+                    <strong data-empty={item.answered ? 'false' : 'true'} style={{ height: `${Math.max(8, value)}%` }} />
                     <em>{item.answered ? `${value}%` : '-'}</em>
                   </div>
                 );
@@ -471,9 +333,8 @@ function HskFocusPanel({ focusLevel, showFirstRun, onSelectLevel, onOpenLessons,
   return (
     <section className={`core-card focus-panel ${showFirstRun ? 'focus-panel--first' : ''}`}>
       <div className="focus-copy">
-        <span className="core-eyebrow">HSK Focus</span>
-        <h1>{showFirstRun ? 'Chọn HSK để kiểm tra đầu vào' : `Đang tập trung HSK ${focusLevel}`}</h1>
-        <p>{showFirstRun ? 'Bài kiểm tra tổng quát dùng từ và câu tự nhiên, gồm đủ các dạng quiz để hệ thống biết phần cần ôn.' : 'Chọn một cấp HSK làm trọng tâm. Hệ thống vẫn dùng ví dụ và câu hỏi tự nhiên, không tách rời khỏi ngữ cảnh thật.'}</p>
+        <h1>{showFirstRun ? 'Chọn cấp HSK' : `HSK ${focusLevel}`}</h1>
+        <p className="hide-mobile">{showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Cấp độ trọng tâm hiện tại.'}</p>
       </div>
 
       <div className="focus-controls">
@@ -487,7 +348,7 @@ function HskFocusPanel({ focusLevel, showFirstRun, onSelectLevel, onOpenLessons,
         </div>
         <div className="focus-actions">
           <button className="btn-primary" onClick={() => onStartGeneralCheck(focusLevel)}><Play size={16} /> Kiểm tra tổng quát</button>
-          <button className="btn-secondary" onClick={onOpenLessons}><BookOpen size={16} /> Vào bài học HSK {focusLevel}</button>
+          <button className="btn-secondary" onClick={onOpenLessons}><Play size={16} /> Luyện tập HSK {focusLevel}</button>
           {showFirstRun && <button className="btn-secondary" onClick={onSkipFirstRun}>Bỏ qua</button>}
         </div>
       </div>
@@ -533,9 +394,8 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
     <section className="core-card today-queue-panel" aria-label="Kế hoạch học hôm nay">
       <div className="today-queue-head">
         <div>
-          <span className="core-eyebrow">Today Queue</span>
           <h2>{plan.title}</h2>
-          <p>{plan.subtitle}</p>
+          <p className="hide-mobile">{plan.subtitle}</p>
         </div>
         <div className="today-mode-stack" aria-label="Chọn thời lượng phiên học">
           {SESSION_MODES.map(item => (
@@ -555,13 +415,11 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
       {!nudgeMuted && plan.nudge && (
         <div className={`behavior-nudge behavior-nudge--${plan.behaviorState || 'maintenance'}`}>
           <div>
-            <span className="core-eyebrow">Behavior Engine</span>
             <h3>{plan.behaviorLabel || 'Duy trì'}</h3>
             <p>{plan.nudge}</p>
           </div>
-          <div className="behavior-nudge-meta">
+          <div className="behavior-nudge-meta hide-mobile">
             <span>{plan.behaviorReason || plan.reason}</span>
-            <small>EWMA {metrics.ewmaAccuracy || 0}% · Confidence {Number(metrics.ewmaConfidence || 0).toFixed(1)} · Streak sai {metrics.wrongStreak || 0}</small>
           </div>
           <button className="btn-secondary" type="button" onClick={muteNudge}><BellOff size={16} /> Tắt nhắc</button>
         </div>
@@ -572,7 +430,7 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
           <article key={item.key} className={`today-mission today-mission--${item.tone}`}>
             <span>{item.label}</span>
             <strong>{item.value}</strong>
-            <p>{item.detail}</p>
+            <p className="hide-mobile">{item.detail}</p>
           </article>
         ))}
       </div>
@@ -592,8 +450,7 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
           )}
         </div>
         <div className="today-actions">
-          <div>
-            <span className="core-eyebrow">Session</span>
+          <div className="hide-mobile">
             <p>{mode.description}</p>
           </div>
           <div className="today-action-buttons">
@@ -632,50 +489,6 @@ function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, show
     </main>
   );
 }
-function Lessons({ level, setLevel, quizType, setQuizType, onStartQuiz }) {
-  const selectedType = QUIZ_TYPES.find(type => type.id === quizType);
-  return (
-    <main className="core-page page-enter">
-      <section className="core-card core-section-head">
-        <span className="core-eyebrow">Lessons</span>
-        <h1>Bài học theo cấp độ</h1>
-        <p>Chọn HSK và dạng luyện tập. Nội dung sẽ được sắp xếp theo cấp độ hiện tại.</p>
-      </section>
-
-      <section className="level-grid">
-        {LEVELS.map(item => (
-          <button key={item} className={`level-card ${level === item ? 'active' : ''}`} onClick={() => setLevel(item)}>
-            <span>HSK</span>
-            <strong>{item}</strong>
-          </button>
-        ))}
-      </section>
-
-      <section className="quiz-type-grid">
-        {QUIZ_TYPES.map(type => {
-          const Icon = type.icon;
-          return (
-            <button key={type.id} className={`quiz-type-card ${quizType === type.id ? 'active' : ''}`} onClick={() => setQuizType(type.id)}>
-              <Icon size={22} />
-              <strong>{type.label}</strong>
-              <span>{quizTypeDescription(type.id)}</span>
-            </button>
-          );
-        })}
-      </section>
-
-      <section className="core-card lesson-start-card">
-        <div>
-          <span className="core-eyebrow">Selected</span>
-          <h2>HSK {level} · {selectedType?.label}</h2>
-          <p>Phiên học tập trung vào nội dung cùng cấp độ, tránh lan man và giữ nhịp luyện ổn định.</p>
-        </div>
-        <button className="btn-primary" onClick={onStartQuiz}><Play size={16} /> Bắt đầu</button>
-      </section>
-    </main>
-  );
-}
-
 const QUIZ_STRATEGY_MODES = [
   {
     id: 'targeted',
@@ -745,6 +558,7 @@ function buildQuizStrategySummary(answerRows) {
 }
 
 function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartKey, limit = 10, strategyHint = 'targeted' }) {
+  const { userId } = useAuth();
   const [session, setSession] = useState(null);
   const [quizItems, setQuizItems] = useState([]);
   const [primaryQuestions, setPrimaryQuestions] = useState([]);
@@ -760,6 +574,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
   const [submitting, setSubmitting] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioPlayed, setAudioPlayed] = useState(false);
+  const [audioError, setAudioError] = useState(false);
   const answersRef = useRef([]);
   const questionStartedAtRef = useRef(0);
 
@@ -786,6 +601,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     setCompletedQuestions([]);
     setAudioPlaying(false);
     setAudioPlayed(false);
+    setAudioError(false);
     answersRef.current = [];
     stopSpeech();
   };
@@ -796,7 +612,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     try {
       const quizTypes = buildStrategyQuizTypes(quizType, strategyMode);
       const started = await startLearningSession({
-        user_id: USER_ID,
+        user_id: userId,
         session_type: `quiz_${strategyMode}`,
         behavior_state: strategyMode === 'repair' ? 'fragile' : 'maintenance',
         estimated_minutes: strategyMode === 'interleaved' ? 20 : 10,
@@ -806,7 +622,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
       });
       const perTypeLimit = strategyMode === 'interleaved' ? Math.max(2, Math.ceil(limit / quizTypes.length)) : limit;
       const batches = await Promise.all(quizTypes.map(async type => {
-        const data = await startQuiz({ user_id: USER_ID, level, quiz_type: type, limit: perTypeLimit });
+        const data = await startQuiz({ user_id: userId, level, quiz_type: type, limit: perTypeLimit });
         return {
           quizType: type,
           questions: (data.questions || []).map(row => ({ ...row, quiz_type: row.quiz_type || type })),
@@ -833,12 +649,24 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     return () => window.clearTimeout(timer);
   }, [autoStartKey, loadQuiz]);
 
+  const questionAudioText = resolveQuestionAudioText(question);
+  const showAudioPanel = Boolean(questionAudioText) || isListeningMode;
+
   const playAudio = useCallback((rate = 0.82, speechMode = null) => {
-    if (!question?.audio_text) return;
+    const audioText = resolveQuestionAudioText(question);
+    if (!audioText) {
+      setAudioError(true);
+      return;
+    }
+    unlockSpeech();
     setAudioPlaying(true);
     setAudioPlayed(true);
+    setAudioError(false);
     const mode = speechMode || (activeQuizType === 'dialogue' ? 'dialogue' : 'sentence');
-    speak(question.audio_text, rate, () => setAudioPlaying(false), mode);
+    speak(audioText, rate, (success) => {
+      setAudioPlaying(false);
+      setAudioError(!success);
+    }, mode);
   }, [activeQuizType, question]);
 
   useEffect(() => {
@@ -847,8 +675,9 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     const resetTimer = window.setTimeout(() => {
       setAudioPlayed(false);
       setAudioPlaying(false);
+      setAudioError(false);
     }, 0);
-    if (!question.audio_text || !isListeningMode) {
+    if (!showAudioPanel || !isListeningMode || !isSpeechUnlocked()) {
       return () => window.clearTimeout(resetTimer);
     }
     const timer = window.setTimeout(() => playAudio(activeQuizType === 'dialogue' ? 0.76 : 0.82), 280);
@@ -857,7 +686,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
       window.clearTimeout(timer);
       stopSpeech();
     };
-  }, [activeQuizType, isListeningMode, playAudio, question]);
+  }, [activeQuizType, isListeningMode, playAudio, question, showAudioPanel]);
 
   const queueRepairItem = (review, selectedIndex, confidenceValue) => {
     if (!question || isRepair) return;
@@ -909,7 +738,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
       });
       await Promise.all([...answersByType.entries()].map(([type, rows]) => (
         submitQuiz({
-          user_id: USER_ID,
+          user_id: userId,
           level,
           quiz_type: type,
           session_id: session?.id,
@@ -918,7 +747,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
         }, questionsByType.get(type) || [])
       )));
       if (session?.id) {
-        await completeLearningSession({ user_id: USER_ID, session_id: session.id, summary });
+        await completeLearningSession({ user_id: userId, session_id: session.id, summary });
       }
       await refreshStats?.();
       setCompletedQuestions(primaryQuestions);
@@ -942,7 +771,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     try {
       const itemType = isRepair ? 'repair_card' : sessionItemType(question, false);
       const review = await recordLearningEvent({
-        user_id: USER_ID,
+        user_id: userId,
         session_id: session?.id,
         question_id: question.id,
         selected_index: selected,
@@ -1037,81 +866,85 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
 
   return (
     <main className="core-page page-enter">
-      <section className="core-card core-section-head quiz-setup strategy-quiz-setup">
-        <div>
-          <span className="core-eyebrow">Strategic Quiz</span>
-          <h1>HSK {level} · {selectedType?.label}</h1>
-          <p>Retrieval từng câu, confidence, feedback tức thì, repair loop và SRS event. Không chờ đến cuối phiên mới biết sai.</p>
-        </div>
-        <div className="setup-controls">
-          <select value={level} onChange={e => setLevel(Number(e.target.value))} disabled={Boolean(question) || loading}>
-            {LEVELS.map(row => <option key={row} value={row}>HSK {row}</option>)}
-          </select>
-          <select value={quizType} onChange={e => setQuizType(e.target.value)} disabled={Boolean(question) || loading}>
-            {QUIZ_TYPES.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
-          </select>
-          <button className="btn-primary" onClick={loadQuiz} disabled={loading}>{loading ? <Loader2 size={16} className="spin" /> : <Play size={16} />} Tạo quiz</button>
-        </div>
-      </section>
-
-      <section className="quiz-strategy-grid" aria-label="Chọn chiến lược quiz">
-        {QUIZ_STRATEGY_MODES.map(mode => (
-          <button key={mode.id} type="button" className={`core-card quiz-strategy-card ${strategyMode === mode.id ? 'active' : ''}`} onClick={() => setStrategyMode(mode.id)} disabled={Boolean(question) || loading}>
-            <span>{mode.label}</span>
-            <strong>{mode.title}</strong>
-            <small>{mode.detail}</small>
-          </button>
-        ))}
-      </section>
-
       {!question && !loading && (
-        <section className="core-card empty-state">
-          <AlertCircle size={24} />
-          <h2>Chưa có phiên quiz</h2>
-          <p>Chọn cấp độ, dạng luyện tập và chiến lược rồi tạo quiz.</p>
-          <button className="btn-primary" onClick={loadQuiz}><Play size={16} /> Tạo quiz chiến lược</button>
-        </section>
+        <>
+          <section className="core-card core-section-head">
+            <h1>Luyện tập</h1>
+          </section>
+
+          <section className="level-grid" aria-label="Chọn cấp HSK">
+            {LEVELS.map(item => (
+              <button key={item} type="button" className={`level-card ${level === item ? 'active' : ''}`} onClick={() => setLevel(item)}>
+                <span>HSK</span>
+                <strong>{item}</strong>
+              </button>
+            ))}
+          </section>
+
+          <section className="quiz-type-grid" aria-label="Chọn dạng bài">
+            {QUIZ_TYPES.map(type => {
+              const Icon = type.icon;
+              return (
+                <button key={type.id} type="button" className={`quiz-type-card ${quizType === type.id ? 'active' : ''}`} onClick={() => setQuizType(type.id)}>
+                  <Icon size={22} />
+                  <strong>{type.label}</strong>
+                  <span className="hide-mobile">{quizTypeDescription(type.id)}</span>
+                </button>
+              );
+            })}
+          </section>
+
+          <section className="quiz-strategy-grid" aria-label="Chọn chiến lược">
+            {QUIZ_STRATEGY_MODES.map(mode => (
+              <button key={mode.id} type="button" className={`core-card quiz-strategy-card ${strategyMode === mode.id ? 'active' : ''}`} onClick={() => setStrategyMode(mode.id)}>
+                <span>{mode.label}</span>
+                <strong className="hide-mobile">{mode.title}</strong>
+                <small className="hide-mobile">{mode.detail}</small>
+              </button>
+            ))}
+          </section>
+
+          <section className="core-card lesson-start-card">
+            <h2>HSK {level} · {selectedType?.label} · {strategy.label}</h2>
+            <button className="btn-primary" type="button" onClick={loadQuiz}><Play size={16} /> Bắt đầu</button>
+          </section>
+        </>
       )}
 
       {loading && !question && (
         <section className="core-card empty-state">
           <Loader2 size={24} className="spin" />
-          <h2>Đang dựng quiz</h2>
-          <p>Hệ thống đang tạo session, chọn câu hỏi và chuẩn bị vòng repair.</p>
+          <h2>Đang tạo...</h2>
         </section>
       )}
 
       {question && (
         <section key={item.id} className={`core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
           <div className="question-topline">
-            <span>{isRepair ? 'Repair loop' : questionType?.label || 'Đang luyện'}</span>
-            <strong>{index + 1}</strong>
+            <span>{isRepair ? 'Ôn lại' : questionType?.label || 'Câu hỏi'}</span>
+            <strong>{index + 1}/{quizItems.length}</strong>
           </div>
           <div className="quiz-progress"><span style={{ width: `${progress}%` }} /></div>
-          <div className="quiz-strategy-strip">
+          <div className="quiz-strategy-strip hide-mobile">
             <span>{strategy.label}</span>
-            <small>{answers.filter(row => !row.is_repair).length}/{primaryQuestions.length} câu chính · {answers.filter(row => row.is_repair).length} repair</small>
+            <small>{answers.filter(row => !row.is_repair).length}/{primaryQuestions.length}</small>
           </div>
           {isRepair && (
             <div className="repair-notice">
               <Wrench size={18} />
-              <span>{item.confidence <= 2 ? 'Quay lại vì độ chắc thấp.' : 'Quay lại để sửa lỗi trước đó.'}</span>
+              <span>Ôn lại câu này</span>
             </div>
           )}
           <h2>{question.prompt}</h2>
-          {question.audio_text && (
-            <div className={`audio-panel ${isListeningMode ? 'audio-panel--focus' : ''}`}>
-              <div>
-                <span className="core-eyebrow">Audio</span>
-                <p>{audioPlaying ? 'Đang phát âm thanh...' : audioPlayed ? 'Có thể nghe lại trước khi chọn đáp án.' : 'Bấm nghe để phát âm thanh.'}</p>
-                <VoiceMeta />
-              </div>
-              <div className="audio-actions">
-                <button className="btn-secondary" onClick={() => playAudio(0.82)} disabled={audioPlaying}><Headphones size={16} /> Nghe lại</button>
-                <button className="btn-secondary" onClick={() => playAudio(0.66)} disabled={audioPlaying}><Headphones size={16} /> Nghe chậm</button>
-                <button className="btn-secondary" onClick={() => playAudio(0.58, 'chunk')} disabled={audioPlaying}><Headphones size={16} /> Từng cụm</button>
-              </div>
-            </div>
+          {showAudioPanel && (
+            <QuizAudioPanel
+              audioText={questionAudioText}
+              audioPlaying={audioPlaying}
+              audioPlayed={audioPlayed}
+              audioError={audioError}
+              isListeningMode={isListeningMode}
+              playAudio={playAudio}
+            />
           )}
           <div className="option-grid">
             {question.options.map((option, optionIndex) => (
@@ -1129,16 +962,13 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
 
           {selected !== null && !feedback && (
             <div className="confidence-panel">
-              <div>
-                <span className="core-eyebrow">Confidence</span>
-                <p>Chọn độ chắc chắn. Sai hoặc confidence thấp sẽ tự chèn repair card sau vài câu.</p>
-              </div>
+              <p className="confidence-label">Mức tự tin?</p>
               <div className="confidence-grid">
                 {CONFIDENCE_LEVELS.map(row => (
-                  <button key={row.value} type="button" onClick={() => chooseConfidence(row.value)} disabled={submitting}>
+                  <button key={row.value} type="button" onClick={() => chooseConfidence(row.value)} disabled={submitting} title={row.label}>
                     <strong>{row.value}</strong>
                     <span>{row.label}</span>
-                    <small>{row.detail}</small>
+                    <small className="hide-mobile">{row.detail}</small>
                   </button>
                 ))}
               </div>
@@ -1150,16 +980,13 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               <div className="feedback-head">
                 {feedback.review.correct ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
                 <strong>{feedback.review.correct ? 'Đúng' : 'Cần sửa'}</strong>
-                <span>{nextReviewText(feedback.review.next_review_at)}</span>
+                <span className="hide-mobile">{nextReviewText(feedback.review.next_review_at)}</span>
               </div>
-              <p>{feedback.review.explanation || question.explanation || 'Câu này đã được ghi vào lịch ôn.'}</p>
-              {!feedback.review.correct && <small>Đáp án đúng: {question.options[feedback.review.correct_index] || 'xem giải thích'}</small>}
-              {feedback.review.correct && feedback.confidence <= 2 && <small>Đúng nhưng chưa chắc, hệ thống sẽ cho gặp lại để khóa trí nhớ.</small>}
-              <button className="btn-primary" type="button" onClick={continueQuiz} disabled={loading}>{index + 1 >= quizItems.length ? 'Hoàn thành' : 'Tiếp tục'}</button>
+              <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
+              {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '—'}</small>}
+              <button className="btn-primary" type="button" onClick={continueQuiz} disabled={loading}>{index + 1 >= quizItems.length ? 'Xong' : 'Tiếp'}</button>
             </div>
           )}
-
-          {selected === null && !feedback && <p className="auto-next-hint">Chọn đáp án, sau đó chọn confidence để hệ thống hẹn lịch ôn.</p>}
         </section>
       )}
     </main>
@@ -1230,6 +1057,7 @@ function isPracticeItem(item) {
 }
 
 function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
+  const { userId } = useAuth();
   const [session, setSession] = useState(null);
   const [items, setItems] = useState([]);
   const [index, setIndex] = useState(0);
@@ -1243,6 +1071,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
   const [submitting, setSubmitting] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioPlayed, setAudioPlayed] = useState(false);
+  const [audioError, setAudioError] = useState(false);
   const answersRef = useRef([]);
   const finishedRef = useRef(false);
   const questionStartedAtRef = useRef(0);
@@ -1272,7 +1101,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     const summary = buildSessionSummary(plan, answersRef.current);
     try {
       if (session?.id) {
-        await completeLearningSession({ user_id: USER_ID, session_id: session.id, summary });
+        await completeLearningSession({ user_id: userId, session_id: session.id, summary });
       }
       markLearningSessionCompleted({ ...summary, answers: answersRef.current });
       await onComplete?.();
@@ -1295,12 +1124,13 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     setCompleted(null);
     setAudioPlaying(false);
     setAudioPlayed(false);
+    setAudioError(false);
     answersRef.current = [];
     finishedRef.current = false;
     stopSpeech();
     try {
       const started = await startLearningSession({
-        user_id: USER_ID,
+        user_id: userId,
         session_type: modeId,
         behavior_state: plan?.behaviorState || 'maintenance',
         estimated_minutes: sessionModeMinutes(plan?.mode),
@@ -1308,7 +1138,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
         target_skills_json: [quizType],
         reason: plan?.reason || '',
       });
-      const data = await startQuiz({ user_id: USER_ID, level, quiz_type: quizType, limit });
+      const data = await startQuiz({ user_id: userId, level, quiz_type: quizType, limit });
       const quizItems = (data.questions || []).map((row, rowIndex) => ({
         id: `quiz-${row.id}-${rowIndex}`,
         type: 'quiz_item',
@@ -1332,12 +1162,24 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     };
   }, [loadSession]);
 
+  const questionAudioText = resolveQuestionAudioText(question);
+  const showAudioPanel = Boolean(questionAudioText) || isListeningMode;
+
   const playAudio = useCallback((rate = 0.82, speechMode = null) => {
-    if (!question?.audio_text) return;
+    const audioText = resolveQuestionAudioText(question);
+    if (!audioText) {
+      setAudioError(true);
+      return;
+    }
+    unlockSpeech();
     setAudioPlaying(true);
     setAudioPlayed(true);
+    setAudioError(false);
     const mode = speechMode || (activeQuizType === 'dialogue' ? 'dialogue' : 'sentence');
-    speak(question.audio_text, rate, () => setAudioPlaying(false), mode);
+    speak(audioText, rate, (success) => {
+      setAudioPlaying(false);
+      setAudioError(!success);
+    }, mode);
   }, [activeQuizType, question]);
 
   useEffect(() => {
@@ -1346,8 +1188,9 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     const resetTimer = window.setTimeout(() => {
       setAudioPlayed(false);
       setAudioPlaying(false);
+      setAudioError(false);
     }, 0);
-    if (!question.audio_text || !isListeningMode) {
+    if (!showAudioPanel || !isListeningMode || !isSpeechUnlocked()) {
       return () => window.clearTimeout(resetTimer);
     }
     const timer = window.setTimeout(() => playAudio(activeQuizType === 'dialogue' ? 0.76 : 0.82), 280);
@@ -1356,7 +1199,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       window.clearTimeout(timer);
       stopSpeech();
     };
-  }, [activeQuizType, isListeningMode, playAudio, question]);
+  }, [activeQuizType, isListeningMode, playAudio, question, showAudioPanel]);
 
   const startChallenge = () => {
     setIndex(1);
@@ -1393,7 +1236,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     setSubmitting(true);
     try {
       const review = await recordLearningEvent({
-        user_id: USER_ID,
+        user_id: userId,
         session_id: session?.id,
         question_id: question.id,
         selected_index: selected,
@@ -1446,7 +1289,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
         const localResult = assessSentenceDraft(textAnswer, item.word, [item.word]);
         result = localResult.correct
           ? mergeProductionResult(await submitOutputEvent({
-            user_id: USER_ID,
+            user_id: userId,
             session_id: session?.id,
             word_id: item.word?.word_id,
             target_word: item.word?.hanzi || '',
@@ -1668,30 +1511,26 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       {question && (
         <section key={item.id} className={`core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
           <div className="question-topline">
-            <span>{isRepair ? 'Repair loop' : questionType?.label || 'Challenge'}</span>
-            <strong>{Math.min(index, questionItems.length)}</strong>
+            <span>{isRepair ? 'Ôn lại' : questionType?.label || 'Câu hỏi'}</span>
+            <strong>{Math.min(index, questionItems.length)}/{questionItems.length}</strong>
           </div>
           <div className="quiz-progress"><span style={{ width: `${progress}%` }} /></div>
           {isRepair && (
             <div className="repair-notice">
               <Wrench size={18} />
-              <span>Câu này quay lại để sửa lỗi trước đó.</span>
+              <span>Ôn lại</span>
             </div>
           )}
           <h2>{question.prompt}</h2>
-          {question.audio_text && (
-            <div className={`audio-panel ${isListeningMode ? 'audio-panel--focus' : ''}`}>
-              <div>
-                <span className="core-eyebrow">Audio</span>
-                <p>{audioPlaying ? 'Đang phát âm thanh...' : audioPlayed ? 'Có thể nghe lại trước khi chọn đáp án.' : 'Bấm nghe để phát âm thanh.'}</p>
-                <VoiceMeta />
-              </div>
-              <div className="audio-actions">
-                <button className="btn-secondary" onClick={() => playAudio(0.82)} disabled={audioPlaying}><Headphones size={16} /> Nghe lại</button>
-                <button className="btn-secondary" onClick={() => playAudio(0.66)} disabled={audioPlaying}><Headphones size={16} /> Nghe chậm</button>
-                <button className="btn-secondary" onClick={() => playAudio(0.58, 'chunk')} disabled={audioPlaying}><Headphones size={16} /> Từng cụm</button>
-              </div>
-            </div>
+          {showAudioPanel && (
+            <QuizAudioPanel
+              audioText={questionAudioText}
+              audioPlaying={audioPlaying}
+              audioPlayed={audioPlayed}
+              audioError={audioError}
+              isListeningMode={isListeningMode}
+              playAudio={playAudio}
+            />
           )}
           <div className="option-grid">
             {question.options.map((option, optionIndex) => (
@@ -1709,16 +1548,13 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
 
           {selected !== null && !feedback && (
             <div className="confidence-panel">
-              <div>
-                <span className="core-eyebrow">Confidence</span>
-                <p>Chọn độ chắc chắn để hệ thống hẹn lịch ôn đúng hơn.</p>
-              </div>
+              <p className="confidence-label">Mức tự tin?</p>
               <div className="confidence-grid">
                 {CONFIDENCE_LEVELS.map(row => (
-                  <button key={row.value} type="button" onClick={() => chooseConfidence(row.value)} disabled={submitting}>
+                  <button key={row.value} type="button" onClick={() => chooseConfidence(row.value)} disabled={submitting} title={row.label}>
                     <strong>{row.value}</strong>
                     <span>{row.label}</span>
-                    <small>{row.detail}</small>
+                    <small className="hide-mobile">{row.detail}</small>
                   </button>
                 ))}
               </div>
@@ -1730,11 +1566,11 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
               <div className="feedback-head">
                 {feedback.review.correct ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
                 <strong>{feedback.review.correct ? 'Đúng' : 'Cần sửa'}</strong>
-                <span>{nextReviewText(feedback.review.next_review_at)}</span>
+                <span className="hide-mobile">{nextReviewText(feedback.review.next_review_at)}</span>
               </div>
-              <p>{feedback.review.explanation || question.explanation || 'Câu này đã được ghi vào lịch ôn.'}</p>
-              {!feedback.review.correct && <small>Đáp án đúng: {question.options[feedback.review.correct_index] || 'xem giải thích'}</small>}
-              <button className="btn-primary" type="button" onClick={continueSession} disabled={loading}>{index + 1 >= items.length ? 'Hoàn thành' : 'Tiếp tục'}</button>
+              <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
+              {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '—'}</small>}
+              <button className="btn-primary" type="button" onClick={continueSession} disabled={loading}>{index + 1 >= items.length ? 'Xong' : 'Tiếp'}</button>
             </div>
           )}
         </section>
@@ -1744,6 +1580,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
 }
 
 function GeneralCheck({ level, onExit, onComplete }) {
+  const { userId } = useAuth();
   const [questions, setQuestions] = useState([]);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -1753,11 +1590,14 @@ function GeneralCheck({ level, onExit, onComplete }) {
   const [advancing, setAdvancing] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioPlayed, setAudioPlayed] = useState(false);
+  const [audioError, setAudioError] = useState(false);
   const questionStartedAtRef = useRef(0);
 
   const question = questions[index];
   const questionType = QUIZ_TYPES.find(type => type.id === question?.quiz_type);
   const isListeningMode = question?.quiz_type === 'listening' || question?.quiz_type === 'dialogue';
+  const questionAudioText = resolveQuestionAudioText(question);
+  const showAudioPanel = Boolean(questionAudioText) || isListeningMode;
   const progress = questions.length ? Math.round(((index + 1) / questions.length) * 100) : 0;
 
   const loadGeneralCheck = useCallback(async () => {
@@ -1770,13 +1610,14 @@ function GeneralCheck({ level, onExit, onComplete }) {
     setAdvancing(false);
     setAudioPlayed(false);
     setAudioPlaying(false);
+    setAudioError(false);
     stopSpeech();
     try {
       const batches = await Promise.all(GENERAL_CHECK_TYPES.map(async quizType => {
-        const data = await startQuiz({ user_id: USER_ID, level, quiz_type: quizType, limit: GENERAL_CHECK_LIMIT });
+        const data = await startQuiz({ user_id: userId, level, quiz_type: quizType, limit: GENERAL_CHECK_LIMIT });
         return (data.questions || []).map(item => ({ ...item, quiz_type: item.quiz_type || quizType }));
       }));
-      const mixedQuestions = batches.flat().sort(() => Math.random() - 0.5);
+      const mixedQuestions = shuffleItems(batches.flat());
       setQuestions(mixedQuestions);
     } finally {
       setLoading(false);
@@ -1792,11 +1633,20 @@ function GeneralCheck({ level, onExit, onComplete }) {
   }, [loadGeneralCheck]);
 
   const playAudio = useCallback((rate = 0.82, speechMode = null) => {
-    if (!question?.audio_text) return;
+    const audioText = resolveQuestionAudioText(question);
+    if (!audioText) {
+      setAudioError(true);
+      return;
+    }
+    unlockSpeech();
     setAudioPlaying(true);
     setAudioPlayed(true);
+    setAudioError(false);
     const mode = speechMode || (question.quiz_type === 'dialogue' ? 'dialogue' : 'sentence');
-    speak(question.audio_text, rate, () => setAudioPlaying(false), mode);
+    speak(audioText, rate, (success) => {
+      setAudioPlaying(false);
+      setAudioError(!success);
+    }, mode);
   }, [question]);
 
   useEffect(() => {
@@ -1804,8 +1654,9 @@ function GeneralCheck({ level, onExit, onComplete }) {
     const resetTimer = window.setTimeout(() => {
       setAudioPlayed(false);
       setAudioPlaying(false);
+      setAudioError(false);
     }, 0);
-    if (!question?.audio_text || !isListeningMode) {
+    if (!showAudioPanel || !isListeningMode || !isSpeechUnlocked()) {
       return () => window.clearTimeout(resetTimer);
     }
     const timer = window.setTimeout(() => playAudio(question.quiz_type === 'dialogue' ? 0.76 : 0.82), 280);
@@ -1814,7 +1665,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
       window.clearTimeout(timer);
       stopSpeech();
     };
-  }, [question?.id, question?.audio_text, question?.quiz_type, isListeningMode, playAudio]);
+  }, [question?.id, question?.quiz_type, isListeningMode, playAudio, showAudioPanel]);
 
   const submitGeneralCheck = async (finalAnswers) => {
     setLoading(true);
@@ -1835,7 +1686,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
       });
 
       const submissions = await Promise.all([...answersByType.entries()].map(([quizType, typeAnswers]) => (
-        submitQuiz({ user_id: USER_ID, level, quiz_type: quizType, answers: typeAnswers }, questionsByType.get(quizType) || [])
+        submitQuiz({ user_id: userId, level, quiz_type: quizType, answers: typeAnswers }, questionsByType.get(quizType) || [])
       )));
       const results = submissions.flatMap(item => item.results || []);
       const score = submissions.reduce((sum, item) => sum + (item.score || 0), 0);
@@ -1930,19 +1781,15 @@ function GeneralCheck({ level, onExit, onComplete }) {
           </div>
           <div className="quiz-progress"><span style={{ width: `${progress}%` }} /></div>
           <h2>{question.prompt}</h2>
-          {question.audio_text && (
-            <div className={`audio-panel ${isListeningMode ? 'audio-panel--focus' : ''}`}>
-              <div>
-                <span className="core-eyebrow">Audio</span>
-                <p>{audioPlaying ? 'Đang phát âm thanh...' : audioPlayed ? 'Có thể nghe lại trước khi chọn đáp án.' : 'Bấm nghe để phát âm thanh.'}</p>
-                <VoiceMeta />
-              </div>
-              <div className="audio-actions">
-                <button className="btn-secondary" onClick={() => playAudio(0.82)} disabled={audioPlaying}><Headphones size={16} /> Nghe lại</button>
-                <button className="btn-secondary" onClick={() => playAudio(0.66)} disabled={audioPlaying}><Headphones size={16} /> Nghe chậm</button>
-                <button className="btn-secondary" onClick={() => playAudio(0.58, 'chunk')} disabled={audioPlaying}><Headphones size={16} /> Từng cụm</button>
-              </div>
-            </div>
+          {showAudioPanel && (
+            <QuizAudioPanel
+              audioText={questionAudioText}
+              audioPlaying={audioPlaying}
+              audioPlayed={audioPlayed}
+              audioError={audioError}
+              isListeningMode={isListeningMode}
+              playAudio={playAudio}
+            />
           )}
           <div className="option-grid">
             {question.options.map((option, optionIndex) => (
@@ -1957,7 +1804,6 @@ function GeneralCheck({ level, onExit, onComplete }) {
               </button>
             ))}
           </div>
-          <p className="auto-next-hint">Chọn đáp án để chuyển sang câu tiếp theo.</p>
         </section>
       )}
     </main>
@@ -1999,6 +1845,16 @@ function normalizeExamples(card) {
     });
 }
 
+function normalizeRadicals(card) {
+  const rows = Array.isArray(card.breakdown) ? card.breakdown : [];
+  return rows
+    .map(item => ({
+      radical: cleanText(item.radical || item.component || item.char),
+      meaning: cleanText(item.meaning || item.hint || item.name),
+    }))
+    .filter(item => item.radical || item.meaning);
+}
+
 function normalizeCard(card) {
   const rawLevel = Number(card.hskLevel ?? card.level);
   const level = LEVELS.includes(rawLevel) ? rawLevel : null;
@@ -2006,7 +1862,8 @@ function normalizeCard(card) {
   const pinyin = cleanText(card.pinyin);
   const meaningVi = cleanText(card.meaning_vi || card.meaning);
   const examples = normalizeExamples(card);
-  const sourceQuality = (Array.isArray(card.examples) && card.examples.length ? 3 : 0) + (examples.length ? 2 : 0) + (card.mnemonic ? 1 : 0);
+  const radicals = normalizeRadicals(card);
+  const sourceQuality = (Array.isArray(card.examples) && card.examples.length ? 3 : 0) + (examples.length ? 2 : 0) + (radicals.length ? 2 : 0) + (card.mnemonic ? 1 : 0);
   return {
     key: `${level || 'x'}-${hanzi}-${pinyin || 'no-pinyin'}`,
     id: card.id || `${level || 'x'}-${hanzi}`,
@@ -2016,6 +1873,8 @@ function normalizeCard(card) {
     level,
     category: cleanText(card.category) || 'core',
     stroke_count: Number(card.strokeCount || card.stroke_count || 0),
+    radicals,
+    mnemonic: cleanText(card.mnemonic),
     examples,
     example_cn: examples[0]?.cn || '',
     example_pinyin: examples[0]?.pinyin || '',
@@ -2164,7 +2023,7 @@ function VocabLibrary({ focusLevel, onPracticeWord }) {
     const q = query.trim().toLowerCase();
     return cards
       .filter(item => levelFilter === 'all' || Number(item.level) === Number(levelFilter))
-      .filter(item => !q || [item.hanzi, item.pinyin, item.meaning_vi, item.category, item.example_cn, item.example_vi].join(' ').toLowerCase().includes(q))
+      .filter(item => !q || [item.hanzi, item.pinyin, item.meaning_vi, item.category, item.example_cn, item.example_vi, item.radicals.map(row => `${row.radical} ${row.meaning}`).join(' ')].join(' ').toLowerCase().includes(q))
       .slice(0, 80);
   }, [cards, levelFilter, query]);
 
@@ -2216,8 +2075,18 @@ function VocabLibrary({ focusLevel, onPracticeWord }) {
                   <div className="metadata-strip vocab-metadata-strip">
                     <span><strong>{visibleSelectedWord.category}</strong><small>Loại từ</small></span>
                     <span><strong>{visibleSelectedWord.stroke_count || '-'}</strong><small>Nét</small></span>
+                    <span><strong>{visibleSelectedWord.radicals.length || '-'}</strong><small>Bộ thủ</small></span>
                     <span><strong>{visibleSelectedWord.examples.length}</strong><small>Ví dụ</small></span>
                   </div>
+                  <div className="radical-strip" aria-label="Bộ thủ và thành phần chữ">
+                    {visibleSelectedWord.radicals.length ? visibleSelectedWord.radicals.map((item, index) => (
+                      <span key={`${visibleSelectedWord.key}-radical-${index}`}>
+                        <strong>{item.radical}</strong>
+                        <small>{item.meaning}</small>
+                      </span>
+                    )) : <span><strong>--</strong><small>Chưa có dữ liệu bộ thủ cho từ này.</small></span>}
+                  </div>
+                  {visibleSelectedWord.mnemonic && <p className="radical-note">{visibleSelectedWord.mnemonic}</p>}
                   {visibleSelectedWord.examples.length ? (
                     <div className="vocab-example-list">
                       {visibleSelectedWord.examples.slice(0, 3).map((example, index) => (
@@ -2243,23 +2112,56 @@ function VocabLibrary({ focusLevel, onPracticeWord }) {
 function HandwritingPad({ targetWord }) {
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
+  const lastPointRef = useRef(null);
+
+  const prepareCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(rect.width * ratio));
+    const height = Math.max(1, Math.round(rect.height * ratio));
+    if (canvas.width === width && canvas.height === height) return;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(prepareCanvas, 0);
+    window.addEventListener('resize', prepareCanvas);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('resize', prepareCanvas);
+    };
+  }, [prepareCanvas]);
 
   const canvasPoint = (event) => {
-    const rect = canvasRef.current.getBoundingClientRect();
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
 
   const startDraw = (event) => {
+    prepareCanvas();
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const point = canvasPoint(event);
     drawingRef.current = true;
+    lastPointRef.current = point;
     ctx.lineWidth = 7;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--gold').trim() || '#f2b84b';
     ctx.beginPath();
     ctx.moveTo(point.x, point.y);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
     canvas.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
   };
 
   const draw = (event) => {
@@ -2267,17 +2169,22 @@ function HandwritingPad({ targetWord }) {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const point = canvasPoint(event);
-    ctx.lineTo(point.x, point.y);
+    const last = lastPointRef.current || point;
+    ctx.quadraticCurveTo(last.x, last.y, (last.x + point.x) / 2, (last.y + point.y) / 2);
     ctx.stroke();
+    lastPointRef.current = point;
+    event.preventDefault();
   };
 
   const endDraw = () => {
     drawingRef.current = false;
+    lastPointRef.current = null;
   };
 
   const clear = () => {
     const canvas = canvasRef.current;
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    const rect = canvas.getBoundingClientRect();
+    canvas.getContext('2d').clearRect(0, 0, rect.width, rect.height);
   };
 
   return (
@@ -2301,6 +2208,7 @@ function buildApplyIntro(words) {
 }
 
 function ApplyPractice({ todayPlan, selectedWord, onStartToday }) {
+  const { userId } = useAuth();
   const focusWords = todayPlan?.focusWords || EMPTY_WORDS;
   const fallbackWord = useMemo(() => selectedWord || focusWords[0] || { hanzi: '学习', pinyin: 'xue2 xi2', meaning_vi: 'học tập' }, [selectedWord, focusWords]);
   const targetWords = useMemo(() => [fallbackWord, ...focusWords]
@@ -2334,7 +2242,7 @@ function ApplyPractice({ todayPlan, selectedWord, onStartToday }) {
       setOutputResult(localResult);
       return;
     }
-    const result = await submitOutputEvent({ user_id: USER_ID, target_word: target.hanzi, response_text: sentence, prompt: `Use ${target.hanzi}` });
+    const result = await submitOutputEvent({ user_id: userId, target_word: target.hanzi, response_text: sentence, prompt: `Use ${target.hanzi}` });
     setOutputResult(mergeProductionResult(result, localResult));
   };
 
@@ -2484,6 +2392,7 @@ function Progress({ stats, analytics, onStartRecommended }) {
 }
 
 export default function App() {
+  const { userId, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [level, setLevel] = useState(getInitialFocusLevel);
   const [quizType, setQuizType] = useState('vocab');
@@ -2501,10 +2410,10 @@ export default function App() {
   const [stats, setStats] = useState({ attempts: 0, answered: 0, accuracy: 0, mastery_label: 'Khởi động', weak_words: 0 });
 
   const refreshStats = useCallback(async () => {
-    const [nextStats, nextAnalytics] = await Promise.all([getStats(USER_ID), getAnalytics(USER_ID)]);
+    const [nextStats, nextAnalytics] = await Promise.all([getStats(userId), getAnalytics(userId)]);
     setStats(nextStats);
     setAnalytics(nextAnalytics);
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => refreshStats(), 0);
@@ -2512,12 +2421,18 @@ export default function App() {
   }, [refreshStats]);
 
   useEffect(() => {
+    const cleanup = bindSpeechUnlock();
+    preloadAudioIndex();
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#FBF9F6' : '#0b1117');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#FBF9F6' : '#141313');
     window.localStorage.setItem('theme', theme);
     window.localStorage.setItem('themePaletteVersion', THEME_PALETTE_VERSION);
   }, [theme]);
@@ -2527,7 +2442,7 @@ export default function App() {
     if (activeTab === 'session') return 'Học hôm nay';
     return NAV.find(item => item.id === activeTab)?.label || 'Trang chính';
   }, [activeTab, generalCheckLevel]);
-  const statusLabel = stats.offline ? 'Chế độ local' : 'Đồng bộ';
+  const statusLabel = isAuthenticated ? 'Đã đăng nhập' : stats.offline ? 'Chế độ local' : 'Đồng bộ';
   const isDark = theme === 'dark';
   const localTodayPlan = useMemo(() => buildTodaySessionPlan({ analytics, stats, focusLevel: level, modeId: selectedSessionMode }), [analytics, stats, level, selectedSessionMode]);
   const todayPlan = useMemo(() => normalizeBackendTodayPlan(backendTodayPlan, localTodayPlan), [backendTodayPlan, localTodayPlan]);
@@ -2536,7 +2451,7 @@ export default function App() {
     let alive = true;
     const timer = window.setTimeout(async () => {
       try {
-        const plan = await getTodaySession({ userId: USER_ID, focusLevel: level, mode: selectedSessionMode });
+        const plan = await getTodaySession({ userId, focusLevel: level, mode: selectedSessionMode });
         if (alive) setBackendTodayPlan(plan);
       } catch {
         if (alive) setBackendTodayPlan(null);
@@ -2546,7 +2461,7 @@ export default function App() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [level, selectedSessionMode, analytics?.answered, analytics?.attempts]);
+  }, [userId, level, selectedSessionMode, analytics?.answered, analytics?.attempts]);
 
   const selectFocusLevel = (nextLevel) => {
     const numericLevel = Number(nextLevel);
@@ -2557,7 +2472,7 @@ export default function App() {
   };
 
   const openFocusedLessons = () => {
-    setActiveTab('lessons');
+    setActiveTab('quiz');
   };
 
   const startQuizFlow = (next = {}) => {
@@ -2646,11 +2561,11 @@ export default function App() {
       <section className="core-shell">
         <header className="core-topbar">
           <div>
-          <span className="core-eyebrow">Chinese Learning Platform</span>
           <h2>{currentTitle}</h2>
         </div>
           <div className="topbar-actions">
-            <span className="core-status">{statusLabel}</span>
+            <span className="core-status hide-mobile">{statusLabel}</span>
+            <AuthControls />
             <button
               className="theme-toggle"
               type="button"
@@ -2665,14 +2580,16 @@ export default function App() {
 
         {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
         {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} onOpenProgress={openProgress} />}
-        {!generalCheckLevel && activeTab === 'lessons' && <Lessons level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} onStartQuiz={startQuizFlow} />}
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} onPracticeWord={practiceWord} />}
         {!generalCheckLevel && activeTab === 'apply' && <ApplyPractice todayPlan={todayPlan} selectedWord={selectedPracticeWord} onStartToday={startTodaySession} />}
         {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
+        {!generalCheckLevel && activeTab === 'leaderboard' && <LeaderboardPanel />}
+        {!generalCheckLevel && activeTab === 'profile' && <ProfilePanel />}
         {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
         {!generalCheckLevel && activeTab === 'progress' && <Progress stats={stats} analytics={analytics} onStartRecommended={startRecommendedQuiz} />}
       </section>
+      <AuthModalHost />
     </div>
   );
 }

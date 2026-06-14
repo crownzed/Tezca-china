@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..deps import resolve_user_id
 from ..db import get_db
 from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress, Word
 from ..schemas import AnalyticsOut, QuizOut, QuizStartRequest, QuizSubmitRequest, QuizSubmitResponse, QuestionOut, SessionCompleteOut, SessionCompleteRequest, SessionEventOut, SessionEventRequest, SessionOutputOut, SessionOutputRequest, SessionStartOut, SessionStartRequest, StatsOut, TodaySessionOut
@@ -24,28 +25,29 @@ TYPE_LABELS = {
 
 
 @router.post("/quiz", response_model=QuizOut)
-def start_quiz(payload: QuizStartRequest, db: Session = Depends(get_db)):
-    questions = QuizService(db).get_quiz(payload.user_id, payload.level, payload.quiz_type, payload.limit)
+def start_quiz(payload: QuizStartRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
+    questions = QuizService(db).get_quiz(user_id, payload.level, payload.quiz_type, payload.limit)
     return QuizOut(questions=[QuestionOut.model_validate(q, from_attributes=True) for q in questions])
 
 
 @router.post("/quiz/submit", response_model=QuizSubmitResponse)
-def submit_quiz(payload: QuizSubmitRequest, db: Session = Depends(get_db)):
+def submit_quiz(payload: QuizSubmitRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
+    payload.user_id = user_id
     return QuizService(db).submit(payload)
 
 
 @router.get("/session/today", response_model=TodaySessionOut)
-def today_session(user_id: str = "local-user", focus_level: int = 1, mode: str = "standard", db: Session = Depends(get_db)):
+def today_session(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", db: Session = Depends(get_db)):
     return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode)
 
 @router.get("/recommendation", response_model=TodaySessionOut)
-def recommendation(user_id: str = "local-user", focus_level: int = 1, mode: str = "standard", db: Session = Depends(get_db)):
+def recommendation(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", db: Session = Depends(get_db)):
     return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode)
 
 @router.post("/session/start", response_model=SessionStartOut)
-def start_session(payload: SessionStartRequest, db: Session = Depends(get_db)):
+def start_session(payload: SessionStartRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     session = SessionService(db).start(
-        user_id=payload.user_id,
+        user_id=user_id,
         session_type=payload.session_type,
         behavior_state=payload.behavior_state,
         estimated_minutes=payload.estimated_minutes,
@@ -63,10 +65,10 @@ def start_session(payload: SessionStartRequest, db: Session = Depends(get_db)):
     }
 
 @router.post("/session/event", response_model=SessionEventOut)
-def record_session_event(payload: SessionEventRequest, db: Session = Depends(get_db)):
+def record_session_event(payload: SessionEventRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     try:
         return SessionService(db).record_event(
-            user_id=payload.user_id,
+            user_id=user_id,
             question_id=payload.question_id,
             selected_index=payload.selected_index,
             confidence=payload.confidence,
@@ -81,9 +83,9 @@ def record_session_event(payload: SessionEventRequest, db: Session = Depends(get
         raise
 
 @router.post("/session/complete", response_model=SessionCompleteOut)
-def complete_session(payload: SessionCompleteRequest, db: Session = Depends(get_db)):
+def complete_session(payload: SessionCompleteRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     try:
-        session = SessionService(db).complete(user_id=payload.user_id, session_id=payload.session_id)
+        session = SessionService(db).complete(user_id=user_id, session_id=payload.session_id)
     except ValueError as exc:
         if str(exc) == "session_not_found":
             raise HTTPException(status_code=404, detail="Session not found") from exc
@@ -91,9 +93,9 @@ def complete_session(payload: SessionCompleteRequest, db: Session = Depends(get_
     return {"id": session.id, "completed_at": session.completed_at.isoformat()}
 
 @router.post("/session/output", response_model=SessionOutputOut)
-def submit_session_output(payload: SessionOutputRequest, db: Session = Depends(get_db)):
+def submit_session_output(payload: SessionOutputRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     return OutputService(db).submit(
-        user_id=payload.user_id,
+        user_id=user_id,
         session_id=payload.session_id,
         word_id=payload.word_id,
         target_word=payload.target_word,
@@ -103,7 +105,7 @@ def submit_session_output(payload: SessionOutputRequest, db: Session = Depends(g
 
 
 @router.get("/stats", response_model=StatsOut)
-def stats(user_id: str = "local-user", db: Session = Depends(get_db)):
+def stats(user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     attempts = db.scalar(select(func.count()).select_from(QuizAttempt).where(QuizAttempt.user_id == user_id)) or 0
     progress = db.scalars(select(UserProgress).where(UserProgress.user_id == user_id)).all()
     answered = sum(p.seen for p in progress)
@@ -119,7 +121,7 @@ def stats(user_id: str = "local-user", db: Session = Depends(get_db)):
     return StatsOut(attempts=attempts, answered=answered, accuracy=accuracy, mastery_label=label, weak_words=weak)
 
 @router.get("/analytics", response_model=AnalyticsOut)
-def analytics(user_id: str = "local-user", db: Session = Depends(get_db)):
+def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     now = datetime.utcnow()
     attempts = db.scalars(
         select(QuizAttempt)
