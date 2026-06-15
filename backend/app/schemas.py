@@ -311,6 +311,20 @@ class SessionCompleteOut(BaseModel):
     id: int
     completed_at: str
 
+class TypingDetailIn(BaseModel):
+    """Tín hiệu gõ thực tế thu ở client (SPEC v2 mục 3.1, 3.3).
+
+    Dùng để đo lỗi gõ pinyin/hanzi hay gặp — một trong các tín hiệu usage.
+    Tất cả optional + bounded để client gửi bao nhiêu tùy khả năng.
+    """
+
+    keystrokes: int = Field(default=0, ge=0)
+    backspaces: int = Field(default=0, ge=0)
+    corrections: int = Field(default=0, ge=0)  # số lần sửa (xóa rồi gõ lại)
+    duration_ms: int = Field(default=0, ge=0)
+    pinyin_typos: int = Field(default=0, ge=0)  # gõ sai pinyin (so target)
+    wrong_char: int = Field(default=0, ge=0)    # chọn/gõ sai chữ Hán
+
 class SessionOutputRequest(BaseModel):
     user_id: str = "local-user"
     session_id: int | None = None
@@ -318,6 +332,7 @@ class SessionOutputRequest(BaseModel):
     target_word: str
     prompt: str = ""
     response_text: str = Field(min_length=1)
+    typing_detail: TypingDetailIn | None = None
 
 class SessionOutputOut(BaseModel):
     event_id: int | None = None

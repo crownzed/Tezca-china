@@ -18,6 +18,7 @@ class OutputService:
         session_id: int | None = None,
         word_id: int | None = None,
         prompt: str = "",
+        typing_detail: dict | None = None,
     ) -> dict:
         word = self._resolve_word(word_id, target_word)
         normalized = (response_text or "").strip()
@@ -28,7 +29,9 @@ class OutputService:
         score = assessment["score"]
         correct = assessment["correct"]
         error_tag = "" if correct else assessment["error_tag"]
-        progress = self._update_production_progress(user_id, word, correct, error_tag)
+        progress = self._update_production_progress(
+            user_id, word, correct, error_tag, typing_detail=typing_detail
+        )
 
         event = LearningEvent(
             user_id=user_id,
@@ -105,7 +108,14 @@ class OutputService:
             return self.db.scalar(select(Word).where(Word.hanzi == target_word).limit(1))
         return None
 
-    def _update_production_progress(self, user_id: str, word: Word | None, correct: bool, error_tag: str) -> UserProgress | None:
+    def _update_production_progress(
+        self,
+        user_id: str,
+        word: Word | None,
+        correct: bool,
+        error_tag: str,
+        typing_detail: dict | None = None,
+    ) -> UserProgress | None:
         if not word:
             return None
         progress = self.db.scalar(
@@ -116,14 +126,33 @@ class OutputService:
             self.db.add(progress)
         current = int(progress.production_score or 0)
         progress.production_score = max(0, min(100, current + (16 if correct else -12)))
+        errors = dict(progress.error_json or {})
         if not correct:
-            errors = dict(progress.error_json or {})
             errors[error_tag] = int(errors.get(error_tag, 0)) + 1
-            progress.error_json = errors
             if not progress.next_review_at or progress.next_review_at > datetime.utcnow() + timedelta(days=1):
                 progress.next_review_at = datetime.utcnow() + timedelta(days=1)
+        # Gom tín hiệu usage "lỗi gõ" vào error_json.typing (SPEC v2 mục 3.1, không migration).
+        self._merge_typing_signal(errors, typing_detail)
+        progress.error_json = errors
         progress.last_seen_at = datetime.utcnow()
         return progress
+
+    @staticmethod
+    def _merge_typing_signal(errors: dict, typing_detail: dict | None) -> None:
+        """Cộng dồn lỗi gõ thật từ client vào blob ``error_json.typing``.
+
+        ``typing_detail`` (tùy chọn) từ client, các khóa số sẽ được cộng dồn:
+            backspaces, corrections, pinyin_typos, wrong_char, keystrokes
+        """
+        if not typing_detail:
+            return
+        typing = dict(errors.get("typing") or {})
+        for key in ("backspaces", "corrections", "pinyin_typos", "wrong_char", "keystrokes"):
+            value = typing_detail.get(key)
+            if isinstance(value, (int, float)) and value:
+                typing[key] = int(typing.get(key, 0)) + int(value)
+        if typing:
+            errors["typing"] = typing
 
     def _feedback(self, correct: bool, contains_target: bool, enough_context: bool, target: str | None, assessment: dict) -> str:
         if correct:
