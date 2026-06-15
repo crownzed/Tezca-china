@@ -167,12 +167,14 @@ export async function startQuiz(payload) {
   }
 }
 
-export async function getTodaySession({ userId = 'local-user', focusLevel = 1, mode = 'standard' } = {}) {
+export async function getTodaySession({ userId = 'local-user', focusLevel = 1, mode = 'standard', learningMode = 'hsk', topics = [] } = {}) {
   const params = new URLSearchParams({
     user_id: userId,
     focus_level: String(focusLevel),
     mode,
+    learning_mode: learningMode,
   });
+  (Array.isArray(topics) ? topics : []).forEach(topic => { if (topic) params.append('topics', topic); });
   return request(`/api/session/today?${params.toString()}`);
 }
 
