@@ -10,6 +10,7 @@ from .event_service import LearningEventService
 from .priority_service import extract_features, priority_score
 from .repair_service import RepairService
 from .retrieval_ladder_service import describe_level
+from .acquisition_service import describe_acquisition
 from .srs_service import SRSService
 
 
@@ -226,6 +227,14 @@ class SessionService:
                 context_score=progress.context_score or 0,
                 production_score=progress.production_score or 0,
             )
+            acquisition = describe_acquisition(
+                seen=seen,
+                recognition_score=progress.recognition_score or 0,
+                listening_score=progress.listening_score or 0,
+                context_score=progress.context_score or 0,
+                production_score=progress.production_score or 0,
+                mastery=progress.mastery or 0,
+            )
             rows.append({
                 "word_id": word.id,
                 "level": word.hsk_level or focus_level,
@@ -235,6 +244,7 @@ class SessionService:
                 "accuracy": accuracy,
                 "priority": round(score, 4),
                 "retrieval": retrieval,
+                "acquisition": acquisition,
                 "next_review_at": progress.next_review_at.isoformat() if progress.next_review_at else None,
                 "tone_pattern": metadata["tone_pattern"],
                 "character_family": metadata["character_family"],
