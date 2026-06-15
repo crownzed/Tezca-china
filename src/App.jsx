@@ -62,6 +62,32 @@ function getInitialGeneralCheckState() {
   return window.localStorage.getItem('hskGeneralCheckState') || '';
 }
 
+// Chủ đề thụ đắc tự nhiên (khớp TOPIC_HINTS backend enrichment_service).
+const LEARNING_TOPICS = [
+  { id: 'people', label: 'Con người & xưng hô' },
+  { id: 'school', label: 'Học tập & trường lớp' },
+  { id: 'time', label: 'Thời gian' },
+  { id: 'place', label: 'Nơi chốn & nhà cửa' },
+  { id: 'number', label: 'Số đếm' },
+];
+
+function getInitialLearningMode() {
+  if (typeof window === 'undefined') return 'natural';
+  const saved = window.localStorage.getItem('learningMode');
+  return saved === 'hsk' || saved === 'natural' ? saved : 'natural';
+}
+
+function getInitialTopics() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem('learningTopics');
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(id => LEARNING_TOPICS.some(t => t.id === id)) : [];
+  } catch {
+    return [];
+  }
+}
+
 function QuizAudioPanel({ audioText, audioPlaying, audioPlayed, audioError, isListeningMode, playAudio }) {
   const src = getLocalAudioSrc(audioText);
   return (
@@ -116,6 +142,7 @@ function normalizeBackendTodayPlan(serverPlan, fallbackPlan) {
     level: item.level || level,
     priority: item.priority ?? null,
     retrieval: item.retrieval || null,
+    acquisition: item.acquisition || null,
     next_review_at: item.next_review_at || null,
     tone_pattern: item.tone_pattern || '',
     character_family: item.character_family || '',
@@ -350,26 +377,53 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
     </section>
   );
 }
-function HskFocusPanel({ focusLevel, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun }) {
+function LearningFocusPanel({ focusLevel, showFirstRun, learningMode, topics, onSelectLevel, onSelectLearningMode, onToggleTopic, onOpenLessons, onStartGeneralCheck, onSkipFirstRun }) {
+  const isNatural = learningMode !== 'hsk';
+  const headingNatural = showFirstRun ? 'Bắt đầu học tự nhiên' : 'Học theo nhu cầu';
+  const headingHsk = showFirstRun ? 'Chọn cấp HSK' : `HSK ${focusLevel}`;
   return (
     <section className={`core-card focus-panel ${showFirstRun ? 'focus-panel--first' : ''}`}>
       <div className="focus-copy">
-        <h1>{showFirstRun ? 'Chọn cấp HSK' : `HSK ${focusLevel}`}</h1>
-        <p className="hide-mobile">{showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Cấp độ trọng tâm hiện tại.'}</p>
+        <h1>{isNatural ? headingNatural : headingHsk}</h1>
+        <p className="hide-mobile">{isNatural
+          ? 'Học như tập nói: gặp từ phổ biến trước, leo dần theo mức bạn thực sự dùng được.'
+          : (showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Cấp độ trọng tâm hiện tại.')}</p>
       </div>
 
       <div className="focus-controls">
-        <div className="focus-level-grid" aria-label="Chọn cấp HSK trọng tâm">
-          {FOCUS_LEVELS.map(item => (
-            <button key={item} className={focusLevel === item ? 'active' : ''} onClick={() => onSelectLevel(item)}>
-              <span>HSK</span>
-              <strong>{item}</strong>
-            </button>
-          ))}
+        <div className="learning-mode-toggle" role="group" aria-label="Chế độ học">
+          <button type="button" className={isNatural ? 'active' : ''} onClick={() => onSelectLearningMode('natural')}>Học tự nhiên</button>
+          <button type="button" className={!isNatural ? 'active' : ''} onClick={() => onSelectLearningMode('hsk')}>Luyện thi HSK</button>
         </div>
+
+        {isNatural ? (
+          <div className="topic-grid" aria-label="Chọn chủ đề quan tâm">
+            {LEARNING_TOPICS.map(topic => (
+              <button
+                key={topic.id}
+                type="button"
+                className={topics.includes(topic.id) ? 'active' : ''}
+                aria-pressed={topics.includes(topic.id)}
+                onClick={() => onToggleTopic(topic.id)}
+              >
+                {topic.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="focus-level-grid" aria-label="Chọn cấp HSK trọng tâm">
+            {FOCUS_LEVELS.map(item => (
+              <button key={item} className={focusLevel === item ? 'active' : ''} onClick={() => onSelectLevel(item)}>
+                <span>HSK</span>
+                <strong>{item}</strong>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="focus-actions">
           <button className="btn-primary" onClick={() => onStartGeneralCheck(focusLevel)}><Play size={16} /> Kiểm tra tổng quát</button>
-          <button className="btn-secondary" onClick={onOpenLessons}><Play size={16} /> Luyện tập HSK {focusLevel}</button>
+          <button className="btn-secondary" onClick={onOpenLessons}><Play size={16} /> {isNatural ? 'Vào học' : `Luyện tập HSK ${focusLevel}`}</button>
           {showFirstRun && <button className="btn-secondary" onClick={onSkipFirstRun}>Bỏ qua</button>}
         </div>
       </div>
@@ -462,6 +516,17 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
             <span key={`${item.hanzi}-${item.pinyin || 'focus'}`} title={item.retrieval ? `Bậc truy hồi L${item.retrieval.level}: ${item.retrieval.label}` : undefined}>
               <strong>{item.hanzi}</strong>
               <small>{item.pinyin || 'Cần gặp lại'}</small>
+              {item.acquisition && (
+                <em
+                  className={`focus-word-stage focus-word-stage--${item.acquisition.stage.toLowerCase()}`}
+                  title={`Mức thụ đắc: ${item.acquisition.label} (${item.acquisition.progress_to_next}% tới nấc kế)`}
+                >
+                  {item.acquisition.label}
+                  <span className="focus-word-stage-bar" aria-hidden="true">
+                    <span style={{ width: `${item.acquisition.progress_to_next}%` }} />
+                  </span>
+                </em>
+              )}
               {item.retrieval && <em className="focus-word-rung">L{item.retrieval.level} · {item.retrieval.label}</em>}
             </span>
           )) : (
@@ -487,13 +552,17 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
   );
 }
 
-function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday, onOpenProgress }) {
+function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, showFirstRun, learningMode, topics, onSelectLevel, onSelectLearningMode, onToggleTopic, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday, onOpenProgress }) {
   return (
     <main className="core-dashboard page-enter">
-      <HskFocusPanel
+      <LearningFocusPanel
         focusLevel={focusLevel}
         showFirstRun={showFirstRun}
+        learningMode={learningMode}
+        topics={topics}
         onSelectLevel={onSelectLevel}
+        onSelectLearningMode={onSelectLearningMode}
+        onToggleTopic={onToggleTopic}
         onOpenLessons={onOpenLessons}
         onStartGeneralCheck={onStartGeneralCheck}
         onSkipFirstRun={onSkipFirstRun}
@@ -1252,6 +1321,8 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
   const answersRef = useRef([]);
   const finishedRef = useRef(false);
   const questionStartedAtRef = useRef(0);
+  // Typing tracker: gom lỗi gõ thật (backspace/sửa/độ dài) để gửi usage signal.
+  const typingRef = useRef({ keystrokes: 0, backspaces: 0, corrections: 0, prevLength: 0 });
 
   const modeId = plan?.mode?.id || 'standard';
   const level = plan?.action?.level || plan?.level || fallbackLevel || 1;
@@ -1297,6 +1368,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     setPendingLatency(null);
     setFeedback(null);
     setTextAnswer('');
+    resetTyping();
     setPracticeFeedback(null);
     setCompleted(null);
     setAudioPlaying(false);
@@ -1452,6 +1524,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     setPendingLatency(null);
     setFeedback(null);
     setTextAnswer('');
+    resetTyping();
     setPracticeFeedback(null);
     setAudioPlaying(false);
     setAudioPlayed(false);
@@ -1472,6 +1545,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
             target_word: item.word?.hanzi || '',
             prompt: item.prompt,
             response_text: textAnswer,
+            typing_detail: { ...typingRef.current },
           }), localResult)
           : localResult;
       }
@@ -1507,6 +1581,24 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
   const submitPinyin = () => {
     const result = assessPinyinInput(textAnswer, item?.word?.pinyin);
     completePracticeItem({ ...result, feedback: result.message });
+  };
+
+  // Theo dõi gõ: đếm phím + backspace + lần sửa (độ dài giảm) để đo usage signal.
+  const trackTyping = event => {
+    const next = event.target.value;
+    const tracker = typingRef.current;
+    const prevLength = tracker.prevLength || 0;
+    tracker.keystrokes += 1;
+    if (next.length < prevLength) {
+      tracker.backspaces += 1;
+      tracker.corrections += 1;
+    }
+    tracker.prevLength = next.length;
+    setTextAnswer(next);
+  };
+
+  const resetTyping = () => {
+    typingRef.current = { keystrokes: 0, backspaces: 0, corrections: 0, prevLength: 0 };
   };
 
   if (completed) {
@@ -1639,7 +1731,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
               <span className="core-eyebrow">Pinyin Typing</span>
               <h2>{practiceWord.hanzi}</h2>
               <p>Gõ pinyin có tone số, ví dụ `xue2 xi2`.</p>
-              <input className="practice-input" value={textAnswer} onChange={event => setTextAnswer(event.target.value)} placeholder="Nhập pinyin" disabled={Boolean(practiceFeedback)} />
+              <input className="practice-input" value={textAnswer} onChange={trackTyping} placeholder="Nhập pinyin" disabled={Boolean(practiceFeedback)} />
               {!practiceFeedback && <button className="btn-primary" type="button" onClick={submitPinyin} disabled={!textAnswer.trim() || submitting}>Kiểm tra</button>}
             </div>
           )}
@@ -1664,7 +1756,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
               <span className="core-eyebrow">Guided Output</span>
               <h2>{item.prompt}</h2>
               <p>Dùng từ mục tiêu trong một câu ngắn. Production score tách riêng recognition SRS.</p>
-              <textarea className="practice-textarea" value={textAnswer} onChange={event => setTextAnswer(event.target.value)} placeholder={getPracticeExample(practiceWord)?.cn || `Nhập một câu tiếng Trung có “${practiceWord.hanzi}”`} disabled={Boolean(practiceFeedback)} />
+              <textarea className="practice-textarea" value={textAnswer} onChange={trackTyping} placeholder={getPracticeExample(practiceWord)?.cn || `Nhập một câu tiếng Trung có “${practiceWord.hanzi}”`} disabled={Boolean(practiceFeedback)} />
               {!practiceFeedback && <button className="btn-primary" type="button" onClick={() => completePracticeItem()} disabled={!textAnswer.trim() || submitting}>Gửi câu</button>}
             </div>
           )}
@@ -2591,6 +2683,8 @@ export default function App() {
   const [analytics, setAnalytics] = useState(null);
   const [generalCheckState, setGeneralCheckState] = useState(getInitialGeneralCheckState);
   const [generalCheckLevel, setGeneralCheckLevel] = useState(null);
+  const [learningMode, setLearningMode] = useState(getInitialLearningMode);
+  const [topics, setTopics] = useState(getInitialTopics);
   const [stats, setStats] = useState({ attempts: 0, answered: 0, accuracy: 0, mastery_label: 'Khởi động', weak_words: 0 });
 
   const refreshStats = useCallback(async () => {
@@ -2635,7 +2729,7 @@ export default function App() {
     let alive = true;
     const timer = window.setTimeout(async () => {
       try {
-        const plan = await getTodaySession({ userId, focusLevel: level, mode: selectedSessionMode });
+        const plan = await getTodaySession({ userId, focusLevel: level, mode: selectedSessionMode, learningMode, topics });
         if (alive) setBackendTodayPlan(plan);
       } catch {
         if (alive) setBackendTodayPlan(null);
@@ -2645,7 +2739,23 @@ export default function App() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [userId, level, selectedSessionMode, analytics?.answered, analytics?.attempts]);
+  }, [userId, level, selectedSessionMode, learningMode, topics, analytics?.answered, analytics?.attempts]);
+
+  const selectLearningMode = (nextMode) => {
+    const mode = nextMode === 'hsk' ? 'hsk' : 'natural';
+    setLearningMode(mode);
+    window.localStorage.setItem('learningMode', mode);
+  };
+
+  const toggleTopic = (topicId) => {
+    setTopics(current => {
+      const next = current.includes(topicId)
+        ? current.filter(id => id !== topicId)
+        : [...current, topicId];
+      window.localStorage.setItem('learningTopics', JSON.stringify(next));
+      return next;
+    });
+  };
 
   const selectFocusLevel = (nextLevel) => {
     const numericLevel = Number(nextLevel);
@@ -2763,7 +2873,7 @@ export default function App() {
         </header>
 
         {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
-        {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} onOpenProgress={openProgress} />}
+        {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} learningMode={learningMode} topics={topics} onSelectLearningMode={selectLearningMode} onToggleTopic={toggleTopic} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} onOpenProgress={openProgress} />}
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} onPracticeWord={practiceWord} />}
         {!generalCheckLevel && activeTab === 'apply' && <ApplyPractice todayPlan={todayPlan} selectedWord={selectedPracticeWord} onStartToday={startTodaySession} />}

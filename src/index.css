@@ -1097,6 +1097,42 @@ select:focus-visible {
   text-overflow: ellipsis;
 }
 
+/* Badge 5 nấc thụ đắc (UNKNOWN→MASTERED) — trục tự nhiên thay % HSK. */
+.today-focus-words .focus-word-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+  font-size: 0.64rem;
+  font-weight: 850;
+  font-style: normal;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.focus-word-stage--unknown { color: var(--muted); }
+.focus-word-stage--recognized { color: #c98a1b; }
+.focus-word-stage--understood { color: #1b8ac9; }
+.focus-word-stage--usable { color: var(--jade); }
+.focus-word-stage--mastered { color: #b8336a; }
+
+.focus-word-stage .focus-word-stage-bar {
+  display: block;
+  height: 3px;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.focus-word-stage .focus-word-stage-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+
 .today-actions {
   flex: 0 1 min(520px, 100%);
   min-width: 0;
@@ -3094,6 +3130,60 @@ blockquote small {
 .focus-level-grid strong {
   font: 900 clamp(2.2rem, 4vw, 3.4rem) var(--font-cn);
   line-height: 0.92;
+}
+
+.learning-mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  width: fit-content;
+}
+
+.learning-mode-toggle button {
+  border: 0;
+  border-radius: calc(var(--radius) - 4px);
+  padding: 8px 16px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background 170ms ease, color 170ms ease;
+}
+
+.learning-mode-toggle button.active {
+  color: var(--text);
+  background: var(--gold-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 36%, transparent);
+}
+
+.topic-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.topic-grid button {
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--control-bg);
+  cursor: pointer;
+  transition: transform 170ms ease, border-color 170ms ease, background 170ms ease, color 170ms ease;
+}
+
+.topic-grid button:hover,
+.topic-grid button.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 36%, transparent);
+  background: var(--gold-soft);
+  transform: translateY(-1px);
 }
 
 .focus-actions {

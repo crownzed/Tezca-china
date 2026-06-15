@@ -100,7 +100,7 @@ class SessionService:
         self.db.refresh(session)
         return session
 
-    def today(self, user_id: str, focus_level: int = 1, mode: str = "standard") -> dict:
+    def today(self, user_id: str, focus_level: int = 1, mode: str = "standard", learning_mode: str = "hsk", topics: list[str] | None = None) -> dict:
         now = datetime.utcnow()
         progress_rows = self.db.scalars(select(UserProgress).where(UserProgress.user_id == user_id)).all()
         answered = sum(row.seen or 0 for row in progress_rows)
@@ -127,7 +127,7 @@ class SessionService:
         # (trừ khi hành vi buộc phiên micro nhẹ).
         if repair_plan and not behavior.force_micro:
             quiz_type = repair_plan["quiz_type"]
-        focus_words = self._focus_words(user_id, due_rows, weak_rows, focus_level)
+        focus_words = self._focus_words(user_id, due_rows, weak_rows, focus_level, learning_mode=learning_mode, topics=topics)
         due_count = min(len(due_rows), config["limit"])
         weak_count = min(len(weak_rows), 8 if effective_mode == "deep" else 5)
 
@@ -155,6 +155,7 @@ class SessionService:
             "due_count": due_count,
             "weak_count": weak_count,
             "new_count": new_count,
+            "learning_mode": learning_mode if learning_mode in ("hsk", "natural") else "hsk",
             "target_skills": [self._skill_for_quiz_type(quiz_type)],
             "focus_words": focus_words,
             "missions": self._missions(answered, accuracy, due_count, weak_count, new_count, focus_words, behavior, repair_plan),
@@ -186,7 +187,7 @@ class SessionService:
         ).all()
         return {wid: cnt for wid, cnt in rows}
 
-    def _focus_words(self, user_id: str, due_rows: list[UserProgress], weak_rows: list[UserProgress], focus_level: int) -> list[dict]:
+    def _focus_words(self, user_id: str, due_rows: list[UserProgress], weak_rows: list[UserProgress], focus_level: int, learning_mode: str = "hsk", topics: list[str] | None = None) -> list[dict]:
         progress_by_word = {row.word_id: row for row in [*due_rows, *weak_rows]}
         word_ids = list(progress_by_word.keys())[:12]
         if not word_ids:
@@ -204,6 +205,9 @@ class SessionService:
             seen = progress.seen or 0
             accuracy = round(((progress.correct or 0) / max(1, seen)) * 100)
 
+            # Tín hiệu usage cho mode natural: số lần gặp thật + chủ đề quan tâm.
+            usage_count = int((progress.error_json or {}).get("usage_count", 0)) if progress.error_json else 0
+            topic_match = True if not topics else (metadata["topic"] in topics)
             elapsed_days = (now - progress.last_seen_at).total_seconds() / 86400 if progress.last_seen_at else None
             overdue_days = (now - progress.next_review_at).total_seconds() / 86400 if progress.next_review_at else None
             features = extract_features(
@@ -216,6 +220,9 @@ class SessionService:
                 word_level=word.hsk_level or focus_level,
                 focus_level=focus_level,
                 frequency_band=metadata["frequency_band"],
+                learning_mode=learning_mode,
+                usage_count=usage_count,
+                topic_match=topic_match,
             )
             score = priority_score(features.as_dict())
             retrieval = describe_level(
