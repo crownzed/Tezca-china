@@ -1,13 +1,16 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import LearningSession, QuizType, Question, UserProgress, Word
+from ..models import LearningEvent, LearningSession, QuizType, Question, UserProgress, Word
 from .behavior_service import BehaviorService
 from .chinese_metadata_service import ChineseMetadataService
 from .event_service import LearningEventService
-from .learning_utils import infer_error_tag
+from .priority_service import extract_features, priority_score
+from .repair_service import RepairService
+from .retrieval_ladder_service import describe_level
+from .acquisition_service import describe_acquisition
 from .srs_service import SRSService
 
 
@@ -62,7 +65,6 @@ class SessionService:
             raise ValueError("question_not_found")
 
         correct = selected_index == question.correct_index
-        resolved_error_tag = infer_error_tag(correct, question.quiz_type, error_tag)
         progress = SRSService(self.db).update_from_answer(user_id, question, correct, confidence, latency_ms)
         event = LearningEventService(self.db).record_quiz_answer(
             user_id,
@@ -70,9 +72,10 @@ class SessionService:
             correct,
             confidence,
             latency_ms,
-            resolved_error_tag,
+            error_tag,
             session_id=session_id,
             item_type=item_type,
+            selected_index=selected_index,
         )
         self.db.commit()
         self.db.refresh(event)
@@ -82,7 +85,7 @@ class SessionService:
             "correct": correct,
             "correct_index": question.correct_index,
             "explanation": question.explanation or "",
-            "error_tag": resolved_error_tag,
+            "error_tag": event.error_tag,
             "next_review_at": progress.next_review_at.isoformat() if progress and progress.next_review_at else None,
         }
 
@@ -119,6 +122,11 @@ class SessionService:
         block_new = behavior.block_new_words
         new_count = 0 if block_new else config["new_count"]
         quiz_type = self._quiz_type_for_state(behavior.state, len(weak_rows), effective_mode)
+        repair_plan = RepairService(self.db).build_repair_plan(user_id)
+        # Khi có lỗi gần đây, ưu tiên dạng bài sửa đúng loại lỗi chủ đạo
+        # (trừ khi hành vi buộc phiên micro nhẹ).
+        if repair_plan and not behavior.force_micro:
+            quiz_type = repair_plan["quiz_type"]
         focus_words = self._focus_words(user_id, due_rows, weak_rows, focus_level)
         due_count = min(len(due_rows), config["limit"])
         weak_count = min(len(weak_rows), 8 if effective_mode == "deep" else 5)
@@ -149,7 +157,8 @@ class SessionService:
             "new_count": new_count,
             "target_skills": [self._skill_for_quiz_type(quiz_type)],
             "focus_words": focus_words,
-            "missions": self._missions(answered, accuracy, due_count, weak_count, new_count, focus_words, behavior),
+            "missions": self._missions(answered, accuracy, due_count, weak_count, new_count, focus_words, behavior, repair_plan),
+            "repair_plan": repair_plan,
             "reason": behavior.reason or self._reason(answered, due_count, weak_count, new_count, quiz_type),
         }
 
@@ -160,20 +169,72 @@ class SessionService:
             return QuizType.vocab
         return QuizType.vocab
 
+    def _recent_error_counts(self, user_id: str, word_ids: list[int], days: int = 7) -> dict[int, int]:
+        """Số lần sai gần đây (trong ``days`` ngày) của riêng từng từ."""
+        if not word_ids:
+            return {}
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = self.db.execute(
+            select(LearningEvent.word_id, func.count())
+            .where(
+                LearningEvent.user_id == user_id,
+                LearningEvent.correct == 0,
+                LearningEvent.word_id.in_(word_ids),
+                LearningEvent.created_at >= since,
+            )
+            .group_by(LearningEvent.word_id)
+        ).all()
+        return {wid: cnt for wid, cnt in rows}
+
     def _focus_words(self, user_id: str, due_rows: list[UserProgress], weak_rows: list[UserProgress], focus_level: int) -> list[dict]:
         progress_by_word = {row.word_id: row for row in [*due_rows, *weak_rows]}
-        word_ids = list(progress_by_word.keys())[:8]
+        word_ids = list(progress_by_word.keys())[:12]
         if not word_ids:
             return []
         words = self.db.scalars(select(Word).where(Word.id.in_(word_ids))).all()
         metadata_service = ChineseMetadataService(self.db)
+        error_counts = self._recent_error_counts(user_id, word_ids)
+        now = datetime.utcnow()
         rows = []
         for word in words:
             progress = progress_by_word.get(word.id)
             if not progress:
                 continue
             metadata = metadata_service.enrich_word(word)
-            accuracy = round(((progress.correct or 0) / max(1, progress.seen or 1)) * 100)
+            seen = progress.seen or 0
+            accuracy = round(((progress.correct or 0) / max(1, seen)) * 100)
+
+            elapsed_days = (now - progress.last_seen_at).total_seconds() / 86400 if progress.last_seen_at else None
+            overdue_days = (now - progress.next_review_at).total_seconds() / 86400 if progress.next_review_at else None
+            features = extract_features(
+                seen=seen,
+                wrong=progress.wrong or 0,
+                interval_days=progress.interval_days or 1,
+                elapsed_days=elapsed_days,
+                overdue_days=overdue_days,
+                recent_error_count=error_counts.get(word.id, 0),
+                word_level=word.hsk_level or focus_level,
+                focus_level=focus_level,
+                frequency_band=metadata["frequency_band"],
+            )
+            score = priority_score(features.as_dict())
+            retrieval = describe_level(
+                interval_days=progress.interval_days or 0,
+                repetition=progress.repetition or 0,
+                mastery=progress.mastery or 0,
+                accuracy_pct=accuracy,
+                recent_error_count=error_counts.get(word.id, 0),
+                context_score=progress.context_score or 0,
+                production_score=progress.production_score or 0,
+            )
+            acquisition = describe_acquisition(
+                seen=seen,
+                recognition_score=progress.recognition_score or 0,
+                listening_score=progress.listening_score or 0,
+                context_score=progress.context_score or 0,
+                production_score=progress.production_score or 0,
+                mastery=progress.mastery or 0,
+            )
             rows.append({
                 "word_id": word.id,
                 "level": word.hsk_level or focus_level,
@@ -181,6 +242,9 @@ class SessionService:
                 "pinyin": word.pinyin or "",
                 "meaning_vi": word.meaning_vi or "",
                 "accuracy": accuracy,
+                "priority": round(score, 4),
+                "retrieval": retrieval,
+                "acquisition": acquisition,
                 "next_review_at": progress.next_review_at.isoformat() if progress.next_review_at else None,
                 "tone_pattern": metadata["tone_pattern"],
                 "character_family": metadata["character_family"],
@@ -191,9 +255,24 @@ class SessionService:
                 "frequency_band": metadata["frequency_band"],
             })
         self.db.commit()
-        return sorted(rows, key=lambda item: (item["accuracy"], item["level"]))[:6]
+        return sorted(rows, key=lambda item: -item["priority"])[:6]
 
-    def _missions(self, answered: int, accuracy: int, due_count: int, weak_count: int, new_count: int, focus_words: list[dict], behavior) -> list[dict]:
+    def _missions(self, answered: int, accuracy: int, due_count: int, weak_count: int, new_count: int, focus_words: list[dict], behavior, repair_plan: dict | None = None) -> list[dict]:
+        if repair_plan:
+            repair_value = f"{repair_plan['error_count']} lỗi · {repair_plan['label']}"
+            repair_focus = repair_plan.get("focus_words") or []
+            repair_detail = (
+                f"{repair_plan['method']}. Ưu tiên: "
+                + ", ".join(item["hanzi"] for item in repair_focus[:3])
+            ) if repair_focus else repair_plan["method"]
+            repair_tone = repair_plan.get("tone", "cinnabar")
+        else:
+            repair_value = f"{weak_count} từ" if weak_count else "Chưa có"
+            repair_detail = (
+                ", ".join(item["hanzi"] for item in focus_words[:3])
+                if weak_count else "Lỗi sai sẽ được gom tại đây sau mỗi phiên."
+            )
+            repair_tone = "cinnabar" if weak_count else "jade"
         return [
             {
                 "key": "due",
@@ -205,9 +284,9 @@ class SessionService:
             {
                 "key": "repair",
                 "label": "Sửa lỗi",
-                "value": f"{weak_count} từ" if weak_count else "Chưa có",
-                "detail": ", ".join(item["hanzi"] for item in focus_words[:3]) if weak_count else "Lỗi sai sẽ được gom tại đây sau mỗi phiên.",
-                "tone": "cinnabar" if weak_count else "jade",
+                "value": repair_value,
+                "detail": repair_detail,
+                "tone": repair_tone,
             },
             {
                 "key": "new",

@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@500;700;900&display=swap');
+@import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css');
 
 :root {
   color-scheme: light;
@@ -59,7 +60,7 @@
   --line-compact: 1.32;
   --measure: 68ch;
   --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-cn: 'Noto Sans SC', 'Inter', sans-serif;
+  --font-cn: 'LXGW WenKai', 'Noto Sans SC', 'Inter', sans-serif;
 }
 
 :root[data-theme='dark'] {
@@ -616,6 +617,62 @@ select:focus-visible {
   line-height: 1;
 }
 
+.readiness-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: clamp(14px, 18px, 22px);
+}
+
+.readiness-cell {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  border: 1px solid var(--line-soft);
+}
+
+.readiness-cell span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.readiness-cell strong {
+  font-size: 1.32rem;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.readiness-meter {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.readiness-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--jade);
+}
+
+.readiness-cell[data-tone="steady"] .readiness-meter span {
+  background: var(--gold);
+}
+
+.readiness-cell[data-tone="weak"] .readiness-meter span {
+  background: var(--cinnabar);
+}
+
+@media (max-width: 720px) {
+  .readiness-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .analytics-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.618fr) minmax(320px, 1fr);
@@ -1026,6 +1083,18 @@ select:focus-visible {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 850;
+}
+
+.today-focus-words .focus-word-rung {
+  margin-top: 2px;
+  color: var(--jade);
+  font-size: 0.66rem;
+  font-weight: 800;
+  font-style: normal;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .today-actions {
@@ -1997,6 +2066,137 @@ textarea {
 .feedback-panel .btn-primary {
   width: fit-content;
 }
+
+.feedback-error-tag {
+  display: block;
+  font-style: normal;
+  font-weight: 850;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  padding: 7px 11px;
+  border-radius: var(--radius);
+  color: var(--text);
+  background: color-mix(in srgb, var(--cinnabar) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cinnabar) 30%, transparent);
+}
+
+.feedback-error-tag strong {
+  color: var(--cinnabar);
+  font-weight: 950;
+}
+
+.result-narrative {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+}
+
+.result-narrative li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 820;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.result-narrative li svg {
+  flex: 0 0 auto;
+  color: var(--gold);
+}
+
+.result-narrative strong {
+  color: var(--gold);
+  font-weight: 950;
+}
+
+/* Card ENCODE sau khi trả lời (doc 5.2): hanzi lớn, pinyin tô màu thanh điệu,
+   gợi ý bộ thủ, cặp dễ nhầm. Biến phản hồi thành lúc ghi nhớ sâu. */
+.word-encode-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--gold) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 22%, transparent);
+}
+
+.word-encode-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.word-encode-hanzi {
+  font-family: var(--font-cn);
+  font-size: 2.6rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.word-encode-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.word-encode-pinyin {
+  font-size: 1.15rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+}
+
+.word-encode-meaning {
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: var(--muted);
+}
+
+.word-encode-hint {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.word-encode-confuse {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.word-encode-confuse small {
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.word-encode-confuse span {
+  font-family: var(--font-cn);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--cinnabar);
+}
+
+/* Tô màu thanh điệu (chuẩn phổ biến: 1 đỏ, 2 xanh lá, 3 lam, 4 tím, nhẹ xám). */
+.toned-pinyin {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.toned-pinyin .tone-1 { color: #d11a2a; }
+.toned-pinyin .tone-2 { color: #2e8b57; }
+.toned-pinyin .tone-3 { color: #1f6feb; }
+.toned-pinyin .tone-4 { color: #8957e5; }
+.toned-pinyin .tone-5 { color: var(--muted); }
 
 .session-result-card {
   gap: 14px;

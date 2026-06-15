@@ -10,6 +10,42 @@ class QuizStartRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=50)
 
 
+class QuestionWordOut(BaseModel):
+    """Metadata trực quan của từ mục tiêu, kèm theo mỗi câu hỏi.
+
+    Cho phép card câu hỏi render hook trực quan (tô màu thanh điệu,
+    gợi ý bộ thủ, cặp dễ nhầm) trong khoảnh khắc REVEAL→ENCODE
+    sau khi trả lời, thay vì chỉ hiện nghĩa trơn.
+    """
+
+    word_id: int | None = None
+    hanzi: str = ""
+    pinyin: str = ""
+    meaning_vi: str = ""
+    tone_pattern: str = ""
+    character_family: str = ""
+    component_hint: str = ""
+    confusable_words: list[str] = Field(default_factory=list)
+    collocations: list[str] = Field(default_factory=list)
+    topic: str = "core"
+
+    @classmethod
+    def from_word(cls, word) -> "QuestionWordOut | None":
+        if word is None:
+            return None
+        return cls(
+            word_id=word.id,
+            hanzi=word.hanzi,
+            pinyin=word.pinyin or "",
+            meaning_vi=word.meaning_vi or word.meaning_en or "",
+            tone_pattern=word.tone_pattern or "",
+            character_family=word.character_family or "",
+            component_hint=word.component_hint or "",
+            confusable_words=list(word.confusable_words_json or []),
+            collocations=list(word.collocations_json or []),
+            topic=word.topic or "core",
+        )
+
 class QuestionOut(BaseModel):
     id: int
     level: int
@@ -18,6 +54,7 @@ class QuestionOut(BaseModel):
     options: list[str]
     audio_text: str = ""
     explanation: str = ""
+    word: QuestionWordOut | None = None
 
 
 class QuizOut(BaseModel):
@@ -124,6 +161,21 @@ class AnalyticsOut(BaseModel):
     recommendation: AnalyticsRecommendation
 
 
+class RetrievalRung(BaseModel):
+    level: int
+    label: str
+    mode: str
+    skill: str
+    is_production: bool = False
+
+
+class AcquisitionStateOut(BaseModel):
+    stage: str = "UNKNOWN"
+    label: str = ""
+    index: int = 0
+    progress_to_next: int = 0
+    is_productive: bool = False
+
 class TodayFocusWord(BaseModel):
     word_id: int | None = None
     level: int
@@ -131,6 +183,9 @@ class TodayFocusWord(BaseModel):
     pinyin: str = ""
     meaning_vi: str = ""
     accuracy: int = 0
+    priority: float = 0.0
+    retrieval: RetrievalRung | None = None
+    acquisition: AcquisitionStateOut | None = None
     next_review_at: str | None = None
     tone_pattern: str = ""
     character_family: str = ""
@@ -156,6 +211,37 @@ class TodayBehaviorMetrics(BaseModel):
     wrong_streak: int = 0
 
 
+class RepairFocusWord(BaseModel):
+    word_id: int | None = None
+    hanzi: str
+    pinyin: str = ""
+    meaning_vi: str = ""
+    level: int = 1
+
+
+class RepairDistributionItem(BaseModel):
+    error_tag: str
+    count: int
+    label: str
+
+
+class RepairConfusionItem(BaseModel):
+    pair: str
+    count: int
+
+
+class RepairPlan(BaseModel):
+    error_tag: str
+    label: str
+    method: str
+    quiz_type: QuizType
+    tone: str = "cinnabar"
+    error_count: int = 0
+    focus_words: list[RepairFocusWord] = Field(default_factory=list)
+    distribution: list[RepairDistributionItem] = Field(default_factory=list)
+    confusion_matrix: list[RepairConfusionItem] = Field(default_factory=list)
+
+
 class TodaySessionOut(BaseModel):
     session_type: str
     behavior_state: str
@@ -177,6 +263,7 @@ class TodaySessionOut(BaseModel):
     target_skills: list[str]
     focus_words: list[TodayFocusWord]
     missions: list[TodayMission]
+    repair_plan: RepairPlan | None = None
     reason: str
 
 class SessionStartRequest(BaseModel):
