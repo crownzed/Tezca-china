@@ -114,6 +114,8 @@ function normalizeBackendTodayPlan(serverPlan, fallbackPlan) {
     meaning_vi: item.meaning_vi || '',
     accuracy: item.accuracy || 0,
     level: item.level || level,
+    priority: item.priority ?? null,
+    retrieval: item.retrieval || null,
     next_review_at: item.next_review_at || null,
     tone_pattern: item.tone_pattern || '',
     character_family: item.character_family || '',
@@ -145,6 +147,7 @@ function normalizeBackendTodayPlan(serverPlan, fallbackPlan) {
     targetSkills: serverPlan.target_skills || fallbackPlan.targetSkills || [quizType],
     focusWords: focusWords.length ? focusWords : fallbackPlan.focusWords,
     missions: serverPlan.missions || fallbackPlan.missions,
+    repairPlan: serverPlan.repair_plan || null,
     title: planTitleForState(serverPlan.behavior_state, mode),
     subtitle: `${serverPlan.behavior_label || fallbackPlan.behaviorLabel || 'Duy trì'}: ưu tiên ${quizTypeDescription(quizType)} HSK ${level}.`,
     reason: serverPlan.reason || fallbackPlan.reason,
@@ -209,6 +212,14 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
   }).join(' ');
   const bestType = typeRows.filter(item => item.answered > 0).sort((a, b) => b.accuracy - a.accuracy)[0];
   const weakType = typeRows.filter(item => item.answered > 0).sort((a, b) => a.accuracy - b.accuracy)[0];
+  // Readiness theo kỹ năng (doc 7.2): dashboard ưu tiên hiện độ sẵn sàng từng
+  // năng lực thay vì chỉ accuracy tổng.
+  const readinessRows = [
+    { key: 'memory', label: 'Trí nhớ bền', value: clampPercent(analytics?.memory_stability) },
+    { key: 'listening', label: 'Nghe', value: clampPercent(analytics?.listening_readiness) },
+    { key: 'context', label: 'Ngữ cảnh', value: clampPercent(analytics?.context_transfer) },
+    { key: 'production', label: 'Sản sinh', value: clampPercent(analytics?.production_readiness) },
+  ];
 
   return (
     <section className="analytics-panel page-enter" aria-label="Phân tích dữ liệu người học">
@@ -223,6 +234,16 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
           <span className="hide-mobile"><strong>{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</strong>Tự tin</span>
           <span className="hide-mobile"><strong>{eventCount || analytics?.attempts || 0}</strong>Lượt</span>
         </div>
+      </div>
+
+      <div className="readiness-strip" aria-label="Độ sẵn sàng theo kỹ năng">
+        {readinessRows.map(item => (
+          <div key={item.key} className="readiness-cell" data-tone={skillTone(item.value)}>
+            <span>{item.label}</span>
+            <strong>{hasData ? `${item.value}%` : '-'}</strong>
+            <div className="readiness-meter"><span style={{ width: `${item.value}%` }} /></div>
+          </div>
+        ))}
       </div>
 
       <div className="analytics-grid">
@@ -438,9 +459,10 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
       <div className="today-queue-bottom">
         <div className="today-focus-words" aria-label="Từ trọng tâm">
           {focusWords.length ? focusWords.map(item => (
-            <span key={`${item.hanzi}-${item.pinyin || 'focus'}`}>
+            <span key={`${item.hanzi}-${item.pinyin || 'focus'}`} title={item.retrieval ? `Bậc truy hồi L${item.retrieval.level}: ${item.retrieval.label}` : undefined}>
               <strong>{item.hanzi}</strong>
               <small>{item.pinyin || 'Cần gặp lại'}</small>
+              {item.retrieval && <em className="focus-word-rung">L{item.retrieval.level} · {item.retrieval.label}</em>}
             </span>
           )) : (
             <span>
@@ -545,6 +567,11 @@ function buildQuizStrategySummary(answerRows) {
   const lowConfidence = primary.filter(item => item.confidence <= 2).length;
   const repairSuccess = repairs.filter(item => item.correct).length;
   const confidenceTotal = primary.reduce((sum, item) => sum + (Number(item.confidence) || 0), 0);
+  const errorBreakdown = {};
+  primary.filter(item => !item.correct && item.error_tag).forEach(item => {
+    errorBreakdown[item.error_tag] = (errorBreakdown[item.error_tag] || 0) + 1;
+  });
+  const dominantError = Object.entries(errorBreakdown).sort((a, b) => b[1] - a[1])[0] || null;
   return {
     total,
     correct,
@@ -554,6 +581,7 @@ function buildQuizStrategySummary(answerRows) {
     repairSuccess,
     nextReviewCount: primary.filter(item => !item.correct || item.confidence <= 2).length,
     avgConfidence: total ? Number((confidenceTotal / total).toFixed(1)) : 0,
+    dominantError: dominantError ? { tag: dominantError[0], count: dominantError[1] } : null,
   };
 }
 
@@ -827,7 +855,12 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
         <section className="core-card result-card session-result-card">
           <span className="core-eyebrow">Strategic Quiz Result</span>
           <h1>{result.accuracy >= 80 ? 'Nhớ chắc hơn' : result.accuracy >= 55 ? 'Đã sửa được nền' : 'Cần phiên phục hồi'}</h1>
-          <p>Quiz đã cập nhật SRS từng câu, confidence, lỗi sai và repair loop.</p>
+          <ul className="result-narrative">
+            <li><ShieldCheck size={16} /> Đã củng cố <strong>{result.correct}</strong> từ qua retrieval.</li>
+            {result.repairCount > 0 && <li><Wrench size={16} /> Đã sửa <strong>{result.repairSuccess}/{result.repairCount}</strong> từ hay sai.</li>}
+            {result.dominantError && <li><XCircle size={16} /> <strong>{result.dominantError.count}</strong> lỗi {errorTagLabel(result.dominantError.tag)} sẽ gặp lại sớm.</li>}
+            {result.nextReviewCount > 0 ? <li><Clock3 size={16} /> <strong>{result.nextReviewCount}</strong> từ vào lịch ôn ngày mai.</li> : <li><Clock3 size={16} /> Không còn từ nào cần ôn gấp.</li>}
+          </ul>
           <div className="session-result-grid">
             <span><ShieldCheck size={18} /><strong>{result.correct}/{result.total}</strong><small>retrieval đúng</small></span>
             <span><Wrench size={18} /><strong>{result.repairSuccess}/{result.repairCount}</strong><small>repair thành công</small></span>
@@ -984,6 +1017,13 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               </div>
               <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
               {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '—'}</small>}
+              {!feedback.review.correct && errorTagLabel(feedback.review.error_tag) && (
+                <div className="feedback-error-tag">
+                  <em>{errorTagLabel(feedback.review.error_tag)}</em>
+                  {errorTagHint(feedback.review.error_tag) && <small>{errorTagHint(feedback.review.error_tag)}</small>}
+                </div>
+              )}
+              <WordEncodeCard word={question.word} />
               <button className="btn-primary" type="button" onClick={continueQuiz} disabled={loading}>{index + 1 >= quizItems.length ? 'Xong' : 'Tiếp'}</button>
             </div>
           )}
@@ -1018,6 +1058,143 @@ function nextReviewText(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Gặp lại trong lịch ôn kế tiếp.';
   return `Gặp lại ${date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}.`;
+}
+
+// Nhãn loại lỗi (doc 4.6/5.3): mỗi lỗi nói rõ "sai kiểu gì" + cách sửa ngắn.
+const ERROR_TAG_INFO = {
+  tone_error: { label: 'Lỗi thanh điệu', hint: 'Đúng âm nhưng sai thanh. Nghe lại cặp thanh tối thiểu.' },
+  sound_error: { label: 'Lỗi phát âm', hint: 'Âm gần giống dễ lẫn. Nghe chậm và lặp lại.' },
+  hanzi_error: { label: 'Lỗi mặt chữ', hint: 'Chữ trông giống nhau. So sánh bộ thủ để phân biệt.' },
+  meaning_error: { label: 'Lỗi nghĩa', hint: 'Nhầm nghĩa. Xem lại ví dụ tương phản.' },
+  context_error: { label: 'Lỗi ngữ cảnh', hint: 'Dùng sai tình huống. Luyện điền khuyết trong câu.' },
+  production_error: { label: 'Lỗi sản sinh', hint: 'Đặt câu chưa đạt. Bám khung câu mẫu.' },
+  speed_error: { label: 'Lỗi tốc độ', hint: 'Đúng nhưng chậm. Luyện vòng phản xạ nhanh.' },
+  confidence_error: { label: 'Chưa chắc', hint: 'Đúng nhưng thiếu tự tin. Gặp lại sớm để củng cố.' },
+};
+
+function errorTagInfo(tag) {
+  if (!tag) return null;
+  if (ERROR_TAG_INFO[tag]) return ERROR_TAG_INFO[tag];
+  // confusion_x_y từ sound taxonomy → gộp về lỗi phát âm.
+  if (String(tag).startsWith('confusion_')) return ERROR_TAG_INFO.sound_error;
+  return null;
+}
+
+function errorTagLabel(tag) {
+  return errorTagInfo(tag)?.label || '';
+}
+
+function errorTagHint(tag) {
+  return errorTagInfo(tag)?.hint || '';
+}
+
+// Tô màu thanh điệu theo dấu pinyin (doc 3.1: thanh điệu là khoá ghi nhớ).
+// Phát hiện thanh qua dấu phụ trên nguyên âm, không cần số thanh.
+const TONE_MARKS = {
+  1: 'āēīōūǖĀĒĪŌŪǕ',
+  2: 'áéíóúǘÁÉÍÓÚǗ',
+  3: 'ǎěǐǒǔǚǍĚǏǑǓǙ',
+  4: 'àèìòùǜÀÈÌÒÙǛ',
+};
+
+function toneOfSyllable(syllable) {
+  for (const ch of syllable) {
+    for (const tone of [1, 2, 3, 4]) {
+      if (TONE_MARKS[tone].includes(ch)) return tone;
+    }
+  }
+  // Fallback: số thanh cuối âm tiết (vd "xue2") khi không có dấu phụ.
+  const trailing = syllable.match(/[1-5](?!.*[1-5])/);
+  if (trailing) return Number(trailing[0]);
+  return 5; // không dấu → thanh nhẹ
+}
+
+// Nguyên âm có dấu thanh + nguyên âm trơn, dùng để dò ranh giới âm tiết.
+const PINYIN_VOWELS = 'aeiouüvāēīōūǖáéíóúǘǎěǐǒǔǚàèìòùǜ';
+const isPinyinVowel = (ch) => PINYIN_VOWELS.includes(ch.toLowerCase());
+
+// Tách một token pinyin dính liền (vd "jīntiān") thành từng âm tiết.
+// Âm tiết mới bắt đầu khi gặp phụ âm onset sau khi đã thấy nguyên âm,
+// trừ các coda hợp lệ: n (khi không đứng trước nguyên âm), ng, r (erhua).
+function splitPinyinToken(token) {
+  const text = token.toLowerCase();
+  const out = [];
+  let cur = '';
+  let sawVowel = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    const next = text[i + 1];
+    if (isPinyinVowel(c)) {
+      cur += c;
+      sawVowel = true;
+    } else if (!sawVowel) {
+      cur += c; // phụ âm đầu (gồm cụm zh/ch/sh)
+    } else if (c === 'n' && !(next && isPinyinVowel(next))) {
+      cur += c; // n coda
+    } else if (c === 'g' && cur.endsWith('n')) {
+      cur += c; // ng coda
+    } else if (c === 'r' && !(next && isPinyinVowel(next))) {
+      cur += c; // r coda / erhua
+    } else {
+      if (cur) out.push(cur);
+      cur = c;
+      sawVowel = false;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+function tonedPinyin(pinyin) {
+  const text = cleanText(pinyin);
+  if (!text) return [];
+  // Tách theo khoảng trắng trước, rồi tách tiếp mỗi token dính liền.
+  const syllables = text.split(/\s+/).flatMap(splitPinyinToken);
+  return syllables.map((syllable, idx) => ({
+    key: `${syllable}-${idx}`,
+    text: syllable,
+    tone: toneOfSyllable(syllable),
+  }));
+}
+
+function TonedPinyin({ pinyin, className = '' }) {
+  const syllables = tonedPinyin(pinyin);
+  if (!syllables.length) return null;
+  return (
+    <span className={`toned-pinyin ${className}`} aria-label={pinyin}>
+      {syllables.map(part => (
+        <span key={part.key} className={`tone-${part.tone}`}>{part.text}</span>
+      ))}
+    </span>
+  );
+}
+
+// Card ENCODE sau khi trả lời (doc 5.2 REVEAL→ENCODE): hiện hanzi lớn,
+// pinyin tô màu thanh điệu, gợi ý bộ thủ và cặp dễ nhầm — biến khoảnh
+// khắc phản hồi thành lúc ghi nhớ sâu, không chỉ báo đúng/sai.
+function WordEncodeCard({ word }) {
+  if (!word || !word.hanzi) return null;
+  const confusables = Array.isArray(word.confusable_words) ? word.confusable_words.filter(Boolean) : [];
+  return (
+    <div className="word-encode-card">
+      <div className="word-encode-hero">
+        <span className="word-encode-hanzi">{word.hanzi}</span>
+        <div className="word-encode-meta">
+          <TonedPinyin pinyin={word.pinyin} className="word-encode-pinyin" />
+          {word.meaning_vi && <span className="word-encode-meaning">{word.meaning_vi}</span>}
+        </div>
+      </div>
+      {word.component_hint && (
+        <p className="word-encode-hint">{word.character_family ? `${word.character_family} · ` : ''}{word.component_hint}</p>
+      )}
+      {confusables.length > 0 && (
+        <div className="word-encode-confuse">
+          <small>Dễ nhầm với</small>
+          <span>{confusables.slice(0, 3).join(' / ')}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function buildSessionSummary(plan, answers) {
@@ -1570,6 +1747,13 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
               </div>
               <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
               {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '—'}</small>}
+              {!feedback.review.correct && errorTagLabel(feedback.review.error_tag) && (
+                <div className="feedback-error-tag">
+                  <em>{errorTagLabel(feedback.review.error_tag)}</em>
+                  {errorTagHint(feedback.review.error_tag) && <small>{errorTagHint(feedback.review.error_tag)}</small>}
+                </div>
+              )}
+              <WordEncodeCard word={question.word} />
               <button className="btn-primary" type="button" onClick={continueSession} disabled={loading}>{index + 1 >= items.length ? 'Xong' : 'Tiếp'}</button>
             </div>
           )}
