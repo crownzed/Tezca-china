@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..deps import resolve_user_id
 from ..db import get_db
 from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress, Word
-from ..schemas import AnalyticsOut, QuizOut, QuizStartRequest, QuizSubmitRequest, QuizSubmitResponse, QuestionOut, SessionCompleteOut, SessionCompleteRequest, SessionEventOut, SessionEventRequest, SessionOutputOut, SessionOutputRequest, SessionStartOut, SessionStartRequest, StatsOut, TodaySessionOut
+from ..schemas import AnalyticsOut, QuizOut, QuizStartRequest, QuizSubmitRequest, QuizSubmitResponse, QuestionOut, QuestionWordOut, SessionCompleteOut, SessionCompleteRequest, SessionEventOut, SessionEventRequest, SessionOutputOut, SessionOutputRequest, SessionStartOut, SessionStartRequest, StatsOut, TodaySessionOut
 from ..services.output_service import OutputService
 from ..services.quiz_service import QuizService
 from ..services.session_service import SessionService
@@ -24,10 +24,22 @@ TYPE_LABELS = {
 }
 
 
+def _question_out(q) -> QuestionOut:
+    """Serialize câu hỏi kèm metadata trực quan của từ mục tiêu.
+
+    ``model_validate(from_attributes=True)`` không map các cột ``*_json``
+    (confusable_words_json -> confusable_words), nên ``word`` được dựng
+    thủ công qua ``QuestionWordOut.from_word``.
+    """
+    out = QuestionOut.model_validate(q, from_attributes=True)
+    out.word = QuestionWordOut.from_word(getattr(q, "word", None))
+    return out
+
+
 @router.post("/quiz", response_model=QuizOut)
 def start_quiz(payload: QuizStartRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     questions = QuizService(db).get_quiz(user_id, payload.level, payload.quiz_type, payload.limit)
-    return QuizOut(questions=[QuestionOut.model_validate(q, from_attributes=True) for q in questions])
+    return QuizOut(questions=[_question_out(q) for q in questions])
 
 
 @router.post("/quiz/submit", response_model=QuizSubmitResponse)
@@ -36,13 +48,19 @@ def submit_quiz(payload: QuizSubmitRequest, user_id: str = Depends(resolve_user_
     return QuizService(db).submit(payload)
 
 
+def _parse_topics(topics: str | None) -> list[str] | None:
+    if not topics:
+        return None
+    parsed = [t.strip() for t in topics.split(",") if t.strip()]
+    return parsed or None
+
 @router.get("/session/today", response_model=TodaySessionOut)
-def today_session(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", db: Session = Depends(get_db)):
-    return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode)
+def today_session(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", learning_mode: str = "hsk", topics: str | None = None, db: Session = Depends(get_db)):
+    return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode, learning_mode=learning_mode, topics=_parse_topics(topics))
 
 @router.get("/recommendation", response_model=TodaySessionOut)
-def recommendation(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", db: Session = Depends(get_db)):
-    return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode)
+def recommendation(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", learning_mode: str = "hsk", topics: str | None = None, db: Session = Depends(get_db)):
+    return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode, learning_mode=learning_mode, topics=_parse_topics(topics))
 
 @router.post("/session/start", response_model=SessionStartOut)
 def start_session(payload: SessionStartRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
@@ -101,6 +119,7 @@ def submit_session_output(payload: SessionOutputRequest, user_id: str = Depends(
         target_word=payload.target_word,
         prompt=payload.prompt,
         response_text=payload.response_text,
+        typing_detail=payload.typing_detail,
     )
 
 
