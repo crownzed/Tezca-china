@@ -92,12 +92,19 @@ def extract_features(
     word_level: int,
     focus_level: int,
     frequency_band: str,
+    learning_mode: str = "hsk",
+    usage_count: int = 0,
+    topic_match: bool = True,
 ) -> WordFeatures:
     """Suy ra 7 đặc trưng chuẩn hóa từ trạng thái một từ.
 
     - ``elapsed_days``: số ngày từ lần gặp gần nhất (None nếu chưa từng gặp).
     - ``overdue_days``: số ngày quá hạn ôn (âm nếu chưa tới hạn, None nếu chưa lên lịch).
     - ``recent_error_count``: số lần sai gần đây của riêng từ này.
+    - ``learning_mode``: "hsk" (mặc định) khớp cấp HSK; "natural" dùng tần suất
+      dùng thật + nhu cầu cá nhân cho goal_relevance/habit_fit (SPEC v2).
+    - ``usage_count``: số lần gặp/dùng thật (chỉ dùng ở mode natural).
+    - ``topic_match``: từ thuộc chủ đề người dùng quan tâm (mode natural).
     """
     seen = max(0, int(seen))
     interval = max(1, int(interval_days or 1))
@@ -118,15 +125,32 @@ def extract_features(
     error_rate = (wrong / seen) if seen else 0.0
     error_need = _clamp(0.6 * error_rate + 0.4 * _clamp(recent_error_count / 3.0))
 
-    # goal_relevance: khớp cấp HSK mục tiêu.
-    diff = abs(int(word_level or focus_level) - int(focus_level))
-    goal_relevance = 1.0 if diff == 0 else 0.5 if diff == 1 else 0.2
+    # goal_relevance / usage_relevance: nguồn khác nhau theo learning_mode.
+    #   - hsk (mặc định, tương thích ngược): khớp cấp HSK mục tiêu.
+    #   - natural: tần suất dùng thật (usage_count) + nhu cầu cá nhân (lỗi gần đây).
+    if (learning_mode or "hsk") == "natural":
+        # frequency_signal: từ phổ biến (core) + người dùng hay gặp/dùng thật.
+        band = frequency_band or "core_hsk"
+        band_weight = 1.0 if band in ("core_hsk", "core") else 0.6 if band == "common" else 0.3
+        usage_signal = _clamp(usage_count / 5.0)
+        frequency_signal = _clamp(0.6 * band_weight + 0.4 * usage_signal)
+        # personal_need_signal: từ người dùng hay sai gần đây cần đẩy lên.
+        personal_need_signal = _clamp(recent_error_count / 3.0)
+        goal_relevance = _clamp(0.5 * frequency_signal + 0.5 * personal_need_signal)
+    else:
+        diff = abs(int(word_level or focus_level) - int(focus_level))
+        goal_relevance = 1.0 if diff == 0 else 0.5 if diff == 1 else 0.2
 
     # novelty_need: từ mới/ít gặp được ưu tiên đưa vào.
     novelty_need = _clamp((3 - seen) / 3.0)
 
-    # habit_fit: từ lõi HSK hợp với thói quen học hằng ngày.
-    habit_fit = 1.0 if (frequency_band or "core_hsk") == "core_hsk" else 0.5
+    # habit_fit:
+    #   - hsk: từ lõi HSK hợp thói quen học.
+    #   - natural: từ thuộc chủ đề người dùng quan tâm.
+    if (learning_mode or "hsk") == "natural":
+        habit_fit = 1.0 if topic_match else 0.5
+    else:
+        habit_fit = 1.0 if (frequency_band or "core_hsk") == "core_hsk" else 0.5
 
     # recent_repeat_penalty: vừa gặp trong ~6h thì hạ ưu tiên, tránh lặp ngay.
     if elapsed_days is None:
