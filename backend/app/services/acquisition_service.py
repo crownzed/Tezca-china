@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .tuning import ACQUISITION_THRESHOLDS
+
 # Thứ tự thụ đắc (index dùng để so sánh tiến/lùi).
 STAGES = ("UNKNOWN", "RECOGNIZED", "UNDERSTOOD", "USABLE", "MASTERED")
 _STAGE_INDEX = {name: i for i, name in enumerate(STAGES)}
@@ -37,19 +39,8 @@ STAGE_LABELS = {
     "MASTERED": "Thuần thục",
 }
 
-# Ngưỡng điểm (0-100) để bước qua mỗi nấc. Cố ý "dễ vào, khó thuần":
-# nhận ra rất sớm (giống trẻ con nghe nhiều lần là quen mặt chữ),
-# nhưng "dùng được" và "thuần thục" đòi hỏi sản sinh thật.
-THRESHOLDS = {
-    "recognized_seen": 1,        # đã gặp ít nhất 1 lần
-    "recognized_recall": 20,     # bắt đầu nhận diện được
-    "understood_recall": 55,     # gợi nhớ nghĩa ổn
-    "understood_context": 35,    # hiểu trong ngữ cảnh
-    "usable_production": 40,     # sản sinh có hướng dẫn
-    "usable_context": 55,
-    "mastered_production": 75,   # sản sinh tự do vững
-    "mastered_mastery": 80,      # trí nhớ ổn định cao
-}
+# Nguồn duy nhất: ``tuning.ACQUISITION_THRESHOLDS`` (giữ alias để tham chiếu nội bộ).
+THRESHOLDS = ACQUISITION_THRESHOLDS
 
 
 @dataclass(frozen=True)

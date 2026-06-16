@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Example, Question, QuizType, Word
+from .distractor_policy import order_distractors_by_stage
 
 RICH_PARAGRAPH_MARKERS = ("老师先说", "昨天晚上", "这周", "如果只看")
 
@@ -55,15 +56,16 @@ class QuestionGeneratorService:
         )
         if found:
             if quiz_type == QuizType.dialogue and any(len(option) > 55 for option in found.options or []):
-                options, correct_index = self._options_for(word, quiz_type)
+                options, correct_index, option_word_ids = self._options_with_words(word, quiz_type)
                 if len(options) >= 4:
                     found.options = options
                     found.correct_index = correct_index
                     found.explanation = self._explanation_for(word, quiz_type)
                     found.audio_text = self._audio_for(word, quiz_type)
+                    found.metadata_json = {**(found.metadata_json or {}), "option_word_ids": option_word_ids}
             return found
 
-        options, correct_index = self._options_for(word, quiz_type)
+        options, correct_index, option_word_ids = self._options_with_words(word, quiz_type)
         if len(options) < 4:
             return None
 
@@ -76,7 +78,7 @@ class QuestionGeneratorService:
             correct_index=correct_index,
             explanation=self._explanation_for(word, quiz_type),
             audio_text=self._audio_for(word, quiz_type),
-            metadata_json={"source": "generated"},
+            metadata_json={"source": "generated", "option_word_ids": option_word_ids},
         )
         self.db.add(question)
         self.db.flush()
@@ -107,60 +109,121 @@ class QuestionGeneratorService:
             return f"Đọc câu và chọn từ khóa chính: {example.sentence_cn}"
         return f"Đọc nghĩa và chọn từ phù hợp: {word.meaning_vi or word.meaning_en}"
 
+    def _pick_distractors(
+        self, word: Word, pool: list[Word], count: int = 3, stage: str | None = None
+    ) -> list[Word]:
+        """Chọn distractor ưu tiên từ nhóm dễ nhầm (confusables).
+
+        Lấy trước các từ trong ``word.confusable_words_json`` (đã xếp theo độ
+        dễ nhầm: đồng âm > gần âm > chung chữ > gần nghĩa), sau đó bù phần
+        còn thiếu bằng từ ngẫu nhiên cùng cấp HSK. Distractor gần với đáp án
+        đúng buộc người học phân biệt đúng chỗ hay sai, thay vì loại trừ
+        những lựa chọn khác hẳn.
+
+        Khi có ``stage`` (nấc thụ đắc của người học với từ này), thứ tự ưu tiên
+        confusable được sắp lại theo ``distractor_policy`` để distractor "vừa
+        đủ khó": người mới gặp distractor xa (dễ loại), người thạo gặp gần
+        (buộc phân biệt). ``stage=None`` → giữ nguyên thứ tự gốc (hành vi cũ).
+        """
+        chosen: list[Word] = []
+        chosen_ids: set[int] = set()
+        # confusable_words_json là list[str] hanzi (shape canonical).
+        # Vẫn chấp nhận list[dict] cũ để an toàn ngược.
+        confusables = word.confusable_words_json or []
+        conf_hanzi = [
+            c if isinstance(c, str) else c.get("hanzi")
+            for c in confusables
+        ]
+        conf_hanzi = [h for h in conf_hanzi if h]
+        if stage:
+            conf_hanzi = order_distractors_by_stage(conf_hanzi, stage)
+        if conf_hanzi:
+            conf_words = self.db.scalars(
+                select(Word).where(Word.hanzi.in_(conf_hanzi), Word.id != word.id)
+            ).all()
+            by_hanzi = {w.hanzi: w for w in conf_words}
+            for hanzi in conf_hanzi:  # giữ thứ tự theo độ dễ nhầm
+                candidate = by_hanzi.get(hanzi)
+                if candidate and candidate.id not in chosen_ids:
+                    chosen.append(candidate)
+                    chosen_ids.add(candidate.id)
+                if len(chosen) >= count:
+                    break
+        if len(chosen) < count:
+            remaining = [w for w in pool if w.id not in chosen_ids]
+            shuffle(remaining)
+            chosen.extend(remaining[: count - len(chosen)])
+        return chosen[:count]
+
     def _options_for(self, word: Word, quiz_type: QuizType) -> tuple[list[str], int]:
+        options, correct_index, _ = self._options_with_words(word, quiz_type)
+        return options, correct_index
+
+    def _options_with_words(
+        self, word: Word, quiz_type: QuizType
+    ) -> tuple[list[str], int, list[int | None]]:
+        """Như ``_options_for`` nhưng trả thêm word_id của từ đứng sau mỗi đáp án.
+
+        Mapping option->word_id cho phép suy ra ``selected_word`` khi người học
+        chọn sai (đáp án đã shuffle), làm đầu vào cho bộ phân loại lỗi.
+        """
         pool = self.db.scalars(
             select(Word).where(Word.hsk_level == word.hsk_level, Word.id != word.id).limit(80)
         ).all()
         if len(pool) < 3:
-            return [], 0
-        distractors = sample(pool, 3)
+            return [], 0, []
+        distractors = self._pick_distractors(word, pool, 3)
+        if len(distractors) < 3:
+            return [], 0, []
 
+        # Mỗi phần tử: (text, word_id). word_id của đáp án đúng là word.id.
         if quiz_type == QuizType.listening:
             listening = self._listening_for_word(word)
             if not listening:
-                return [], 0
-            correct = listening["vi"]
-            distractor_options = []
+                return [], 0, []
+            pairs = [(listening["vi"], word.id)]
             for item in distractors:
                 item_listening = self._listening_for_word(item)
-                distractor_options.append(item_listening["vi"] if item_listening else item.meaning_vi or item.meaning_en)
-            options = [correct, *distractor_options]
+                text = item_listening["vi"] if item_listening else item.meaning_vi or item.meaning_en
+                pairs.append((text, item.id))
         elif quiz_type == QuizType.dialogue:
             dialogue = self._dialogue_for_word(word)
             if not dialogue:
-                return [], 0
-            correct = dialogue.get("option_vi", dialogue["vi"])
-            distractor_options = []
+                return [], 0, []
+            pairs = [(dialogue.get("option_vi", dialogue["vi"]), word.id)]
             for item in distractors:
                 item_dialogue = self._dialogue_for_word(item)
-                distractor_options.append(item_dialogue.get("option_vi", item_dialogue["vi"]) if item_dialogue else item.meaning_vi or item.meaning_en)
-            options = [correct, *distractor_options]
+                text = item_dialogue.get("option_vi", item_dialogue["vi"]) if item_dialogue else item.meaning_vi or item.meaning_en
+                pairs.append((text, item.id))
         elif quiz_type == QuizType.translation:
             paragraph = self._paragraph_for_word(word)
             if not paragraph:
-                return [], 0
-            correct = paragraph["vi"]
-            distractor_options = []
+                return [], 0, []
+            pairs = [(paragraph["vi"], word.id)]
             for item in distractors:
                 item_paragraph = self._paragraph_for_word(item)
-                distractor_options.append(item_paragraph["vi"] if item_paragraph else item.meaning_vi or item.meaning_en)
-            options = [correct, *distractor_options]
+                text = item_paragraph["vi"] if item_paragraph else item.meaning_vi or item.meaning_en
+                pairs.append((text, item.id))
         elif quiz_type == QuizType.vocab:
-            correct = word.meaning_vi or word.meaning_en
-            options = [correct, *[(w.meaning_vi or w.meaning_en) for w in distractors]]
+            pairs = [(word.meaning_vi or word.meaning_en, word.id)]
+            pairs.extend([(w.meaning_vi or w.meaning_en, w.id) for w in distractors])
         else:
-            correct = word.hanzi
-            options = [correct, *[w.hanzi for w in distractors]]
+            pairs = [(word.hanzi, word.id)]
+            pairs.extend([(w.hanzi, w.id) for w in distractors])
 
-        clean = []
-        for option in options:
-            if option and option not in clean:
-                clean.append(option)
+        clean: list[tuple[str, int | None]] = []
+        seen_text: set[str] = set()
+        for text, wid in pairs:
+            if text and text not in seen_text:
+                seen_text.add(text)
+                clean.append((text, wid))
         if len(clean) < 4:
-            return [], 0
-        correct_value = clean[0]
+            return [], 0, []
+        correct_value = clean[0][0]
         shuffle(clean)
-        return clean, clean.index(correct_value)
+        options = [text for text, _ in clean]
+        option_word_ids = [wid for _, wid in clean]
+        return options, options.index(correct_value), option_word_ids
 
     def _explanation_for(self, word: Word, quiz_type: QuizType) -> str:
         if quiz_type == QuizType.listening:

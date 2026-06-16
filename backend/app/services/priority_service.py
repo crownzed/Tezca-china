@@ -24,23 +24,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Trọng số lấy nguyên từ tài liệu mục 4.7.
-WEIGHTS = {
-    "due_urgency": 0.35,
-    "forgetting_risk": 0.20,
-    "error_need": 0.20,
-    "goal_relevance": 0.10,
-    "novelty_need": 0.05,
-    "habit_fit": 0.05,
-    "recent_repeat_penalty": -0.05,
-}
+from .learning_utils import clamp
+from .tuning import FSRS_FACTOR, PRIORITY_WEIGHTS
 
-# Hằng số đường cong FSRS: R = (1 + t/(F·S))^(-1), F = 9 cho mục tiêu R≈90%.
-_FSRS_FACTOR = 9.0
+# Nguồn duy nhất: ``tuning`` (giữ alias để tham chiếu nội bộ + API công khai).
+WEIGHTS = PRIORITY_WEIGHTS
+_FSRS_FACTOR = FSRS_FACTOR
 
 
-def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
-    return max(low, min(high, value))
+# Nguồn duy nhất: ``learning_utils.clamp`` (giữ alias để tham chiếu nội bộ).
+_clamp = clamp
 
 
 def retrievability(stability_days: float, elapsed_days: float) -> float:
