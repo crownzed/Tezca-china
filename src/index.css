@@ -3,12 +3,15 @@
 
 :root {
   color-scheme: light;
-  --modern-zen-bg: #FBF9F6;
-  --modern-zen-card: #FFFFFF;
-  --modern-zen-primary: #D32F2F;
+  /* Palette "Mực & Ngọc" (Ink & Jade): nền giấy ấm, mực sâu, ngọc trầm.
+     Primary chuyển từ đỏ gắt -> xanh ngọc (đỡ chói, hợp học tự nhiên);
+     vàng kim chỉ làm điểm nhấn. */
+  --modern-zen-bg: #F6F4EE;
+  --modern-zen-card: #FFFDFA;
+  --modern-zen-primary: #1F8A70;
   --modern-zen-success: #2E8B57;
-  --modern-zen-text: #2C3E50;
-  --modern-zen-chip: #F4F1EA;
+  --modern-zen-text: #23302E;
+  --modern-zen-chip: #ECE8DD;
   --ink-950: #e9e2d8;
   --ink-900: #FBF9F6;
   --ink-850: #FFFFFF;
@@ -33,27 +36,27 @@
   --text: var(--modern-zen-text);
   --muted: #4B5563;
   --dim: #687076;
-  --gold: var(--modern-zen-primary);
-  --gold-soft: rgba(211, 47, 47, 0.08);
-  --jade: var(--modern-zen-success);
-  --jade-soft: rgba(46, 139, 87, 0.12);
-  --cinnabar: var(--modern-zen-primary);
-  --cinnabar-soft: rgba(211, 47, 47, 0.11);
+  --gold: #C08A2D;
+  --gold-soft: rgba(192, 138, 45, 0.12);
+  --jade: var(--modern-zen-primary);
+  --jade-soft: rgba(31, 138, 112, 0.12);
+  --cinnabar: #C2402F;
+  --cinnabar-soft: rgba(194, 64, 47, 0.11);
   --porcelain: #3f7d9a;
   --porcelain-soft: rgba(63, 125, 154, 0.1);
-  --primary-start: var(--modern-zen-primary);
-  --primary-end: var(--modern-zen-primary);
+  --primary-start: #23997C;
+  --primary-end: #1B7A62;
   --primary-text: #FFFFFF;
   --selected-text: var(--modern-zen-text);
   --danger-text: #b3261e;
   --logo-text: #FFFFFF;
-  --focus-ring: rgba(211, 47, 47, 0.36);
-  --shadow: 0px 4px 24px rgba(0, 0, 0, 0.04);
+  --focus-ring: rgba(31, 138, 112, 0.36);
+  --shadow: 0 6px 28px rgba(35, 48, 46, 0.07);
   --badge-strong-text: #0CA678;
   --badge-strong-bg: #E6FCF5;
   --badge-weak-text: #FA5252;
   --badge-weak-bg: #FFF5F5;
-  --radius: 8px;
+  --radius: 14px;
   --phi-minor: 0.382fr;
   --phi-major: 0.618fr;
   --line-readable: 1.62;
@@ -67,9 +70,9 @@
   color-scheme: dark;
   --modern-zen-bg: #141313;
   --modern-zen-card: #1E1D1B;
-  --modern-zen-primary: #E05252;
+  --modern-zen-primary: #34B89A;
   --modern-zen-success: #3DAA6B;
-  --modern-zen-text: #F7F2EA;
+  --modern-zen-text: #F2EFE7;
   --modern-zen-chip: #2A2824;
   --ink-950: #0f0e0d;
   --ink-900: var(--modern-zen-bg);
@@ -95,22 +98,22 @@
   --text: var(--modern-zen-text);
   --muted: #D4CCC1;
   --dim: #AFA79D;
-  --gold: var(--modern-zen-primary);
-  --gold-soft: rgba(224, 82, 82, 0.16);
-  --jade: var(--modern-zen-success);
-  --jade-soft: rgba(61, 170, 107, 0.16);
-  --cinnabar: var(--modern-zen-primary);
-  --cinnabar-soft: rgba(224, 82, 82, 0.16);
+  --gold: #D8B069;
+  --gold-soft: rgba(216, 176, 105, 0.16);
+  --jade: var(--modern-zen-primary);
+  --jade-soft: rgba(52, 184, 154, 0.16);
+  --cinnabar: #E07A5F;
+  --cinnabar-soft: rgba(224, 122, 95, 0.16);
   --porcelain: #73A7BE;
   --porcelain-soft: rgba(115, 167, 190, 0.14);
-  --primary-start: var(--modern-zen-primary);
-  --primary-end: var(--modern-zen-primary);
-  --primary-text: #FFFFFF;
+  --primary-start: #34B89A;
+  --primary-end: #259079;
+  --primary-text: #07120F;
   --selected-text: var(--modern-zen-text);
   --danger-text: #FFB0A8;
-  --logo-text: #FFFFFF;
-  --focus-ring: rgba(224, 82, 82, 0.42);
-  --shadow: 0px 4px 24px rgba(0, 0, 0, 0.24);
+  --logo-text: #07120F;
+  --focus-ring: rgba(52, 184, 154, 0.42);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.30);
   --badge-strong-text: #7BE0A4;
   --badge-strong-bg: rgba(61, 170, 107, 0.18);
   --badge-weak-text: #FF9C9C;
@@ -183,17 +186,17 @@ select:focus-visible {
 }
 
 .core-logo {
-  width: 44px;
+  width: 46px;
   aspect-ratio: 1;
   display: grid;
   place-items: center;
-  margin: 0 auto 12px;
+  margin: 0 auto 14px;
   border-radius: var(--radius);
   color: var(--logo-text);
-  background: linear-gradient(145deg, var(--primary-start), var(--cinnabar));
-  border: 1px solid rgba(255, 228, 181, 0.22);
-  font: 900 1.45rem var(--font-cn);
-  box-shadow: 0 14px 30px rgba(184, 50, 50, 0.22);
+  background: linear-gradient(145deg, var(--primary-start), var(--primary-end));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font: 900 1.5rem var(--font-cn);
+  box-shadow: 0 14px 30px rgba(31, 138, 112, 0.26);
 }
 
 .core-sidebar button {
@@ -219,14 +222,15 @@ select:focus-visible {
 
 .core-sidebar button:hover,
 .core-sidebar button.active {
-  color: var(--gold);
+  color: var(--jade);
   background: var(--modern-zen-card);
   border-color: transparent;
-  box-shadow: 0px 4px 24px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow);
 }
 
 .core-sidebar button.active {
-  color: var(--gold);
+  color: var(--jade);
+  border-color: color-mix(in srgb, var(--jade) 22%, transparent);
 }
 
 .core-sidebar button:hover {
@@ -487,7 +491,7 @@ select:focus-visible {
 }
 
 .btn-primary:hover {
-  box-shadow: 0 12px 28px rgba(184, 50, 50, 0.2);
+  box-shadow: 0 12px 28px rgba(31, 138, 112, 0.24);
 }
 
 .btn-secondary:hover {
@@ -522,9 +526,9 @@ select:focus-visible {
 .core-stat svg { color: var(--gold); }
 .core-stat span { color: var(--muted); font-size: 0.78rem; font-weight: 800; }
 .core-stat strong { font-size: clamp(1.2rem, 2.4vw, 1.75rem); }
-.core-stat--gold { border-color: rgba(216, 173, 76, 0.28); }
+.core-stat--gold { border-color: color-mix(in srgb, var(--gold) 28%, transparent); }
 .core-stat--jade { border-color: rgba(31, 184, 145, 0.28); }
-.core-stat--cinnabar { border-color: rgba(184, 50, 50, 0.32); }
+.core-stat--cinnabar { border-color: color-mix(in srgb, var(--cinnabar) 32%, transparent); }
 .core-stat--blue { border-color: rgba(142, 202, 230, 0.26); }
 
 .core-focus-card,
@@ -1462,7 +1466,7 @@ select:focus-visible {
 .level-card.active,
 .quiz-type-card.active {
   background:
-    linear-gradient(145deg, rgba(216, 173, 76, 0.16), rgba(184, 50, 50, 0.08)),
+    linear-gradient(145deg, var(--gold-soft), var(--jade-soft)),
     var(--paper-strong);
   border-color: color-mix(in srgb, var(--gold) 38%, transparent);
 }
