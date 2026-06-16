@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import LearningEvent, LearningSession, UserProgress
+from .tuning import EWMA_ALPHA
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,7 @@ class BehaviorService:
             wrong_streak=wrong_streak,
         )
 
-    def _ewma(self, values: list[int | float], fallback: int | float, alpha: float = 0.35) -> float:
+    def _ewma(self, values: list[int | float], fallback: int | float, alpha: float = EWMA_ALPHA) -> float:
         if not values:
             return float(fallback or 0)
         current = float(values[0])

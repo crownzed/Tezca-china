@@ -54,13 +54,23 @@ def _parse_topics(topics: str | None) -> list[str] | None:
     parsed = [t.strip() for t in topics.split(",") if t.strip()]
     return parsed or None
 
+def _today_plan(db: Session, user_id: str, focus_level: int, mode: str, learning_mode: str, topics: str | None) -> dict:
+    """Thân chung cho /session/today và /recommendation (cùng một kế hoạch)."""
+    return SessionService(db).today(
+        user_id=user_id,
+        focus_level=focus_level,
+        mode=mode,
+        learning_mode=learning_mode,
+        topics=_parse_topics(topics),
+    )
+
 @router.get("/session/today", response_model=TodaySessionOut)
 def today_session(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", learning_mode: str = "hsk", topics: str | None = None, db: Session = Depends(get_db)):
-    return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode, learning_mode=learning_mode, topics=_parse_topics(topics))
+    return _today_plan(db, user_id, focus_level, mode, learning_mode, topics)
 
 @router.get("/recommendation", response_model=TodaySessionOut)
 def recommendation(user_id: str = Depends(resolve_user_id), focus_level: int = 1, mode: str = "standard", learning_mode: str = "hsk", topics: str | None = None, db: Session = Depends(get_db)):
-    return SessionService(db).today(user_id=user_id, focus_level=focus_level, mode=mode, learning_mode=learning_mode, topics=_parse_topics(topics))
+    return _today_plan(db, user_id, focus_level, mode, learning_mode, topics)
 
 @router.post("/session/start", response_model=SessionStartOut)
 def start_session(payload: SessionStartRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):

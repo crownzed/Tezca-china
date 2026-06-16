@@ -1,6 +1,11 @@
 from ..models import QuizType
 
 
+def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
+    """Kẹp giá trị vào [low, high]. Dùng chung cho các engine scoring."""
+    return max(low, min(high, value))
+
+
 def skill_for_quiz_type(quiz_type: QuizType) -> str:
     if quiz_type in (QuizType.listening, QuizType.dialogue):
         return "listening"

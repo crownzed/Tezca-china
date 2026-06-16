@@ -14,11 +14,7 @@ from .acquisition_service import describe_acquisition
 from .srs_service import SRSService
 
 
-MODE_CONFIG = {
-    "micro": {"minutes": 5, "limit": 5, "new_count": 0, "label": "Ôn nhanh"},
-    "standard": {"minutes": 20, "limit": 10, "new_count": 6, "label": "Học hôm nay"},
-    "deep": {"minutes": 45, "limit": 16, "new_count": 8, "label": "Học sâu"},
-}
+from .tuning import MODE_CONFIG
 
 
 class SessionService:

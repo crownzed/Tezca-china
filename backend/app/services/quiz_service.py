@@ -1,12 +1,13 @@
 from datetime import datetime
 from random import shuffle
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import Question, QuizAttempt, QuizType, UserProgress
+from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress
 from ..schemas import AnswerResult, QuizSubmitRequest, QuizSubmitResponse
 from .event_service import LearningEventService
+from .item_difficulty import difficulty_fit, is_low_quality
 from .question_generator import QuestionGeneratorService, RICH_PARAGRAPH_MARKERS
 from .srs_service import SRSService
 
@@ -42,8 +43,11 @@ class QuizService:
         last_question_ids = self._recent_question_ids(user_id, level, quiz_type, attempt_count=1)
         recent_question_ids = self._recent_question_ids(user_id, level, quiz_type, attempt_count=3)
         progress_by_word = self._progress_by_word(user_id)
+        difficulty_stats = self._difficulty_stats([q.id for q in candidates])
 
-        fresh = self._rank_questions(candidates, progress_by_word, last_question_ids, recent_question_ids)
+        fresh = self._rank_questions(
+            candidates, progress_by_word, last_question_ids, recent_question_ids, difficulty_stats
+        )
         selected = fresh[:limit]
         if len(selected) >= limit:
             return selected
@@ -58,13 +62,16 @@ class QuizService:
         for question in questions:
             if not question.word or not any(len(option) > 55 for option in question.options or []):
                 continue
-            options, correct_index = self.generator._options_for(question.word, QuizType.dialogue)
+            options, correct_index, option_word_ids = self.generator._options_with_words(question.word, QuizType.dialogue)
             if len(options) < 4:
                 continue
             question.options = options
             question.correct_index = correct_index
             question.explanation = self.generator._explanation_for(question.word, QuizType.dialogue)
             question.audio_text = self.generator._audio_for(question.word, QuizType.dialogue)
+            meta = dict(question.metadata_json or {})
+            meta["option_word_ids"] = option_word_ids
+            question.metadata_json = meta
             changed = True
         if changed:
             self.db.commit()
@@ -95,6 +102,7 @@ class QuizService:
                     answer.latency_ms,
                     answer.error_tag,
                     session_id=payload.session_id,
+                    selected_index=answer.selected_index,
                 )
             result = AnswerResult(
                 question_id=question.id,
@@ -143,17 +151,44 @@ class QuizService:
         rows = self.db.scalars(select(UserProgress).where(UserProgress.user_id == user_id)).all()
         return {row.word_id: row for row in rows}
 
+    def _difficulty_stats(self, question_ids: list[int]) -> dict[int, tuple[int, int]]:
+        """Gom (số đúng, tổng lượt) toàn hệ cho mỗi câu từ ``LearningEvent``.
+
+        Đây là dữ liệu thô cho ``item_difficulty`` (độ khó thực nghiệm). Tính
+        trên TOÀN BỘ người dùng (không lọc theo user) vì độ khó của câu là
+        thuộc tính của câu, không phải của người học.
+        """
+        if not question_ids:
+            return {}
+        rows = self.db.execute(
+            select(
+                LearningEvent.question_id,
+                func.count(LearningEvent.id),
+                func.sum(LearningEvent.correct),
+            )
+            .where(LearningEvent.question_id.in_(question_ids))
+            .group_by(LearningEvent.question_id)
+        ).all()
+        stats: dict[int, tuple[int, int]] = {}
+        for question_id, total, correct in rows:
+            if question_id is None:
+                continue
+            stats[int(question_id)] = (int(correct or 0), int(total or 0))
+        return stats
+
     def _rank_questions(
         self,
         questions: list[Question],
         progress_by_word: dict[int, UserProgress],
         last_question_ids: set[int],
         recent_question_ids: set[int],
+        difficulty_stats: dict[int, tuple[int, int]] | None = None,
     ) -> list[Question]:
+        difficulty_stats = difficulty_stats or {}
         shuffled = list(questions)
         shuffle(shuffled)
 
-        def priority(question: Question) -> tuple[int, int, int]:
+        def priority(question: Question) -> tuple[int, int, int, float, int]:
             if question.id in last_question_ids:
                 recent_penalty = 5
             elif question.id in recent_question_ids:
@@ -172,7 +207,22 @@ class QuizService:
                 knowledge_rank = 4
             else:
                 knowledge_rank = 2
-            return (recent_penalty, knowledge_rank, progress.seen if progress else 0)
+
+            # Độ khó thực nghiệm: câu kém chất lượng bị đẩy xuống cuối; còn lại
+            # ưu tiên câu có độ khó "vừa đủ" (difficulty_fit cao). Đặt SAU các
+            # tín hiệu cũ (recent/knowledge) để không phá hành vi sẵn có khi
+            # chưa có dữ liệu lượt làm.
+            correct, total = difficulty_stats.get(question.id, (0, 0))
+            low_quality_rank = 1 if is_low_quality(correct, total) else 0
+            fit_penalty = -difficulty_fit(correct, total)
+
+            return (
+                recent_penalty,
+                low_quality_rank,
+                knowledge_rank,
+                fit_penalty,
+                progress.seen if progress else 0,
+            )
 
         return sorted(shuffled, key=priority)
 
