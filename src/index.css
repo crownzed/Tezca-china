@@ -3922,3 +3922,274 @@ blockquote small {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Skeleton Loading ─────────────────────────────────────────────── */
+
+.skeleton {
+  background: linear-gradient(90deg, var(--control-bg) 25%, var(--line-soft) 50%, var(--control-bg) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+  min-height: 180px;
+  padding: clamp(18px, 2.6vw, 28px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.skeleton-line {
+  height: 16px;
+  margin-bottom: 12px;
+}
+
+.skeleton-line:last-child { margin-bottom: 0; }
+
+.skeleton-line--lg { height: 28px; width: 70%; }
+.skeleton-line--md { height: 16px; width: 90%; }
+.skeleton-line--sm { height: 12px; width: 55%; }
+
+.skeleton-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  margin-bottom: 14px;
+}
+
+/* ── Achievement Toast ────────────────────────────────────────────── */
+
+.achievement-toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.achievement-toast {
+  pointer-events: auto;
+  min-width: 280px;
+  max-width: 380px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  border: 1px solid var(--gold);
+  box-shadow: 0 8px 32px rgba(192, 138, 45, 0.18);
+  animation: toastSlideIn 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.achievement-toast--exit {
+  animation: toastSlideOut 260ms ease-in forwards;
+}
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(40px); }
+}
+
+.achievement-toast-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.achievement-toast-body strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.achievement-toast-body small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* ── Streak Banner ────────────────────────────────────────────────── */
+
+.streak-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--gold-soft), var(--jade-soft));
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  animation: softRise 260ms ease both;
+}
+
+.streak-banner-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #FFF;
+  font-size: 1.2rem;
+}
+
+.streak-banner-body strong {
+  display: block;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.streak-banner-body small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* ── Confetti Canvas ──────────────────────────────────────────────── */
+
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ── Drag-drop quiz styles ────────────────────────────────────────── */
+
+.drag-drop-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 56px;
+  padding: 12px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.drag-drop-zone--over {
+  border-color: var(--jade);
+  background: var(--jade-soft);
+}
+
+.drag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--paper-strong);
+  border: 1px solid var(--line);
+  font-family: var(--font-cn);
+  font-size: 1.05rem;
+  cursor: grab;
+  user-select: none;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.drag-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.drag-chip:active {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+
+.drag-chip--placed {
+  background: var(--jade-soft);
+  border-color: color-mix(in srgb, var(--jade) 40%, transparent);
+}
+
+/* ── Voice recording styles ───────────────────────────────────────── */
+
+.voice-record-btn {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--cinnabar);
+  background: var(--cinnabar-soft);
+  color: var(--cinnabar);
+  cursor: pointer;
+  transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease;
+}
+
+.voice-record-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 20px var(--cinnabar-soft);
+}
+
+.voice-record-btn--recording {
+  border-color: var(--cinnabar);
+  background: var(--cinnabar);
+  color: #FFF;
+  animation: voicePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voicePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(194, 64, 47, 0.4); }
+  50% { box-shadow: 0 0 0 14px rgba(194, 64, 47, 0); }
+}
+
+.voice-feedback {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  border: 1px solid var(--line-soft);
+}
+
+.voice-feedback--good {
+  border-color: color-mix(in srgb, var(--jade) 36%, transparent);
+  background: var(--jade-soft);
+}
+
+.voice-feedback--needs-work {
+  border-color: color-mix(in srgb, var(--cinnabar) 36%, transparent);
+  background: var(--cinnabar-soft);
+}
+
+/* ── Motion: prefers-reduced-motion ───────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .skeleton,
+  .achievement-toast,
+  .drag-chip,
+  .voice-record-btn--recording {
+    animation: none !important;
+  }
+
+  .core-stat:nth-child(1),
+  .core-stat:nth-child(2),
+  .core-stat:nth-child(3),
+  .core-stat:nth-child(4) {
+    animation: none !important;
+  }
+}

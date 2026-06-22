@@ -1,0 +1,151 @@
+{
+  "_description": "Slot-based template system for generating diverse Chinese learning contexts. [SLOT] fills from dictionaries; {[FIELD]} fills from word/example data.",
+
+  "slots": {
+    "TIME": [
+      "今天上午", "昨天晚上", "这周", "昨天下午", "今天早上",
+      "前天", "上个月", "最近", "这几天", "周末",
+      "每天早上", "放学后", "午休时间", "晚饭后", "睡觉前",
+      "上周五", "放假的时候", "开学第一天", "考试前", "每天下午"
+    ],
+    "SUBJECT": [
+      "我", "我们", "老师", "我的同学", "我的朋友",
+      "妈妈", "爸爸", "哥哥", "姐姐", "汉语老师",
+      "同桌", "室友", "同事们", "邻居", "男朋友",
+      "女朋友", "孩子们", "学生们", "一位老人", "新同学"
+    ],
+    "PLACE": [
+      "在学校", "在家", "在图书馆", "在教室里", "在咖啡店",
+      "在公园", "在书店", "在宿舍", "在办公室", "在地铁上",
+      "在公交车上", "在超市", "在医院", "在机场", "在博物馆",
+      "在操场", "在河边", "在山上", "在花园里", "在厨房"
+    ],
+    "ACTION_STUDY": [
+      "学习中文", "练习口语", "记汉语词", "读课文", "写汉字",
+      "做练习", "复习生词", "听录音", "查词典", "准备考试",
+      "背课文", "练书法", "做笔记", "看中文视频", "朗读课文",
+      "抄写汉字", "造句练习", "做听力训练", "默写生词", "练发音"
+    ],
+    "ACTION_DAILY": [
+      "去散步", "做饭", "看电视", "听音乐", "打电话",
+      "买东西", "打扫房间", "写日记", "上网", "看书",
+      "锻炼身体", "喝茶", "洗衣服", "整理书桌", "收邮件",
+      "给花浇水", "遛狗", "拍照", "画素描", "弹吉他"
+    ],
+    "MANNER": [
+      "认真地", "慢慢地", "高兴地", "努力地", "仔细地",
+      "一遍一遍地", "耐心地", "积极地", "轻松地", "专心地",
+      "反复地", "默默地", "快速地", "悄悄地", "大声地",
+      "小声地", "自信地", "紧张地", "好奇地", "熟练地"
+    ],
+    "FREQUENCY": [
+      "每天", "经常", "有时候", "总是", "从来不",
+      "偶尔", "常常", "很少", "天天", "时不时",
+      "每周三次", "有空就", "每次上课都", "一有空就", "坚持每天"
+    ],
+    "EMOTION": [
+      "很高兴", "觉得很有意思", "感到有点难", "觉得很自信", "很开心",
+      "觉得有进步", "感到很满足", "觉得很实用", "越学越喜欢", "充满动力",
+      "有点担心", "觉得很值得", "特别有成就感", "越来越有兴趣", "感到轻松",
+      "觉得不无聊", "很期待", "感到骄傲", "觉得方便多了", "很兴奋"
+    ],
+    "TRANSITION": [
+      "然后", "接着", "之后", "所以", "因此",
+      "不过", "但是", "而且", "另外", "同时",
+      "后来", "没想到", "突然", "慢慢地", "不久"
+    ],
+    "OPINION": [
+      "我觉得", "我认为", "在我看来", "说实话", "其实",
+      "老实说", "个人觉得", "看起来", "听起来", "事实证明",
+      "不得不承认", "显而易见", "众所周知", "对我来说", "据我所知"
+    ],
+    "MEMORY_HINT": [
+      "把词写在本子上", "用这个词造句", "和图片联想在一起",
+      "反复读几遍", "用手机app复习", "制作生词卡片",
+      "贴在墙上每天看", "录音然后听自己的发音", "找例句来理解用法",
+      "教给别人加深印象", "画思维导图", "编一个小故事",
+      "用手写几遍汉字", "和学过的词做对比", "做成Anki卡片"
+    ],
+    "GOAL": [
+      "学好汉语", "通过HSK考试", "能和中国人聊天",
+      "看懂中文电影", "去中国旅游", "在中国工作",
+      "读懂中文新闻", "交中国朋友", "提高口语水平",
+      "掌握基础词汇", "看懂中文菜单", "读中文小说",
+      "看懂中文字幕", "在工作中使用中文", "通过期末考试"
+    ],
+    "CHALLENGE": [
+      "有时候会忘记声调", "写字容易少笔画", "近义词容易混淆",
+      "听力速度跟不上", "口语表达不够流利", "多音字很难记",
+      "量词的搭配", "语法顺序不习惯", "听不出相近的发音",
+      "记不住长句子", "不知道什么时候用哪个词", "阅读速度不够快"
+    ],
+    "ADVICE": [
+      "多听多说", "每天坚持十分钟", "找语伴练习",
+      "看中文动画片", "用中文写日记", "不要怕犯错",
+      "先听懂再说", "利用碎片时间", "把手机设成中文",
+      "模仿母语者的语气", "从简单的开始", "多用才是王道"
+    ],
+    "GROUP_ACTIVITY": [
+      "互相听写", "角色扮演", "一起读课文",
+      "用中文聊天", "比赛造句", "互相纠正发音",
+      "玩词语接龙", "分享学习方法", "轮流当小老师",
+      "一起看中文视频", "互相出题考试", "讨论一个话题"
+    ]
+  },
+
+  "paragraph_templates": [
+    {
+      "cn": "[TIME]，[SUBJECT]在[PLACE]看手机，收到了一条很有意思的消息。消息上写着：“{[EXAMPLE_CN]}”看到“{[TARGET]}”这个词，[SUBJECT]马上明白了它的意思是“{[MEANING]}”。",
+      "vi": "[TIME], [SUBJECT] xem điện thoại tại [PLACE] và nhận được một tin nhắn rất thú vị. Tin nhắn viết: “{[EXAMPLE_VI]}” Khi thấy từ “{[TARGET]}”, [SUBJECT] lập tức hiểu nghĩa của nó là “{[MEANING]}”.",
+      "option_vi": "[SUBJECT] nhận được tin nhắn và hiểu nghĩa của từ {[TARGET]}."
+    },
+    {
+      "cn": "昨天[SUBJECT]在[PLACE]读报纸，有一段话让人印象深刻：“{[EXAMPLE_CN]}”[OPINION]，这里的“{[TARGET]}”用得很准确，完美地传达了“{[MEANING]}”的感觉。",
+      "vi": "Hôm qua [SUBJECT] đọc báo tại [PLACE], có một đoạn làm người ta ấn tượng sâu sắc: “{[EXAMPLE_VI]}” [OPINION], từ “{[TARGET]}” ở đây dùng rất chính xác, truyền tải hoàn hảo cảm giác “{[MEANING]}”.",
+      "option_vi": "Đoạn báo dùng từ {[TARGET]} rất chính xác."
+    },
+    {
+      "cn": "[SUBJECT]总是喜欢观察生活细节。[TIME]，在[PLACE]的时候，[SUBJECT]突然听到有人大声说：“{[EXAMPLE_CN]}”这句话里包含了“{[TARGET]}”，显然是在表达“{[MEANING]}”。",
+      "vi": "[SUBJECT] luôn thích quan sát các chi tiết trong cuộc sống. [TIME], khi ở [PLACE], [SUBJECT] đột nhiên nghe có người nói lớn: “{[EXAMPLE_VI]}” Câu này có chứa từ “{[TARGET]}”, rõ ràng là đang diễn đạt “{[MEANING]}”.",
+      "option_vi": "[SUBJECT] nghe thấy người khác dùng từ {[TARGET]} để diễn đạt {[MEANING]}."
+    },
+    {
+      "cn": "[OPINION]，有时候一句话就能改变人的心情。比如这句经典的台词：“{[EXAMPLE_CN]}”如果缺少了“{[TARGET]}”这个词，就无法体现出“{[MEANING]}”的深意了。",
+      "vi": "[OPINION], đôi khi một câu nói có thể thay đổi tâm trạng con người. Ví dụ như lời thoại kinh điển này: “{[EXAMPLE_VI]}” Nếu thiếu đi từ “{[TARGET]}”, sẽ không thể hiện được ý nghĩa sâu xa của “{[MEANING]}”.",
+      "option_vi": "Từ {[TARGET]} đóng vai trò quan trọng trong việc thể hiện ý nghĩa của câu."
+    },
+    {
+      "cn": "[TIME]，[SUBJECT]回忆起一件往事。[TRANSITION]，那时候最常听到的一句话就是：“{[EXAMPLE_CN]}”如今回想起来，“{[TARGET]}”所代表的“{[MEANING]}”，真的让人感慨万千。",
+      "vi": "[TIME], [SUBJECT] nhớ lại một chuyện cũ. [TRANSITION], lúc đó câu thường nghe nhất là: “{[EXAMPLE_VI]}” Giờ nhớ lại, “{[MEANING]}” mà từ “{[TARGET]}” đại diện, thật khiến người ta vô cùng bùi ngùi.",
+      "option_vi": "Từ {[TARGET]} gợi lại một kỷ niệm cũ."
+    }
+  ],
+
+  "dialogue_templates": [
+    {
+      "cn": "A：你在看什么？看得这么专心。\nB：我朋友给我发了一条消息，他说：“{[EXAMPLE_CN]}”\nA：这里的“{[TARGET]}”是什么意思？\nB：结合语境看，应该就是“{[MEANING]}”的意思吧。",
+      "vi": "A: Bạn đang xem gì mà chăm chú thế?\nB: Bạn tôi gửi cho tôi một tin nhắn, nói là: “{[EXAMPLE_VI]}”\nA: Từ “{[TARGET]}” ở đây nghĩa là gì?\nB: Xét theo ngữ cảnh, chắc là có nghĩa “{[MEANING]}”.",
+      "option_vi": "B giải thích nghĩa của từ {[TARGET]} trong tin nhắn."
+    },
+    {
+      "cn": "A：今天的报纸上写了什么新闻？\nB：里面有一句话让我印象很深：“{[EXAMPLE_CN]}”\nA：确实。特别是“{[TARGET]}”这个词，用得很好。\nB：对，它完美地表达了“{[MEANING]}”的感觉。",
+      "vi": "A: Báo hôm nay viết tin tức gì thế?\nB: Có một câu làm tôi rất ấn tượng: “{[EXAMPLE_VI]}”\nA: Thật vậy. Đặc biệt là từ “{[TARGET]}”, dùng rất hay.\nB: Đúng, nó truyền tải hoàn hảo cảm giác “{[MEANING]}”.",
+      "option_vi": "Hai người đồng tình rằng từ {[TARGET]} trên báo được dùng rất hay."
+    },
+    {
+      "cn": "A：对不起，我刚才没听清。你说的是“{[TARGET]}”吗？\nB：是的。我完整的意思是：“{[EXAMPLE_CN]}”\nA：啊，我明白了。所以你想表达的是“{[MEANING]}”。\nB：没错，就是这样。",
+      "vi": "A: Xin lỗi, ban nãy tôi nghe không rõ. Bạn nói là “{[TARGET]}” à?\nB: Đúng vậy. Ý hoàn chỉnh của tôi là: “{[EXAMPLE_VI]}”\nA: À, tôi hiểu rồi. Vậy bạn muốn diễn đạt là “{[MEANING]}”.\nB: Đúng vậy, chính là thế.",
+      "option_vi": "B nhắc lại câu có chứa từ {[TARGET]} để A hiểu rõ ý."
+    },
+    {
+      "cn": "A：大家都这么说：“{[EXAMPLE_CN]}”\nB：真的吗？为什么一定要强调“{[TARGET]}”？\nA：因为它的意思是“{[MEANING]}”啊，在这个情况下很关键。",
+      "vi": "A: Mọi người đều nói thế này: “{[EXAMPLE_VI]}”\nB: Thật không? Tại sao lại phải nhấn mạnh “{[TARGET]}”?\nA: Vì nghĩa của nó là “{[MEANING]}” mà, trong tình huống này rất quan trọng.",
+      "option_vi": "A giải thích lý do phải nhấn mạnh từ {[TARGET]}."
+    },
+    {
+      "cn": "A：你看这段视频里的话：“{[EXAMPLE_CN]}”\nB：我听到了。他在用到“{[TARGET]}”的时候，语气很重。\nA：是啊，毕竟事关“{[MEANING]}”，肯定不能随便说。\nB：同意，语言的魅力就在这里。",
+      "vi": "A: Bạn xem câu nói trong video này: “{[EXAMPLE_VI]}”\nB: Tôi nghe rồi. Khi anh ta dùng đến “{[TARGET]}”, giọng rất nặng.\nA: Đúng vậy, xét cho cùng liên quan đến “{[MEANING]}”, chắc chắn không thể nói bừa.\nB: Đồng ý, sức hấp dẫn của ngôn ngữ chính là ở đây.",
+      "option_vi": "Hai người thảo luận về sắc thái khi sử dụng từ {[TARGET]} trong video."
+    }
+  ]
+}

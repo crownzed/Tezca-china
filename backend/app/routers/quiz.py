@@ -21,6 +21,8 @@ TYPE_LABELS = {
     QuizType.reading: "Đọc hiểu",
     QuizType.translation: "Dịch đoạn",
     QuizType.cloze: "Điền từ",
+    QuizType.drag_drop: "Sắp xếp câu",
+    QuizType.voice: "Phát âm",
 }
 
 

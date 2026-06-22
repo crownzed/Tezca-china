@@ -47,6 +47,7 @@ def seed_words(db):
             word.pinyin = word.pinyin or row.get("pinyin") or entry.get("pinyin") or ""
             word.meaning_vi = word.meaning_vi or row.get("meaning_vi") or row.get("meaning") or ""
             word.meaning_en = word.meaning_en or row.get("meaning_en") or entry.get("definition") or ""
+            word.pos = word.pos or row.get("pos") or entry.get("pos") or ""
             continue
         db.add(Word(
             hanzi=hanzi,
@@ -55,6 +56,7 @@ def seed_words(db):
             meaning_en=row.get("meaning_en") or entry.get("definition") or "",
             hsk_level=level,
             source="hsk+cedict",
+            pos=row.get("pos") or entry.get("pos") or "",
         ))
     db.commit()
 

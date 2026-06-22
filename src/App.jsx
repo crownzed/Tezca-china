@@ -18,6 +18,8 @@ const QUIZ_TYPES = [
   { id: 'reading', label: 'Đọc hiểu', icon: ScrollText },
   { id: 'translation', label: 'Dịch đoạn', icon: Languages },
   { id: 'cloze', label: 'Điền từ', icon: ScrollText },
+  { id: 'drag_drop', label: 'Sắp xếp câu', icon: PenTool },
+  { id: 'voice', label: 'Phát âm', icon: Headphones },
 ];
 const FOCUS_LEVELS = [1, 2, 3, 4];
 const GENERAL_CHECK_TYPES = QUIZ_TYPES.map(type => type.id);
@@ -30,6 +32,8 @@ function quizTypeDescription(typeId) {
   if (typeId === 'dialogue') return 'Nghe đoạn A/B';
   if (typeId === 'translation') return 'Dịch đoạn nói';
   if (typeId === 'cloze') return 'Chọn từ còn thiếu';
+  if (typeId === 'drag_drop') return 'Sắp xếp từ thành câu';
+  if (typeId === 'voice') return 'Luyện phát âm';
   return 'Câu và ngữ cảnh';
 }
 

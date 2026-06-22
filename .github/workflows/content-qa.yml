@@ -1,0 +1,56 @@
+# Content Quality Check — runs every 8 hours and on relevant pushes
+name: Content QA
+
+on:
+  schedule:
+    - cron: '0 */8 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/app/data/**'
+      - 'backend/app/models.py'
+      - 'backend/app/services/question_generator.py'
+      - 'backend/app/services/template_engine.py'
+      - 'backend/app/scripts/**'
+  workflow_dispatch:
+
+jobs:
+  content-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pypinyin
+
+      - name: Run Content QA
+        id: qa
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python backend/app/scripts/cron_qa_runner.py
+
+      - name: Upload QA Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: backend/app/data/qa_report.json
+          retention-days: 30
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "🚨 Tezca Content QA failed on ${{ github.ref_name }} by ${{ github.actor }} — check ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

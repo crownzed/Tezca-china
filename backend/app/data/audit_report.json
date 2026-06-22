@@ -1,0 +1,4030 @@
+{
+  "check": "pinyin",
+  "total_errors": 420,
+  "by_severity": {
+    "medium": 202,
+    "high": 218
+  },
+  "errors": [
+    {
+      "word_id": 120,
+      "hanzi": "一起",
+      "hsk_level": 1,
+      "pinyin": "yīqǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīqǐ'",
+      "severity": "medium",
+      "suggested_fix": "yī qǐ"
+    },
+    {
+      "word_id": 16,
+      "hanzi": "上",
+      "hsk_level": 1,
+      "pinyin": "shàng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '上' (1) vs pinyin syllables (2): ['shà', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 16,
+      "hanzi": "上",
+      "hsk_level": 1,
+      "pinyin": "shàng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 152,
+      "hanzi": "上班",
+      "hsk_level": 1,
+      "pinyin": "shàngbān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shàngbān'",
+      "severity": "medium",
+      "suggested_fix": "shà ngbā n"
+    },
+    {
+      "word_id": 152,
+      "hanzi": "上班",
+      "hsk_level": 1,
+      "pinyin": "shàngbān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '上班' (2) vs pinyin syllables (3): ['shà', 'ngbā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 152,
+      "hanzi": "上班",
+      "hsk_level": 1,
+      "pinyin": "shàngbān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 153,
+      "hanzi": "下班",
+      "hsk_level": 1,
+      "pinyin": "xiàbān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xiàbān'",
+      "severity": "medium",
+      "suggested_fix": "xià bā n"
+    },
+    {
+      "word_id": 153,
+      "hanzi": "下班",
+      "hsk_level": 1,
+      "pinyin": "xiàbān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '下班' (2) vs pinyin syllables (3): ['xià', 'bā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 153,
+      "hanzi": "下班",
+      "hsk_level": 1,
+      "pinyin": "xiàbān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 24,
+      "hanzi": "中午",
+      "hsk_level": 1,
+      "pinyin": "zhōngwǔ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhōngwǔ'",
+      "severity": "medium",
+      "suggested_fix": "zhō ngwǔ"
+    },
+    {
+      "word_id": 150,
+      "hanzi": "买单",
+      "hsk_level": 1,
+      "pinyin": "mǎidān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'mǎidān'",
+      "severity": "medium",
+      "suggested_fix": "mǎi dā n"
+    },
+    {
+      "word_id": 150,
+      "hanzi": "买单",
+      "hsk_level": 1,
+      "pinyin": "mǎidān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '买单' (2) vs pinyin syllables (3): ['mǎi', 'dā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 150,
+      "hanzi": "买单",
+      "hsk_level": 1,
+      "pinyin": "mǎidān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 5,
+      "hanzi": "什么",
+      "hsk_level": 1,
+      "pinyin": "shénme",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shénme'",
+      "severity": "medium",
+      "suggested_fix": "shé nme"
+    },
+    {
+      "word_id": 20,
+      "hanzi": "今天",
+      "hsk_level": 1,
+      "pinyin": "jīntiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jīntiān'",
+      "severity": "medium",
+      "suggested_fix": "jī ntiā n"
+    },
+    {
+      "word_id": 20,
+      "hanzi": "今天",
+      "hsk_level": 1,
+      "pinyin": "jīntiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '今天' (2) vs pinyin syllables (3): ['jī', 'ntiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 20,
+      "hanzi": "今天",
+      "hsk_level": 1,
+      "pinyin": "jīntiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 1,
+      "hanzi": "们",
+      "hsk_level": 1,
+      "pinyin": "men",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '们' (1) vs pinyin syllables (2): ['me', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 1,
+      "hanzi": "们",
+      "hsk_level": 1,
+      "pinyin": "men",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 140,
+      "hanzi": "便宜",
+      "hsk_level": 1,
+      "pinyin": "piányi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'piányi'",
+      "severity": "medium",
+      "suggested_fix": "piá nyi"
+    },
+    {
+      "word_id": 40,
+      "hanzi": "儿子",
+      "hsk_level": 1,
+      "pinyin": "érzi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'érzi'",
+      "severity": "medium",
+      "suggested_fix": "ér zi"
+    },
+    {
+      "word_id": 74,
+      "hanzi": "公园",
+      "hsk_level": 1,
+      "pinyin": "gōngyuán",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gōngyuán'",
+      "severity": "medium",
+      "suggested_fix": "gō ngyuá n"
+    },
+    {
+      "word_id": 74,
+      "hanzi": "公园",
+      "hsk_level": 1,
+      "pinyin": "gōngyuán",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '公园' (2) vs pinyin syllables (3): ['gō', 'ngyuá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 74,
+      "hanzi": "公园",
+      "hsk_level": 1,
+      "pinyin": "gōngyuán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 104,
+      "hanzi": "再见",
+      "hsk_level": 1,
+      "pinyin": "zàijiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zàijiàn'",
+      "severity": "medium",
+      "suggested_fix": "zài jià n"
+    },
+    {
+      "word_id": 104,
+      "hanzi": "再见",
+      "hsk_level": 1,
+      "pinyin": "zàijiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '再见' (2) vs pinyin syllables (3): ['zài', 'jià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 104,
+      "hanzi": "再见",
+      "hsk_level": 1,
+      "pinyin": "zàijiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 82,
+      "hanzi": "冷",
+      "hsk_level": 1,
+      "pinyin": "lěng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '冷' (1) vs pinyin syllables (2): ['lě', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 82,
+      "hanzi": "冷",
+      "hsk_level": 1,
+      "pinyin": "lěng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 147,
+      "hanzi": "出租车",
+      "hsk_level": 1,
+      "pinyin": "chūzūchē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'chūzūchē'",
+      "severity": "medium",
+      "suggested_fix": "chū zū chē"
+    },
+    {
+      "word_id": 29,
+      "hanzi": "分",
+      "hsk_level": 1,
+      "pinyin": "fēn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '分' (1) vs pinyin syllables (2): ['fē', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 29,
+      "hanzi": "分",
+      "hsk_level": 1,
+      "pinyin": "fēn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 18,
+      "hanzi": "前",
+      "hsk_level": 1,
+      "pinyin": "qián",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '前' (1) vs pinyin syllables (2): ['qiá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 18,
+      "hanzi": "前",
+      "hsk_level": 1,
+      "pinyin": "qián",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 71,
+      "hanzi": "医院",
+      "hsk_level": 1,
+      "pinyin": "yīyuàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīyuàn'",
+      "severity": "medium",
+      "suggested_fix": "yī yuà n"
+    },
+    {
+      "word_id": 71,
+      "hanzi": "医院",
+      "hsk_level": 1,
+      "pinyin": "yīyuàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '医院' (2) vs pinyin syllables (3): ['yī', 'yuà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 71,
+      "hanzi": "医院",
+      "hsk_level": 1,
+      "pinyin": "yīyuàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 28,
+      "hanzi": "半",
+      "hsk_level": 1,
+      "pinyin": "bàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '半' (1) vs pinyin syllables (2): ['bà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 28,
+      "hanzi": "半",
+      "hsk_level": 1,
+      "pinyin": "bàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 70,
+      "hanzi": "可乐",
+      "hsk_level": 1,
+      "pinyin": "kělè",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kělè'",
+      "severity": "medium",
+      "suggested_fix": "kě lè"
+    },
+    {
+      "word_id": 95,
+      "hanzi": "可以",
+      "hsk_level": 1,
+      "pinyin": "kěyǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kěyǐ'",
+      "severity": "medium",
+      "suggested_fix": "kě yǐ"
+    },
+    {
+      "word_id": 154,
+      "hanzi": "同学",
+      "hsk_level": 1,
+      "pinyin": "tóngxué",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'tóngxué'",
+      "severity": "medium",
+      "suggested_fix": "tó ngxué"
+    },
+    {
+      "word_id": 45,
+      "hanzi": "名字",
+      "hsk_level": 1,
+      "pinyin": "míngzì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'míngzì'",
+      "severity": "medium",
+      "suggested_fix": "mí ngzì"
+    },
+    {
+      "word_id": 69,
+      "hanzi": "咖啡",
+      "hsk_level": 1,
+      "pinyin": "kāfēi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kāfēi'",
+      "severity": "medium",
+      "suggested_fix": "kā fēi"
+    },
+    {
+      "word_id": 36,
+      "hanzi": "哥哥",
+      "hsk_level": 1,
+      "pinyin": "gēge",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gēge'",
+      "severity": "medium",
+      "suggested_fix": "gē ge"
+    },
+    {
+      "word_id": 6,
+      "hanzi": "哪儿",
+      "hsk_level": 1,
+      "pinyin": "nǎr",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'nǎr'",
+      "severity": "medium",
+      "suggested_fix": "nǎr"
+    },
+    {
+      "word_id": 72,
+      "hanzi": "商店",
+      "hsk_level": 1,
+      "pinyin": "shāngdiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shāngdiàn'",
+      "severity": "medium",
+      "suggested_fix": "shā ngdià n"
+    },
+    {
+      "word_id": 72,
+      "hanzi": "商店",
+      "hsk_level": 1,
+      "pinyin": "shāngdiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '商店' (2) vs pinyin syllables (3): ['shā', 'ngdià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 72,
+      "hanzi": "商店",
+      "hsk_level": 1,
+      "pinyin": "shāngdiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 97,
+      "hanzi": "喜欢",
+      "hsk_level": 1,
+      "pinyin": "xǐhuān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xǐhuān'",
+      "severity": "medium",
+      "suggested_fix": "xǐ huā n"
+    },
+    {
+      "word_id": 97,
+      "hanzi": "喜欢",
+      "hsk_level": 1,
+      "pinyin": "xǐhuān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '喜欢' (2) vs pinyin syllables (3): ['xǐ', 'huā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 97,
+      "hanzi": "喜欢",
+      "hsk_level": 1,
+      "pinyin": "xǐhuān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 76,
+      "hanzi": "图书馆",
+      "hsk_level": 1,
+      "pinyin": "túshūguǎn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'túshūguǎn'",
+      "severity": "medium",
+      "suggested_fix": "tú shū guǎ n"
+    },
+    {
+      "word_id": 76,
+      "hanzi": "图书馆",
+      "hsk_level": 1,
+      "pinyin": "túshūguǎn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '图书馆' (3) vs pinyin syllables (4): ['tú', 'shū', 'guǎ', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 76,
+      "hanzi": "图书馆",
+      "hsk_level": 1,
+      "pinyin": "túshūguǎn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 3 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 158,
+      "hanzi": "地址",
+      "hsk_level": 1,
+      "pinyin": "dìzhǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dìzhǐ'",
+      "severity": "medium",
+      "suggested_fix": "dì zhǐ"
+    },
+    {
+      "word_id": 148,
+      "hanzi": "地铁站",
+      "hsk_level": 1,
+      "pinyin": "dìtiězhàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dìtiězhàn'",
+      "severity": "medium",
+      "suggested_fix": "dì tiě zhà n"
+    },
+    {
+      "word_id": 148,
+      "hanzi": "地铁站",
+      "hsk_level": 1,
+      "pinyin": "dìtiězhàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '地铁站' (3) vs pinyin syllables (4): ['dì', 'tiě', 'zhà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 148,
+      "hanzi": "地铁站",
+      "hsk_level": 1,
+      "pinyin": "dìtiězhàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 3 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 8,
+      "hanzi": "多少",
+      "hsk_level": 1,
+      "pinyin": "duōshǎo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'duōshǎo'",
+      "severity": "medium",
+      "suggested_fix": "duō shǎo"
+    },
+    {
+      "word_id": 79,
+      "hanzi": "天气",
+      "hsk_level": 1,
+      "pinyin": "tiānqì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'tiānqì'",
+      "severity": "medium",
+      "suggested_fix": "tiā nqì"
+    },
+    {
+      "word_id": 88,
+      "hanzi": "好吃",
+      "hsk_level": 1,
+      "pinyin": "hǎochī",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'hǎochī'",
+      "severity": "medium",
+      "suggested_fix": "hǎo chī"
+    },
+    {
+      "word_id": 87,
+      "hanzi": "好看",
+      "hsk_level": 1,
+      "pinyin": "hǎokàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'hǎokàn'",
+      "severity": "medium",
+      "suggested_fix": "hǎo kà n"
+    },
+    {
+      "word_id": 87,
+      "hanzi": "好看",
+      "hsk_level": 1,
+      "pinyin": "hǎokàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '好看' (2) vs pinyin syllables (3): ['hǎo', 'kà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 87,
+      "hanzi": "好看",
+      "hsk_level": 1,
+      "pinyin": "hǎokàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 35,
+      "hanzi": "妈妈",
+      "hsk_level": 1,
+      "pinyin": "māma",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'māma'",
+      "severity": "medium",
+      "suggested_fix": "mā ma"
+    },
+    {
+      "word_id": 38,
+      "hanzi": "妹妹",
+      "hsk_level": 1,
+      "pinyin": "mèimei",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'mèimei'",
+      "severity": "medium",
+      "suggested_fix": "mèi mei"
+    },
+    {
+      "word_id": 37,
+      "hanzi": "姐姐",
+      "hsk_level": 1,
+      "pinyin": "jiějie",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jiějie'",
+      "severity": "medium",
+      "suggested_fix": "jiě jie"
+    },
+    {
+      "word_id": 107,
+      "hanzi": "学习",
+      "hsk_level": 1,
+      "pinyin": "xuéxí",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xuéxí'",
+      "severity": "medium",
+      "suggested_fix": "xué xí"
+    },
+    {
+      "word_id": 46,
+      "hanzi": "学校",
+      "hsk_level": 1,
+      "pinyin": "xuéxiào",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xuéxiào'",
+      "severity": "medium",
+      "suggested_fix": "xué xiào"
+    },
+    {
+      "word_id": 43,
+      "hanzi": "学生",
+      "hsk_level": 1,
+      "pinyin": "xuéshēng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xuéshēng'",
+      "severity": "medium",
+      "suggested_fix": "xué shē ng"
+    },
+    {
+      "word_id": 43,
+      "hanzi": "学生",
+      "hsk_level": 1,
+      "pinyin": "xuéshēng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '学生' (2) vs pinyin syllables (3): ['xué', 'shē', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 43,
+      "hanzi": "学生",
+      "hsk_level": 1,
+      "pinyin": "xuéshēng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 78,
+      "hanzi": "宿舍",
+      "hsk_level": 1,
+      "pinyin": "sùshè",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'sùshè'",
+      "severity": "medium",
+      "suggested_fix": "sù shè"
+    },
+    {
+      "word_id": 101,
+      "hanzi": "对不起",
+      "hsk_level": 1,
+      "pinyin": "duìbuqǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'duìbuqǐ'",
+      "severity": "medium",
+      "suggested_fix": "duì bu qǐ"
+    },
+    {
+      "word_id": 106,
+      "hanzi": "工作",
+      "hsk_level": 1,
+      "pinyin": "gōngzuò",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gōngzuò'",
+      "severity": "medium",
+      "suggested_fix": "gō ngzuò"
+    },
+    {
+      "word_id": 121,
+      "hanzi": "已经",
+      "hsk_level": 1,
+      "pinyin": "yǐjīng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yǐjīng'",
+      "severity": "medium",
+      "suggested_fix": "yǐ jī ng"
+    },
+    {
+      "word_id": 121,
+      "hanzi": "已经",
+      "hsk_level": 1,
+      "pinyin": "yǐjīng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '已经' (2) vs pinyin syllables (3): ['yǐ', 'jī', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 121,
+      "hanzi": "已经",
+      "hsk_level": 1,
+      "pinyin": "yǐjīng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 117,
+      "hanzi": "帮助",
+      "hsk_level": 1,
+      "pinyin": "bāngzhù",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'bāngzhù'",
+      "severity": "medium",
+      "suggested_fix": "bā ngzhù"
+    },
+    {
+      "word_id": 31,
+      "hanzi": "年",
+      "hsk_level": 1,
+      "pinyin": "nián",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '年' (1) vs pinyin syllables (2): ['niá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 31,
+      "hanzi": "年",
+      "hsk_level": 1,
+      "pinyin": "nián",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 39,
+      "hanzi": "弟弟",
+      "hsk_level": 1,
+      "pinyin": "dìdi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dìdi'",
+      "severity": "medium",
+      "suggested_fix": "dì di"
+    },
+    {
+      "word_id": 9,
+      "hanzi": "很",
+      "hsk_level": 1,
+      "pinyin": "hěn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '很' (1) vs pinyin syllables (2): ['hě', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 9,
+      "hanzi": "很",
+      "hsk_level": 1,
+      "pinyin": "hěn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 89,
+      "hanzi": "忙",
+      "hsk_level": 1,
+      "pinyin": "máng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '忙' (1) vs pinyin syllables (2): ['má', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 89,
+      "hanzi": "忙",
+      "hsk_level": 1,
+      "pinyin": "máng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 85,
+      "hanzi": "快乐",
+      "hsk_level": 1,
+      "pinyin": "kuàilè",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kuàilè'",
+      "severity": "medium",
+      "suggested_fix": "kuài lè"
+    },
+    {
+      "word_id": 157,
+      "hanzi": "快递",
+      "hsk_level": 1,
+      "pinyin": "kuàidì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kuàidì'",
+      "severity": "medium",
+      "suggested_fix": "kuài dì"
+    },
+    {
+      "word_id": 93,
+      "hanzi": "想",
+      "hsk_level": 1,
+      "pinyin": "xiǎng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '想' (1) vs pinyin syllables (2): ['xiǎ', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 93,
+      "hanzi": "想",
+      "hsk_level": 1,
+      "pinyin": "xiǎng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 134,
+      "hanzi": "慢",
+      "hsk_level": 1,
+      "pinyin": "màn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '慢' (1) vs pinyin syllables (2): ['mà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 134,
+      "hanzi": "慢",
+      "hsk_level": 1,
+      "pinyin": "màn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 54,
+      "hanzi": "房间",
+      "hsk_level": 1,
+      "pinyin": "fángjiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fángjiān'",
+      "severity": "medium",
+      "suggested_fix": "fá ngjiā n"
+    },
+    {
+      "word_id": 54,
+      "hanzi": "房间",
+      "hsk_level": 1,
+      "pinyin": "fángjiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '房间' (2) vs pinyin syllables (3): ['fá', 'ngjiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 54,
+      "hanzi": "房间",
+      "hsk_level": 1,
+      "pinyin": "fángjiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 58,
+      "hanzi": "手机",
+      "hsk_level": 1,
+      "pinyin": "shǒujī",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shǒujī'",
+      "severity": "medium",
+      "suggested_fix": "shǒu jī"
+    },
+    {
+      "word_id": 156,
+      "hanzi": "排队",
+      "hsk_level": 1,
+      "pinyin": "páiduì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'páiduì'",
+      "severity": "medium",
+      "suggested_fix": "pái duì"
+    },
+    {
+      "word_id": 47,
+      "hanzi": "教室",
+      "hsk_level": 1,
+      "pinyin": "jiàoshì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jiàoshì'",
+      "severity": "medium",
+      "suggested_fix": "jiào shì"
+    },
+    {
+      "word_id": 137,
+      "hanzi": "新",
+      "hsk_level": 1,
+      "pinyin": "xīn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '新' (1) vs pinyin syllables (2): ['xī', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 137,
+      "hanzi": "新",
+      "hsk_level": 1,
+      "pinyin": "xīn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 23,
+      "hanzi": "早上",
+      "hsk_level": 1,
+      "pinyin": "zǎoshang",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zǎoshang'",
+      "severity": "medium",
+      "suggested_fix": "zǎo sha ng"
+    },
+    {
+      "word_id": 23,
+      "hanzi": "早上",
+      "hsk_level": 1,
+      "pinyin": "zǎoshang",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '早上' (2) vs pinyin syllables (3): ['zǎo', 'sha', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 23,
+      "hanzi": "早上",
+      "hsk_level": 1,
+      "pinyin": "zǎoshang",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 21,
+      "hanzi": "明天",
+      "hsk_level": 1,
+      "pinyin": "míngtiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'míngtiān'",
+      "severity": "medium",
+      "suggested_fix": "mí ngtiā n"
+    },
+    {
+      "word_id": 21,
+      "hanzi": "明天",
+      "hsk_level": 1,
+      "pinyin": "míngtiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '明天' (2) vs pinyin syllables (3): ['mí', 'ngtiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 21,
+      "hanzi": "明天",
+      "hsk_level": 1,
+      "pinyin": "míngtiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 33,
+      "hanzi": "星期",
+      "hsk_level": 1,
+      "pinyin": "xīngqī",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xīngqī'",
+      "severity": "medium",
+      "suggested_fix": "xī ngqī"
+    },
+    {
+      "word_id": 22,
+      "hanzi": "昨天",
+      "hsk_level": 1,
+      "pinyin": "zuótiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zuótiān'",
+      "severity": "medium",
+      "suggested_fix": "zuó tiā n"
+    },
+    {
+      "word_id": 22,
+      "hanzi": "昨天",
+      "hsk_level": 1,
+      "pinyin": "zuótiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '昨天' (2) vs pinyin syllables (3): ['zuó', 'tiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 22,
+      "hanzi": "昨天",
+      "hsk_level": 1,
+      "pinyin": "zuótiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 25,
+      "hanzi": "晚上",
+      "hsk_level": 1,
+      "pinyin": "wǎnshang",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'wǎnshang'",
+      "severity": "medium",
+      "suggested_fix": "wǎ nsha ng"
+    },
+    {
+      "word_id": 25,
+      "hanzi": "晚上",
+      "hsk_level": 1,
+      "pinyin": "wǎnshang",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '晚上' (2) vs pinyin syllables (3): ['wǎ', 'nsha', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 25,
+      "hanzi": "晚上",
+      "hsk_level": 1,
+      "pinyin": "wǎnshang",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 44,
+      "hanzi": "朋友",
+      "hsk_level": 1,
+      "pinyin": "péngyǒu",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'péngyǒu'",
+      "severity": "medium",
+      "suggested_fix": "pé ngyǒu"
+    },
+    {
+      "word_id": 151,
+      "hanzi": "服务员",
+      "hsk_level": 1,
+      "pinyin": "fúwùyuán",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fúwùyuán'",
+      "severity": "medium",
+      "suggested_fix": "fú wù yuá n"
+    },
+    {
+      "word_id": 151,
+      "hanzi": "服务员",
+      "hsk_level": 1,
+      "pinyin": "fúwùyuán",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '服务员' (3) vs pinyin syllables (4): ['fú', 'wù', 'yuá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 151,
+      "hanzi": "服务员",
+      "hsk_level": 1,
+      "pinyin": "fúwùyuán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 3 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 50,
+      "hanzi": "桌子",
+      "hsk_level": 1,
+      "pinyin": "zhuōzi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhuōzi'",
+      "severity": "medium",
+      "suggested_fix": "zhuō zi"
+    },
+    {
+      "word_id": 51,
+      "hanzi": "椅子",
+      "hsk_level": 1,
+      "pinyin": "yǐzi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yǐzi'",
+      "severity": "medium",
+      "suggested_fix": "yǐ zi"
+    },
+    {
+      "word_id": 61,
+      "hanzi": "水果",
+      "hsk_level": 1,
+      "pinyin": "shuǐguǒ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shuǐguǒ'",
+      "severity": "medium",
+      "suggested_fix": "shuǐ guǒ"
+    },
+    {
+      "word_id": 102,
+      "hanzi": "没关系",
+      "hsk_level": 1,
+      "pinyin": "méiguānxi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'méiguānxi'",
+      "severity": "medium",
+      "suggested_fix": "méi guā nxi"
+    },
+    {
+      "word_id": 86,
+      "hanzi": "漂亮",
+      "hsk_level": 1,
+      "pinyin": "piàoliang",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'piàoliang'",
+      "severity": "medium",
+      "suggested_fix": "piào lia ng"
+    },
+    {
+      "word_id": 86,
+      "hanzi": "漂亮",
+      "hsk_level": 1,
+      "pinyin": "piàoliang",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '漂亮' (2) vs pinyin syllables (3): ['piào', 'lia', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 86,
+      "hanzi": "漂亮",
+      "hsk_level": 1,
+      "pinyin": "piàoliang",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 27,
+      "hanzi": "点",
+      "hsk_level": 1,
+      "pinyin": "diǎn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '点' (1) vs pinyin syllables (2): ['diǎ', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 27,
+      "hanzi": "点",
+      "hsk_level": 1,
+      "pinyin": "diǎn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 34,
+      "hanzi": "爸爸",
+      "hsk_level": 1,
+      "pinyin": "bàba",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'bàba'",
+      "severity": "medium",
+      "suggested_fix": "bà ba"
+    },
+    {
+      "word_id": 64,
+      "hanzi": "牛奶",
+      "hsk_level": 1,
+      "pinyin": "niúnǎi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'niúnǎi'",
+      "severity": "medium",
+      "suggested_fix": "niú nǎi"
+    },
+    {
+      "word_id": 26,
+      "hanzi": "现在",
+      "hsk_level": 1,
+      "pinyin": "xiànzài",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xiànzài'",
+      "severity": "medium",
+      "suggested_fix": "xià nzài"
+    },
+    {
+      "word_id": 116,
+      "hanzi": "用",
+      "hsk_level": 1,
+      "pinyin": "yòng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '用' (1) vs pinyin syllables (2): ['yò', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 116,
+      "hanzi": "用",
+      "hsk_level": 1,
+      "pinyin": "yòng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 59,
+      "hanzi": "电脑",
+      "hsk_level": 1,
+      "pinyin": "diànnǎo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'diànnǎo'",
+      "severity": "medium",
+      "suggested_fix": "dià nnǎo"
+    },
+    {
+      "word_id": 60,
+      "hanzi": "电视",
+      "hsk_level": 1,
+      "pinyin": "diànshì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'diànshì'",
+      "severity": "medium",
+      "suggested_fix": "dià nshì"
+    },
+    {
+      "word_id": 128,
+      "hanzi": "真",
+      "hsk_level": 1,
+      "pinyin": "zhēn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '真' (1) vs pinyin syllables (2): ['zhē', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 128,
+      "hanzi": "真",
+      "hsk_level": 1,
+      "pinyin": "zhēn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 90,
+      "hanzi": "知道",
+      "hsk_level": 1,
+      "pinyin": "zhīdao",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhīdao'",
+      "severity": "medium",
+      "suggested_fix": "zhī dao"
+    },
+    {
+      "word_id": 144,
+      "hanzi": "短",
+      "hsk_level": 1,
+      "pinyin": "duǎn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '短' (1) vs pinyin syllables (2): ['duǎ', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 144,
+      "hanzi": "短",
+      "hsk_level": 1,
+      "pinyin": "duǎn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 53,
+      "hanzi": "窗",
+      "hsk_level": 1,
+      "pinyin": "chuāng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '窗' (1) vs pinyin syllables (2): ['chuā', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 53,
+      "hanzi": "窗",
+      "hsk_level": 1,
+      "pinyin": "chuāng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 113,
+      "hanzi": "等",
+      "hsk_level": 1,
+      "pinyin": "děng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '等' (1) vs pinyin syllables (2): ['dě', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 113,
+      "hanzi": "等",
+      "hsk_level": 1,
+      "pinyin": "děng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 66,
+      "hanzi": "米饭",
+      "hsk_level": 1,
+      "pinyin": "mǐfàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'mǐfàn'",
+      "severity": "medium",
+      "suggested_fix": "mǐ fà n"
+    },
+    {
+      "word_id": 66,
+      "hanzi": "米饭",
+      "hsk_level": 1,
+      "pinyin": "mǐfàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '米饭' (2) vs pinyin syllables (3): ['mǐ', 'fà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 66,
+      "hanzi": "米饭",
+      "hsk_level": 1,
+      "pinyin": "mǐfàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 42,
+      "hanzi": "老师",
+      "hsk_level": 1,
+      "pinyin": "lǎoshī",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'lǎoshī'",
+      "severity": "medium",
+      "suggested_fix": "lǎo shī"
+    },
+    {
+      "word_id": 145,
+      "hanzi": "胖",
+      "hsk_level": 1,
+      "pinyin": "pàng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '胖' (1) vs pinyin syllables (2): ['pà', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 145,
+      "hanzi": "胖",
+      "hsk_level": 1,
+      "pinyin": "pàng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 96,
+      "hanzi": "能",
+      "hsk_level": 1,
+      "pinyin": "néng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '能' (1) vs pinyin syllables (2): ['né', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 96,
+      "hanzi": "能",
+      "hsk_level": 1,
+      "pinyin": "néng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 62,
+      "hanzi": "苹果",
+      "hsk_level": 1,
+      "pinyin": "píngguǒ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'píngguǒ'",
+      "severity": "medium",
+      "suggested_fix": "pí ngguǒ"
+    },
+    {
+      "word_id": 149,
+      "hanzi": "菜单",
+      "hsk_level": 1,
+      "pinyin": "càidān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'càidān'",
+      "severity": "medium",
+      "suggested_fix": "cài dā n"
+    },
+    {
+      "word_id": 149,
+      "hanzi": "菜单",
+      "hsk_level": 1,
+      "pinyin": "càidān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '菜单' (2) vs pinyin syllables (3): ['cài', 'dā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 149,
+      "hanzi": "菜单",
+      "hsk_level": 1,
+      "pinyin": "càidān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 55,
+      "hanzi": "衣服",
+      "hsk_level": 1,
+      "pinyin": "yīfu",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīfu'",
+      "severity": "medium",
+      "suggested_fix": "yī fu"
+    },
+    {
+      "word_id": 99,
+      "hanzi": "觉得",
+      "hsk_level": 1,
+      "pinyin": "juéde",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'juéde'",
+      "severity": "medium",
+      "suggested_fix": "jué de"
+    },
+    {
+      "word_id": 91,
+      "hanzi": "认识",
+      "hsk_level": 1,
+      "pinyin": "rènshi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'rènshi'",
+      "severity": "medium",
+      "suggested_fix": "rè nshi"
+    },
+    {
+      "word_id": 119,
+      "hanzi": "让",
+      "hsk_level": 1,
+      "pinyin": "ràng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '让' (1) vs pinyin syllables (2): ['rà', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 119,
+      "hanzi": "让",
+      "hsk_level": 1,
+      "pinyin": "ràng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 100,
+      "hanzi": "请",
+      "hsk_level": 1,
+      "pinyin": "qǐng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '请' (1) vs pinyin syllables (2): ['qǐ', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 100,
+      "hanzi": "请",
+      "hsk_level": 1,
+      "pinyin": "qǐng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 103,
+      "hanzi": "谢谢",
+      "hsk_level": 1,
+      "pinyin": "xièxie",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xièxie'",
+      "severity": "medium",
+      "suggested_fix": "xiè xie"
+    },
+    {
+      "word_id": 136,
+      "hanzi": "近",
+      "hsk_level": 1,
+      "pinyin": "jìn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '近' (1) vs pinyin syllables (2): ['jì', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 136,
+      "hanzi": "近",
+      "hsk_level": 1,
+      "pinyin": "jìn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 135,
+      "hanzi": "远",
+      "hsk_level": 1,
+      "pinyin": "yuǎn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '远' (1) vs pinyin syllables (2): ['yuǎ', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 135,
+      "hanzi": "远",
+      "hsk_level": 1,
+      "pinyin": "yuǎn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 118,
+      "hanzi": "送",
+      "hsk_level": 1,
+      "pinyin": "sòng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '送' (1) vs pinyin syllables (2): ['sò', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 118,
+      "hanzi": "送",
+      "hsk_level": 1,
+      "pinyin": "sòng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 155,
+      "hanzi": "邻居",
+      "hsk_level": 1,
+      "pinyin": "línjū",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'línjū'",
+      "severity": "medium",
+      "suggested_fix": "lí njū"
+    },
+    {
+      "word_id": 57,
+      "hanzi": "钱包",
+      "hsk_level": 1,
+      "pinyin": "qiánbāo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'qiánbāo'",
+      "severity": "medium",
+      "suggested_fix": "qiá nbāo"
+    },
+    {
+      "word_id": 73,
+      "hanzi": "银行",
+      "hsk_level": 1,
+      "pinyin": "yínháng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yínháng'",
+      "severity": "medium",
+      "suggested_fix": "yí nhá ng"
+    },
+    {
+      "word_id": 73,
+      "hanzi": "银行",
+      "hsk_level": 1,
+      "pinyin": "yínháng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '银行' (2) vs pinyin syllables (3): ['yí', 'nhá', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 73,
+      "hanzi": "银行",
+      "hsk_level": 1,
+      "pinyin": "yínháng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 143,
+      "hanzi": "长",
+      "hsk_level": 1,
+      "pinyin": "cháng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '长' (1) vs pinyin syllables (2): ['chá', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 143,
+      "hanzi": "长",
+      "hsk_level": 1,
+      "pinyin": "cháng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 52,
+      "hanzi": "门",
+      "hsk_level": 1,
+      "pinyin": "mén",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '门' (1) vs pinyin syllables (2): ['mé', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 52,
+      "hanzi": "门",
+      "hsk_level": 1,
+      "pinyin": "mén",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 10,
+      "hanzi": "非常",
+      "hsk_level": 1,
+      "pinyin": "fēicháng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fēicháng'",
+      "severity": "medium",
+      "suggested_fix": "fēi chá ng"
+    },
+    {
+      "word_id": 10,
+      "hanzi": "非常",
+      "hsk_level": 1,
+      "pinyin": "fēicháng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '非常' (2) vs pinyin syllables (3): ['fēi', 'chá', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 10,
+      "hanzi": "非常",
+      "hsk_level": 1,
+      "pinyin": "fēicháng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 65,
+      "hanzi": "面包",
+      "hsk_level": 1,
+      "pinyin": "miànbāo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'miànbāo'",
+      "severity": "medium",
+      "suggested_fix": "mià nbāo"
+    },
+    {
+      "word_id": 67,
+      "hanzi": "面条",
+      "hsk_level": 1,
+      "pinyin": "miàntiáo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'miàntiáo'",
+      "severity": "medium",
+      "suggested_fix": "mià ntiáo"
+    },
+    {
+      "word_id": 75,
+      "hanzi": "饭店",
+      "hsk_level": 1,
+      "pinyin": "fàndiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fàndiàn'",
+      "severity": "medium",
+      "suggested_fix": "fà ndià n"
+    },
+    {
+      "word_id": 75,
+      "hanzi": "饭店",
+      "hsk_level": 1,
+      "pinyin": "fàndiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '饭店' (2) vs pinyin syllables (3): ['fà', 'ndià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 75,
+      "hanzi": "饭店",
+      "hsk_level": 1,
+      "pinyin": "fàndiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 84,
+      "hanzi": "高兴",
+      "hsk_level": 1,
+      "pinyin": "gāoxìng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gāoxìng'",
+      "severity": "medium",
+      "suggested_fix": "gāo xì ng"
+    },
+    {
+      "word_id": 84,
+      "hanzi": "高兴",
+      "hsk_level": 1,
+      "pinyin": "gāoxìng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '高兴' (2) vs pinyin syllables (3): ['gāo', 'xì', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 84,
+      "hanzi": "高兴",
+      "hsk_level": 1,
+      "pinyin": "gāoxìng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 63,
+      "hanzi": "鸡蛋",
+      "hsk_level": 1,
+      "pinyin": "jīdàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jīdàn'",
+      "severity": "medium",
+      "suggested_fix": "jī dà n"
+    },
+    {
+      "word_id": 63,
+      "hanzi": "鸡蛋",
+      "hsk_level": 1,
+      "pinyin": "jīdàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '鸡蛋' (2) vs pinyin syllables (3): ['jī', 'dà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 63,
+      "hanzi": "鸡蛋",
+      "hsk_level": 1,
+      "pinyin": "jīdàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 236,
+      "hanzi": "一会儿",
+      "hsk_level": 2,
+      "pinyin": "yīhuìr",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīhuìr'",
+      "severity": "medium",
+      "suggested_fix": "yī huìr"
+    },
+    {
+      "word_id": 213,
+      "hanzi": "一共",
+      "hsk_level": 2,
+      "pinyin": "yīgòng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīgòng'",
+      "severity": "medium",
+      "suggested_fix": "yī gò ng"
+    },
+    {
+      "word_id": 213,
+      "hanzi": "一共",
+      "hsk_level": 2,
+      "pinyin": "yīgòng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '一共' (2) vs pinyin syllables (3): ['yī', 'gò', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 213,
+      "hanzi": "一共",
+      "hsk_level": 2,
+      "pinyin": "yīgòng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 214,
+      "hanzi": "一直",
+      "hsk_level": 2,
+      "pinyin": "yīzhí",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīzhí'",
+      "severity": "medium",
+      "suggested_fix": "yī zhí"
+    },
+    {
+      "word_id": 215,
+      "hanzi": "一起",
+      "hsk_level": 2,
+      "pinyin": "yīqǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīqǐ'",
+      "severity": "medium",
+      "suggested_fix": "yī qǐ"
+    },
+    {
+      "word_id": 294,
+      "hanzi": "上网",
+      "hsk_level": 2,
+      "pinyin": "shàngwǎng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shàngwǎng'",
+      "severity": "medium",
+      "suggested_fix": "shà ngwǎ ng"
+    },
+    {
+      "word_id": 294,
+      "hanzi": "上网",
+      "hsk_level": 2,
+      "pinyin": "shàngwǎng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '上网' (2) vs pinyin syllables (3): ['shà', 'ngwǎ', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 294,
+      "hanzi": "上网",
+      "hsk_level": 2,
+      "pinyin": "shàngwǎng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 230,
+      "hanzi": "中间",
+      "hsk_level": 2,
+      "pinyin": "zhōngjiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhōngjiān'",
+      "severity": "medium",
+      "suggested_fix": "zhō ngjiā n"
+    },
+    {
+      "word_id": 230,
+      "hanzi": "中间",
+      "hsk_level": 2,
+      "pinyin": "zhōngjiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '中间' (2) vs pinyin syllables (3): ['zhō', 'ngjiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 230,
+      "hanzi": "中间",
+      "hsk_level": 2,
+      "pinyin": "zhōngjiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 228,
+      "hanzi": "之前",
+      "hsk_level": 2,
+      "pinyin": "zhīqián",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhīqián'",
+      "severity": "medium",
+      "suggested_fix": "zhī qiá n"
+    },
+    {
+      "word_id": 228,
+      "hanzi": "之前",
+      "hsk_level": 2,
+      "pinyin": "zhīqián",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '之前' (2) vs pinyin syllables (3): ['zhī', 'qiá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 228,
+      "hanzi": "之前",
+      "hsk_level": 2,
+      "pinyin": "zhīqián",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 229,
+      "hanzi": "之后",
+      "hsk_level": 2,
+      "pinyin": "zhīhòu",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhīhòu'",
+      "severity": "medium",
+      "suggested_fix": "zhī hòu"
+    },
+    {
+      "word_id": 288,
+      "hanzi": "乒乓球",
+      "hsk_level": 2,
+      "pinyin": "pīngpāngqiú",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'pīngpāngqiú'",
+      "severity": "medium",
+      "suggested_fix": "pī ngpā ngqiú"
+    },
+    {
+      "word_id": 181,
+      "hanzi": "介绍",
+      "hsk_level": 2,
+      "pinyin": "jièshào",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jièshào'",
+      "severity": "medium",
+      "suggested_fix": "jiè shào"
+    },
+    {
+      "word_id": 222,
+      "hanzi": "件",
+      "hsk_level": 2,
+      "pinyin": "jiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '件' (1) vs pinyin syllables (2): ['jià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 222,
+      "hanzi": "件",
+      "hsk_level": 2,
+      "pinyin": "jiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 194,
+      "hanzi": "休息",
+      "hsk_level": 2,
+      "pinyin": "xiūxi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xiūxi'",
+      "severity": "medium",
+      "suggested_fix": "xiū xi"
+    },
+    {
+      "word_id": 164,
+      "hanzi": "但是",
+      "hsk_level": 2,
+      "pinyin": "dànshì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dànshì'",
+      "severity": "medium",
+      "suggested_fix": "dà nshì"
+    },
+    {
+      "word_id": 278,
+      "hanzi": "作业",
+      "hsk_level": 2,
+      "pinyin": "zuòyè",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zuòyè'",
+      "severity": "medium",
+      "suggested_fix": "zuò yè"
+    },
+    {
+      "word_id": 297,
+      "hanzi": "信用卡",
+      "hsk_level": 2,
+      "pinyin": "xìnyòngkǎ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xìnyòngkǎ'",
+      "severity": "medium",
+      "suggested_fix": "xì nyò ngkǎ"
+    },
+    {
+      "word_id": 280,
+      "hanzi": "假期",
+      "hsk_level": 2,
+      "pinyin": "jiàqī",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jiàqī'",
+      "severity": "medium",
+      "suggested_fix": "jià qī"
+    },
+    {
+      "word_id": 190,
+      "hanzi": "做饭",
+      "hsk_level": 2,
+      "pinyin": "zuòfàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zuòfàn'",
+      "severity": "medium",
+      "suggested_fix": "zuò fà n"
+    },
+    {
+      "word_id": 190,
+      "hanzi": "做饭",
+      "hsk_level": 2,
+      "pinyin": "zuòfàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '做饭' (2) vs pinyin syllables (3): ['zuò', 'fà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 190,
+      "hanzi": "做饭",
+      "hsk_level": 2,
+      "pinyin": "zuòfàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 211,
+      "hanzi": "健康",
+      "hsk_level": 2,
+      "pinyin": "jiànkāng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jiànkāng'",
+      "severity": "medium",
+      "suggested_fix": "jià nkā ng"
+    },
+    {
+      "word_id": 211,
+      "hanzi": "健康",
+      "hsk_level": 2,
+      "pinyin": "jiànkāng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '健康' (2) vs pinyin syllables (3): ['jià', 'nkā', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 211,
+      "hanzi": "健康",
+      "hsk_level": 2,
+      "pinyin": "jiànkāng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 301,
+      "hanzi": "先生",
+      "hsk_level": 2,
+      "pinyin": "xiānsheng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xiānsheng'",
+      "severity": "medium",
+      "suggested_fix": "xiā nshe ng"
+    },
+    {
+      "word_id": 301,
+      "hanzi": "先生",
+      "hsk_level": 2,
+      "pinyin": "xiānsheng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '先生' (2) vs pinyin syllables (3): ['xiā', 'nshe', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 301,
+      "hanzi": "先生",
+      "hsk_level": 2,
+      "pinyin": "xiānsheng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 268,
+      "hanzi": "公共汽车",
+      "hsk_level": 2,
+      "pinyin": "gōnggòng qìchē",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '公共汽车' (4) vs pinyin syllables (5): ['gō', 'nggò', 'ng', 'qì', 'chē']",
+      "severity": "high"
+    },
+    {
+      "word_id": 268,
+      "hanzi": "公共汽车",
+      "hsk_level": 2,
+      "pinyin": "gōnggòng qìchē",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 237,
+      "hanzi": "刚才",
+      "hsk_level": 2,
+      "pinyin": "gāngcái",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gāngcái'",
+      "severity": "medium",
+      "suggested_fix": "gā ngcái"
+    },
+    {
+      "word_id": 305,
+      "hanzi": "刷卡",
+      "hsk_level": 2,
+      "pinyin": "shuākǎ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shuākǎ'",
+      "severity": "medium",
+      "suggested_fix": "shuā kǎ"
+    },
+    {
+      "word_id": 308,
+      "hanzi": "前台",
+      "hsk_level": 2,
+      "pinyin": "qiántái",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'qiántái'",
+      "severity": "medium",
+      "suggested_fix": "qiá ntái"
+    },
+    {
+      "word_id": 266,
+      "hanzi": "医院",
+      "hsk_level": 2,
+      "pinyin": "yīyuàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīyuàn'",
+      "severity": "medium",
+      "suggested_fix": "yī yuà n"
+    },
+    {
+      "word_id": 266,
+      "hanzi": "医院",
+      "hsk_level": 2,
+      "pinyin": "yīyuàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '医院' (2) vs pinyin syllables (3): ['yī', 'yuà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 266,
+      "hanzi": "医院",
+      "hsk_level": 2,
+      "pinyin": "yīyuàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 182,
+      "hanzi": "参加",
+      "hsk_level": 2,
+      "pinyin": "cānjiā",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'cānjiā'",
+      "severity": "medium",
+      "suggested_fix": "cā njiā"
+    },
+    {
+      "word_id": 223,
+      "hanzi": "双",
+      "hsk_level": 2,
+      "pinyin": "shuāng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '双' (1) vs pinyin syllables (2): ['shuā', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 223,
+      "hanzi": "双",
+      "hsk_level": 2,
+      "pinyin": "shuāng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 263,
+      "hanzi": "发烧",
+      "hsk_level": 2,
+      "pinyin": "fāshāo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fāshāo'",
+      "severity": "medium",
+      "suggested_fix": "fā shāo"
+    },
+    {
+      "word_id": 299,
+      "hanzi": "叔叔",
+      "hsk_level": 2,
+      "pinyin": "shūshu",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shūshu'",
+      "severity": "medium",
+      "suggested_fix": "shū shu"
+    },
+    {
+      "word_id": 176,
+      "hanzi": "变成",
+      "hsk_level": 2,
+      "pinyin": "biànchéng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'biànchéng'",
+      "severity": "medium",
+      "suggested_fix": "bià nché ng"
+    },
+    {
+      "word_id": 176,
+      "hanzi": "变成",
+      "hsk_level": 2,
+      "pinyin": "biànchéng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '变成' (2) vs pinyin syllables (3): ['bià', 'nché', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 176,
+      "hanzi": "变成",
+      "hsk_level": 2,
+      "pinyin": "biànchéng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 307,
+      "hanzi": "口味",
+      "hsk_level": 2,
+      "pinyin": "kǒuwèi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kǒuwèi'",
+      "severity": "medium",
+      "suggested_fix": "kǒu wèi"
+    },
+    {
+      "word_id": 168,
+      "hanzi": "可以",
+      "hsk_level": 2,
+      "pinyin": "kěyǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kěyǐ'",
+      "severity": "medium",
+      "suggested_fix": "kě yǐ"
+    },
+    {
+      "word_id": 172,
+      "hanzi": "可能",
+      "hsk_level": 2,
+      "pinyin": "kěnéng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kěnéng'",
+      "severity": "medium",
+      "suggested_fix": "kě né ng"
+    },
+    {
+      "word_id": 172,
+      "hanzi": "可能",
+      "hsk_level": 2,
+      "pinyin": "kěnéng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '可能' (2) vs pinyin syllables (3): ['kě', 'né', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 172,
+      "hanzi": "可能",
+      "hsk_level": 2,
+      "pinyin": "kěnéng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 274,
+      "hanzi": "司机",
+      "hsk_level": 2,
+      "pinyin": "sījī",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'sījī'",
+      "severity": "medium",
+      "suggested_fix": "sī jī"
+    },
+    {
+      "word_id": 243,
+      "hanzi": "合适",
+      "hsk_level": 2,
+      "pinyin": "héshì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'héshì'",
+      "severity": "medium",
+      "suggested_fix": "hé shì"
+    },
+    {
+      "word_id": 310,
+      "hanzi": "同事",
+      "hsk_level": 2,
+      "pinyin": "tóngshì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'tóngshì'",
+      "severity": "medium",
+      "suggested_fix": "tó ngshì"
+    },
+    {
+      "word_id": 178,
+      "hanzi": "告诉",
+      "hsk_level": 2,
+      "pinyin": "gàosu",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gàosu'",
+      "severity": "medium",
+      "suggested_fix": "gào su"
+    },
+    {
+      "word_id": 264,
+      "hanzi": "咳嗽",
+      "hsk_level": 2,
+      "pinyin": "késou",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'késou'",
+      "severity": "medium",
+      "suggested_fix": "ké sou"
+    },
+    {
+      "word_id": 187,
+      "hanzi": "唱歌",
+      "hsk_level": 2,
+      "pinyin": "chànggē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'chànggē'",
+      "severity": "medium",
+      "suggested_fix": "chà nggē"
+    },
+    {
+      "word_id": 312,
+      "hanzi": "回复",
+      "hsk_level": 2,
+      "pinyin": "huífù",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'huífù'",
+      "severity": "medium",
+      "suggested_fix": "huí fù"
+    },
+    {
+      "word_id": 180,
+      "hanzi": "回答",
+      "hsk_level": 2,
+      "pinyin": "huídá",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'huídá'",
+      "severity": "medium",
+      "suggested_fix": "huí dá"
+    },
+    {
+      "word_id": 162,
+      "hanzi": "因为",
+      "hsk_level": 2,
+      "pinyin": "yīnwèi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīnwèi'",
+      "severity": "medium",
+      "suggested_fix": "yī nwèi"
+    },
+    {
+      "word_id": 289,
+      "hanzi": "地图",
+      "hsk_level": 2,
+      "pinyin": "dìtú",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dìtú'",
+      "severity": "medium",
+      "suggested_fix": "dì tú"
+    },
+    {
+      "word_id": 269,
+      "hanzi": "地铁",
+      "hsk_level": 2,
+      "pinyin": "dìtiě",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dìtiě'",
+      "severity": "medium",
+      "suggested_fix": "dì tiě"
+    },
+    {
+      "word_id": 304,
+      "hanzi": "堵车",
+      "hsk_level": 2,
+      "pinyin": "dǔchē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dǔchē'",
+      "severity": "medium",
+      "suggested_fix": "dǔ chē"
+    },
+    {
+      "word_id": 234,
+      "hanzi": "外面",
+      "hsk_level": 2,
+      "pinyin": "wàimiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'wàimiàn'",
+      "severity": "medium",
+      "suggested_fix": "wài mià n"
+    },
+    {
+      "word_id": 234,
+      "hanzi": "外面",
+      "hsk_level": 2,
+      "pinyin": "wàimiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '外面' (2) vs pinyin syllables (3): ['wài', 'mià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 234,
+      "hanzi": "外面",
+      "hsk_level": 2,
+      "pinyin": "wàimiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 254,
+      "hanzi": "头发",
+      "hsk_level": 2,
+      "pinyin": "tóufa",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'tóufa'",
+      "severity": "medium",
+      "suggested_fix": "tóu fa"
+    },
+    {
+      "word_id": 167,
+      "hanzi": "如果",
+      "hsk_level": 2,
+      "pinyin": "rúguǒ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'rúguǒ'",
+      "severity": "medium",
+      "suggested_fix": "rú guǒ"
+    },
+    {
+      "word_id": 209,
+      "hanzi": "安全",
+      "hsk_level": 2,
+      "pinyin": "ānquán",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'ānquán'",
+      "severity": "medium",
+      "suggested_fix": "ā nquá n"
+    },
+    {
+      "word_id": 209,
+      "hanzi": "安全",
+      "hsk_level": 2,
+      "pinyin": "ānquán",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '安全' (2) vs pinyin syllables (3): ['ā', 'nquá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 209,
+      "hanzi": "安全",
+      "hsk_level": 2,
+      "pinyin": "ānquán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 200,
+      "hanzi": "安静",
+      "hsk_level": 2,
+      "pinyin": "ānjìng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'ānjìng'",
+      "severity": "medium",
+      "suggested_fix": "ā njì ng"
+    },
+    {
+      "word_id": 200,
+      "hanzi": "安静",
+      "hsk_level": 2,
+      "pinyin": "ānjìng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '安静' (2) vs pinyin syllables (3): ['ā', 'njì', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 200,
+      "hanzi": "安静",
+      "hsk_level": 2,
+      "pinyin": "ānjìng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 203,
+      "hanzi": "容易",
+      "hsk_level": 2,
+      "pinyin": "róngyì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'róngyì'",
+      "severity": "medium",
+      "suggested_fix": "ró ngyì"
+    },
+    {
+      "word_id": 232,
+      "hanzi": "对面",
+      "hsk_level": 2,
+      "pinyin": "duìmiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'duìmiàn'",
+      "severity": "medium",
+      "suggested_fix": "duì mià n"
+    },
+    {
+      "word_id": 232,
+      "hanzi": "对面",
+      "hsk_level": 2,
+      "pinyin": "duìmiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '对面' (2) vs pinyin syllables (3): ['duì', 'mià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 232,
+      "hanzi": "对面",
+      "hsk_level": 2,
+      "pinyin": "duìmiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 300,
+      "hanzi": "小姐",
+      "hsk_level": 2,
+      "pinyin": "xiǎojiě",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xiǎojiě'",
+      "severity": "medium",
+      "suggested_fix": "xiǎo jiě"
+    },
+    {
+      "word_id": 198,
+      "hanzi": "小心",
+      "hsk_level": 2,
+      "pinyin": "xiǎoxīn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xiǎoxīn'",
+      "severity": "medium",
+      "suggested_fix": "xiǎo xī n"
+    },
+    {
+      "word_id": 198,
+      "hanzi": "小心",
+      "hsk_level": 2,
+      "pinyin": "xiǎoxīn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '小心' (2) vs pinyin syllables (3): ['xiǎo', 'xī', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 198,
+      "hanzi": "小心",
+      "hsk_level": 2,
+      "pinyin": "xiǎoxīn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 161,
+      "hanzi": "已经",
+      "hsk_level": 2,
+      "pinyin": "yǐjīng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yǐjīng'",
+      "severity": "medium",
+      "suggested_fix": "yǐ jī ng"
+    },
+    {
+      "word_id": 161,
+      "hanzi": "已经",
+      "hsk_level": 2,
+      "pinyin": "yǐjīng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '已经' (2) vs pinyin syllables (3): ['yǐ', 'jī', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 161,
+      "hanzi": "已经",
+      "hsk_level": 2,
+      "pinyin": "yǐjīng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 248,
+      "hanzi": "年轻",
+      "hsk_level": 2,
+      "pinyin": "niánqīng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'niánqīng'",
+      "severity": "medium",
+      "suggested_fix": "niá nqī ng"
+    },
+    {
+      "word_id": 248,
+      "hanzi": "年轻",
+      "hsk_level": 2,
+      "pinyin": "niánqīng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '年轻' (2) vs pinyin syllables (3): ['niá', 'nqī', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 248,
+      "hanzi": "年轻",
+      "hsk_level": 2,
+      "pinyin": "niánqīng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 210,
+      "hanzi": "幸福",
+      "hsk_level": 2,
+      "pinyin": "xìngfú",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xìngfú'",
+      "severity": "medium",
+      "suggested_fix": "xì ngfú"
+    },
+    {
+      "word_id": 169,
+      "hanzi": "应该",
+      "hsk_level": 2,
+      "pinyin": "yīnggāi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yīnggāi'",
+      "severity": "medium",
+      "suggested_fix": "yī nggāi"
+    },
+    {
+      "word_id": 174,
+      "hanzi": "开始",
+      "hsk_level": 2,
+      "pinyin": "kāishǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kāishǐ'",
+      "severity": "medium",
+      "suggested_fix": "kāi shǐ"
+    },
+    {
+      "word_id": 273,
+      "hanzi": "开车",
+      "hsk_level": 2,
+      "pinyin": "kāichē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kāichē'",
+      "severity": "medium",
+      "suggested_fix": "kāi chē"
+    },
+    {
+      "word_id": 170,
+      "hanzi": "必须",
+      "hsk_level": 2,
+      "pinyin": "bìxū",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'bìxū'",
+      "severity": "medium",
+      "suggested_fix": "bì xū"
+    },
+    {
+      "word_id": 262,
+      "hanzi": "感冒",
+      "hsk_level": 2,
+      "pinyin": "gǎnmào",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gǎnmào'",
+      "severity": "medium",
+      "suggested_fix": "gǎ nmào"
+    },
+    {
+      "word_id": 171,
+      "hanzi": "愿意",
+      "hsk_level": 2,
+      "pinyin": "yuànyì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yuànyì'",
+      "severity": "medium",
+      "suggested_fix": "yuà nyì"
+    },
+    {
+      "word_id": 163,
+      "hanzi": "所以",
+      "hsk_level": 2,
+      "pinyin": "suǒyǐ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'suǒyǐ'",
+      "severity": "medium",
+      "suggested_fix": "suǒ yǐ"
+    },
+    {
+      "word_id": 306,
+      "hanzi": "打包",
+      "hsk_level": 2,
+      "pinyin": "dǎbāo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dǎbāo'",
+      "severity": "medium",
+      "suggested_fix": "dǎ bāo"
+    },
+    {
+      "word_id": 173,
+      "hanzi": "打算",
+      "hsk_level": 2,
+      "pinyin": "dǎsuàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dǎsuàn'",
+      "severity": "medium",
+      "suggested_fix": "dǎ suà n"
+    },
+    {
+      "word_id": 173,
+      "hanzi": "打算",
+      "hsk_level": 2,
+      "pinyin": "dǎsuàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '打算' (2) vs pinyin syllables (3): ['dǎ', 'suà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 173,
+      "hanzi": "打算",
+      "hsk_level": 2,
+      "pinyin": "dǎsuàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 196,
+      "hanzi": "担心",
+      "hsk_level": 2,
+      "pinyin": "dānxīn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dānxīn'",
+      "severity": "medium",
+      "suggested_fix": "dā nxī n"
+    },
+    {
+      "word_id": 196,
+      "hanzi": "担心",
+      "hsk_level": 2,
+      "pinyin": "dānxīn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '担心' (2) vs pinyin syllables (3): ['dā', 'nxī', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 196,
+      "hanzi": "担心",
+      "hsk_level": 2,
+      "pinyin": "dānxīn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 177,
+      "hanzi": "改变",
+      "hsk_level": 2,
+      "pinyin": "gǎibiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gǎibiàn'",
+      "severity": "medium",
+      "suggested_fix": "gǎi bià n"
+    },
+    {
+      "word_id": 177,
+      "hanzi": "改变",
+      "hsk_level": 2,
+      "pinyin": "gǎibiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '改变' (2) vs pinyin syllables (3): ['gǎi', 'bià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 177,
+      "hanzi": "改变",
+      "hsk_level": 2,
+      "pinyin": "gǎibiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 303,
+      "hanzi": "改天",
+      "hsk_level": 2,
+      "pinyin": "gǎitiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'gǎitiān'",
+      "severity": "medium",
+      "suggested_fix": "gǎi tiā n"
+    },
+    {
+      "word_id": 303,
+      "hanzi": "改天",
+      "hsk_level": 2,
+      "pinyin": "gǎitiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '改天' (2) vs pinyin syllables (3): ['gǎi', 'tiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 303,
+      "hanzi": "改天",
+      "hsk_level": 2,
+      "pinyin": "gǎitiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 279,
+      "hanzi": "放假",
+      "hsk_level": 2,
+      "pinyin": "fàngjià",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fàngjià'",
+      "severity": "medium",
+      "suggested_fix": "fà ngjià"
+    },
+    {
+      "word_id": 197,
+      "hanzi": "放心",
+      "hsk_level": 2,
+      "pinyin": "fàngxīn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fàngxīn'",
+      "severity": "medium",
+      "suggested_fix": "fà ngxī n"
+    },
+    {
+      "word_id": 197,
+      "hanzi": "放心",
+      "hsk_level": 2,
+      "pinyin": "fàngxīn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '放心' (2) vs pinyin syllables (3): ['fà', 'ngxī', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 197,
+      "hanzi": "放心",
+      "hsk_level": 2,
+      "pinyin": "fàngxīn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 247,
+      "hanzi": "整齐",
+      "hsk_level": 2,
+      "pinyin": "zhěngqí",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhěngqí'",
+      "severity": "medium",
+      "suggested_fix": "zhě ngqí"
+    },
+    {
+      "word_id": 242,
+      "hanzi": "方便",
+      "hsk_level": 2,
+      "pinyin": "fāngbiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fāngbiàn'",
+      "severity": "medium",
+      "suggested_fix": "fā ngbià n"
+    },
+    {
+      "word_id": 242,
+      "hanzi": "方便",
+      "hsk_level": 2,
+      "pinyin": "fāngbiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '方便' (2) vs pinyin syllables (3): ['fā', 'ngbià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 242,
+      "hanzi": "方便",
+      "hsk_level": 2,
+      "pinyin": "fāngbiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 231,
+      "hanzi": "旁边",
+      "hsk_level": 2,
+      "pinyin": "pángbiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'pángbiān'",
+      "severity": "medium",
+      "suggested_fix": "pá ngbiā n"
+    },
+    {
+      "word_id": 231,
+      "hanzi": "旁边",
+      "hsk_level": 2,
+      "pinyin": "pángbiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '旁边' (2) vs pinyin syllables (3): ['pá', 'ngbiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 231,
+      "hanzi": "旁边",
+      "hsk_level": 2,
+      "pinyin": "pángbiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 186,
+      "hanzi": "旅游",
+      "hsk_level": 2,
+      "pinyin": "lǚyóu",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'lǚyóu'",
+      "severity": "medium",
+      "suggested_fix": "lǚ yóu"
+    },
+    {
+      "word_id": 282,
+      "hanzi": "春节",
+      "hsk_level": 2,
+      "pinyin": "Chūnjié",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'Chūnjié'",
+      "severity": "medium",
+      "suggested_fix": "Chū njié"
+    },
+    {
+      "word_id": 160,
+      "hanzi": "比较",
+      "hsk_level": 2,
+      "pinyin": "bǐjiào",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'bǐjiào'",
+      "severity": "medium",
+      "suggested_fix": "bǐ jiào"
+    },
+    {
+      "word_id": 291,
+      "hanzi": "汽车",
+      "hsk_level": 2,
+      "pinyin": "qìchē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'qìchē'",
+      "severity": "medium",
+      "suggested_fix": "qì chē"
+    },
+    {
+      "word_id": 191,
+      "hanzi": "洗澡",
+      "hsk_level": 2,
+      "pinyin": "xǐzǎo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xǐzǎo'",
+      "severity": "medium",
+      "suggested_fix": "xǐ zǎo"
+    },
+    {
+      "word_id": 313,
+      "hanzi": "消息",
+      "hsk_level": 2,
+      "pinyin": "xiāoxi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'xiāoxi'",
+      "severity": "medium",
+      "suggested_fix": "xiāo xi"
+    },
+    {
+      "word_id": 208,
+      "hanzi": "清楚",
+      "hsk_level": 2,
+      "pinyin": "qīngchu",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'qīngchu'",
+      "severity": "medium",
+      "suggested_fix": "qī ngchu"
+    },
+    {
+      "word_id": 293,
+      "hanzi": "游戏",
+      "hsk_level": 2,
+      "pinyin": "yóuxì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yóuxì'",
+      "severity": "medium",
+      "suggested_fix": "yóu xì"
+    },
+    {
+      "word_id": 185,
+      "hanzi": "游泳",
+      "hsk_level": 2,
+      "pinyin": "yóuyǒng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yóuyǒng'",
+      "severity": "medium",
+      "suggested_fix": "yóu yǒ ng"
+    },
+    {
+      "word_id": 185,
+      "hanzi": "游泳",
+      "hsk_level": 2,
+      "pinyin": "yóuyǒng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '游泳' (2) vs pinyin syllables (3): ['yóu', 'yǒ', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 185,
+      "hanzi": "游泳",
+      "hsk_level": 2,
+      "pinyin": "yóuyǒng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 290,
+      "hanzi": "火车",
+      "hsk_level": 2,
+      "pinyin": "huǒchē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'huǒchē'",
+      "severity": "medium",
+      "suggested_fix": "huǒ chē"
+    },
+    {
+      "word_id": 267,
+      "hanzi": "火车站",
+      "hsk_level": 2,
+      "pinyin": "huǒchēzhàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'huǒchēzhàn'",
+      "severity": "medium",
+      "suggested_fix": "huǒ chē zhà n"
+    },
+    {
+      "word_id": 267,
+      "hanzi": "火车站",
+      "hsk_level": 2,
+      "pinyin": "huǒchēzhàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '火车站' (3) vs pinyin syllables (4): ['huǒ', 'chē', 'zhà', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 267,
+      "hanzi": "火车站",
+      "hsk_level": 2,
+      "pinyin": "huǒchēzhàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 3 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 244,
+      "hanzi": "热闹",
+      "hsk_level": 2,
+      "pinyin": "rènào",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'rènào'",
+      "severity": "medium",
+      "suggested_fix": "rè nào"
+    },
+    {
+      "word_id": 212,
+      "hanzi": "特别",
+      "hsk_level": 2,
+      "pinyin": "tèbié",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'tèbié'",
+      "severity": "medium",
+      "suggested_fix": "tè bié"
+    },
+    {
+      "word_id": 225,
+      "hanzi": "瓶",
+      "hsk_level": 2,
+      "pinyin": "píng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '瓶' (1) vs pinyin syllables (2): ['pí', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 225,
+      "hanzi": "瓶",
+      "hsk_level": 2,
+      "pinyin": "píng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 283,
+      "hanzi": "生日",
+      "hsk_level": 2,
+      "pinyin": "shēngrì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shēngrì'",
+      "severity": "medium",
+      "suggested_fix": "shē ngrì"
+    },
+    {
+      "word_id": 195,
+      "hanzi": "生病",
+      "hsk_level": 2,
+      "pinyin": "shēngbìng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shēngbìng'",
+      "severity": "medium",
+      "suggested_fix": "shē ngbì ng"
+    },
+    {
+      "word_id": 195,
+      "hanzi": "生病",
+      "hsk_level": 2,
+      "pinyin": "shēngbìng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '生病' (2) vs pinyin syllables (3): ['shē', 'ngbì', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 195,
+      "hanzi": "生病",
+      "hsk_level": 2,
+      "pinyin": "shēngbìng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 309,
+      "hanzi": "登记",
+      "hsk_level": 2,
+      "pinyin": "dēngjì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dēngjì'",
+      "severity": "medium",
+      "suggested_fix": "dē ngjì"
+    },
+    {
+      "word_id": 227,
+      "hanzi": "盘",
+      "hsk_level": 2,
+      "pinyin": "pán",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '盘' (1) vs pinyin syllables (2): ['pá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 227,
+      "hanzi": "盘",
+      "hsk_level": 2,
+      "pinyin": "pán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 252,
+      "hanzi": "眼睛",
+      "hsk_level": 2,
+      "pinyin": "yǎnjīng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yǎnjīng'",
+      "severity": "medium",
+      "suggested_fix": "yǎ njī ng"
+    },
+    {
+      "word_id": 252,
+      "hanzi": "眼睛",
+      "hsk_level": 2,
+      "pinyin": "yǎnjīng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '眼睛' (2) vs pinyin syllables (3): ['yǎ', 'njī', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 252,
+      "hanzi": "眼睛",
+      "hsk_level": 2,
+      "pinyin": "yǎnjīng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 199,
+      "hanzi": "着急",
+      "hsk_level": 2,
+      "pinyin": "zháojí",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zháojí'",
+      "severity": "medium",
+      "suggested_fix": "zháo jí"
+    },
+    {
+      "word_id": 193,
+      "hanzi": "睡觉",
+      "hsk_level": 2,
+      "pinyin": "shuìjiào",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'shuìjiào'",
+      "severity": "medium",
+      "suggested_fix": "shuì jiào"
+    },
+    {
+      "word_id": 226,
+      "hanzi": "碗",
+      "hsk_level": 2,
+      "pinyin": "wǎn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '碗' (1) vs pinyin syllables (2): ['wǎ', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 226,
+      "hanzi": "碗",
+      "hsk_level": 2,
+      "pinyin": "wǎn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 284,
+      "hanzi": "礼物",
+      "hsk_level": 2,
+      "pinyin": "lǐwù",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'lǐwù'",
+      "severity": "medium",
+      "suggested_fix": "lǐ wù"
+    },
+    {
+      "word_id": 241,
+      "hanzi": "突然",
+      "hsk_level": 2,
+      "pinyin": "tūrán",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'tūrán'",
+      "severity": "medium",
+      "suggested_fix": "tūrá n"
+    },
+    {
+      "word_id": 241,
+      "hanzi": "突然",
+      "hsk_level": 2,
+      "pinyin": "tūrán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 0 ('tūrá'): multiple_tone_marks",
+      "severity": "high"
+    },
+    {
+      "word_id": 241,
+      "hanzi": "突然",
+      "hsk_level": 2,
+      "pinyin": "tūrán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 202,
+      "hanzi": "简单",
+      "hsk_level": 2,
+      "pinyin": "jiǎndān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jiǎndān'",
+      "severity": "medium",
+      "suggested_fix": "jiǎ ndā n"
+    },
+    {
+      "word_id": 202,
+      "hanzi": "简单",
+      "hsk_level": 2,
+      "pinyin": "jiǎndān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '简单' (2) vs pinyin syllables (3): ['jiǎ', 'ndā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 202,
+      "hanzi": "简单",
+      "hsk_level": 2,
+      "pinyin": "jiǎndān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 276,
+      "hanzi": "红绿灯",
+      "hsk_level": 2,
+      "pinyin": "hónglǜdēng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'hónglǜdēng'",
+      "severity": "medium",
+      "suggested_fix": "hó nglǜ dē ng"
+    },
+    {
+      "word_id": 276,
+      "hanzi": "红绿灯",
+      "hsk_level": 2,
+      "pinyin": "hónglǜdēng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '红绿灯' (3) vs pinyin syllables (4): ['hó', 'nglǜ', 'dē', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 276,
+      "hanzi": "红绿灯",
+      "hsk_level": 2,
+      "pinyin": "hónglǜdēng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 3 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 238,
+      "hanzi": "经常",
+      "hsk_level": 2,
+      "pinyin": "jīngcháng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jīngcháng'",
+      "severity": "medium",
+      "suggested_fix": "jī ngchá ng"
+    },
+    {
+      "word_id": 238,
+      "hanzi": "经常",
+      "hsk_level": 2,
+      "pinyin": "jīngcháng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '经常' (2) vs pinyin syllables (3): ['jī', 'ngchá', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 238,
+      "hanzi": "经常",
+      "hsk_level": 2,
+      "pinyin": "jīngcháng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 175,
+      "hanzi": "结束",
+      "hsk_level": 2,
+      "pinyin": "jiéshù",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jiéshù'",
+      "severity": "medium",
+      "suggested_fix": "jié shù"
+    },
+    {
+      "word_id": 311,
+      "hanzi": "老板",
+      "hsk_level": 2,
+      "pinyin": "lǎobǎn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'lǎobǎn'",
+      "severity": "medium",
+      "suggested_fix": "lǎo bǎ n"
+    },
+    {
+      "word_id": 311,
+      "hanzi": "老板",
+      "hsk_level": 2,
+      "pinyin": "lǎobǎn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '老板' (2) vs pinyin syllables (3): ['lǎo', 'bǎ', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 311,
+      "hanzi": "老板",
+      "hsk_level": 2,
+      "pinyin": "lǎobǎn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 277,
+      "hanzi": "考试",
+      "hsk_level": 2,
+      "pinyin": "kǎoshì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'kǎoshì'",
+      "severity": "medium",
+      "suggested_fix": "kǎo shì"
+    },
+    {
+      "word_id": 165,
+      "hanzi": "而且",
+      "hsk_level": 2,
+      "pinyin": "érqiě",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'érqiě'",
+      "severity": "medium",
+      "suggested_fix": "ér qiě"
+    },
+    {
+      "word_id": 251,
+      "hanzi": "耳朵",
+      "hsk_level": 2,
+      "pinyin": "ěrduo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'ěrduo'",
+      "severity": "medium",
+      "suggested_fix": "ěr duo"
+    },
+    {
+      "word_id": 295,
+      "hanzi": "聊天",
+      "hsk_level": 2,
+      "pinyin": "liáotiān",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'liáotiān'",
+      "severity": "medium",
+      "suggested_fix": "liáo tiā n"
+    },
+    {
+      "word_id": 295,
+      "hanzi": "聊天",
+      "hsk_level": 2,
+      "pinyin": "liáotiān",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '聊天' (2) vs pinyin syllables (3): ['liáo', 'tiā', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 295,
+      "hanzi": "聊天",
+      "hsk_level": 2,
+      "pinyin": "liáotiān",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 260,
+      "hanzi": "肚子",
+      "hsk_level": 2,
+      "pinyin": "dùzi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dùzi'",
+      "severity": "medium",
+      "suggested_fix": "dù zi"
+    },
+    {
+      "word_id": 246,
+      "hanzi": "脏",
+      "hsk_level": 2,
+      "pinyin": "zāng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '脏' (1) vs pinyin syllables (2): ['zā', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 246,
+      "hanzi": "脏",
+      "hsk_level": 2,
+      "pinyin": "zāng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 255,
+      "hanzi": "脸",
+      "hsk_level": 2,
+      "pinyin": "liǎn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '脸' (1) vs pinyin syllables (2): ['liǎ', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 255,
+      "hanzi": "脸",
+      "hsk_level": 2,
+      "pinyin": "liǎn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 272,
+      "hanzi": "自行车",
+      "hsk_level": 2,
+      "pinyin": "zìxíngchē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zìxíngchē'",
+      "severity": "medium",
+      "suggested_fix": "zì xí ngchē"
+    },
+    {
+      "word_id": 271,
+      "hanzi": "船",
+      "hsk_level": 2,
+      "pinyin": "chuán",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '船' (1) vs pinyin syllables (2): ['chuá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 271,
+      "hanzi": "船",
+      "hsk_level": 2,
+      "pinyin": "chuán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 281,
+      "hanzi": "节日",
+      "hsk_level": 2,
+      "pinyin": "jiérì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'jiérì'",
+      "severity": "medium",
+      "suggested_fix": "jiérì"
+    },
+    {
+      "word_id": 281,
+      "hanzi": "节日",
+      "hsk_level": 2,
+      "pinyin": "jiérì",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '节日' (2) vs pinyin syllables (1): ['jiérì']",
+      "severity": "high"
+    },
+    {
+      "word_id": 281,
+      "hanzi": "节日",
+      "hsk_level": 2,
+      "pinyin": "jiérì",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 0 ('jiérì'): multiple_tone_marks",
+      "severity": "high"
+    },
+    {
+      "word_id": 166,
+      "hanzi": "虽然",
+      "hsk_level": 2,
+      "pinyin": "suīrán",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'suīrán'",
+      "severity": "medium",
+      "suggested_fix": "suīrá n"
+    },
+    {
+      "word_id": 166,
+      "hanzi": "虽然",
+      "hsk_level": 2,
+      "pinyin": "suīrán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 0 ('suīrá'): multiple_tone_marks",
+      "severity": "high"
+    },
+    {
+      "word_id": 166,
+      "hanzi": "虽然",
+      "hsk_level": 2,
+      "pinyin": "suīrán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 285,
+      "hanzi": "蛋糕",
+      "hsk_level": 2,
+      "pinyin": "dàngāo",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'dàngāo'",
+      "severity": "medium",
+      "suggested_fix": "dà ngāo"
+    },
+    {
+      "word_id": 192,
+      "hanzi": "起床",
+      "hsk_level": 2,
+      "pinyin": "qǐchuáng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'qǐchuáng'",
+      "severity": "medium",
+      "suggested_fix": "qǐ chuá ng"
+    },
+    {
+      "word_id": 192,
+      "hanzi": "起床",
+      "hsk_level": 2,
+      "pinyin": "qǐchuáng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '起床' (2) vs pinyin syllables (3): ['qǐ', 'chuá', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 192,
+      "hanzi": "起床",
+      "hsk_level": 2,
+      "pinyin": "qǐchuáng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 184,
+      "hanzi": "跑步",
+      "hsk_level": 2,
+      "pinyin": "pǎobù",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'pǎobù'",
+      "severity": "medium",
+      "suggested_fix": "pǎo bù"
+    },
+    {
+      "word_id": 188,
+      "hanzi": "跳舞",
+      "hsk_level": 2,
+      "pinyin": "tiàowǔ",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'tiàowǔ'",
+      "severity": "medium",
+      "suggested_fix": "tiào wǔ"
+    },
+    {
+      "word_id": 183,
+      "hanzi": "运动",
+      "hsk_level": 2,
+      "pinyin": "yùndòng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yùndòng'",
+      "severity": "medium",
+      "suggested_fix": "yù ndò ng"
+    },
+    {
+      "word_id": 183,
+      "hanzi": "运动",
+      "hsk_level": 2,
+      "pinyin": "yùndòng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '运动' (2) vs pinyin syllables (3): ['yù', 'ndò', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 183,
+      "hanzi": "运动",
+      "hsk_level": 2,
+      "pinyin": "yùndòng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 292,
+      "hanzi": "运动会",
+      "hsk_level": 2,
+      "pinyin": "yùndònghuì",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yùndònghuì'",
+      "severity": "medium",
+      "suggested_fix": "yù ndò nghuì"
+    },
+    {
+      "word_id": 220,
+      "hanzi": "遍",
+      "hsk_level": 2,
+      "pinyin": "biàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '遍' (1) vs pinyin syllables (2): ['bià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 220,
+      "hanzi": "遍",
+      "hsk_level": 2,
+      "pinyin": "biàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 235,
+      "hanzi": "里面",
+      "hsk_level": 2,
+      "pinyin": "lǐmiàn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'lǐmiàn'",
+      "severity": "medium",
+      "suggested_fix": "lǐ mià n"
+    },
+    {
+      "word_id": 235,
+      "hanzi": "里面",
+      "hsk_level": 2,
+      "pinyin": "lǐmiàn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '里面' (2) vs pinyin syllables (3): ['lǐ', 'mià', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 235,
+      "hanzi": "里面",
+      "hsk_level": 2,
+      "pinyin": "lǐmiàn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 201,
+      "hanzi": "重要",
+      "hsk_level": 2,
+      "pinyin": "zhòngyào",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'zhòngyào'",
+      "severity": "medium",
+      "suggested_fix": "zhò ngyào"
+    },
+    {
+      "word_id": 179,
+      "hanzi": "问",
+      "hsk_level": 2,
+      "pinyin": "wèn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '问' (1) vs pinyin syllables (2): ['wè', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 179,
+      "hanzi": "问",
+      "hsk_level": 2,
+      "pinyin": "wèn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 298,
+      "hanzi": "阿姨",
+      "hsk_level": 2,
+      "pinyin": "āyí",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'āyí'",
+      "severity": "medium",
+      "suggested_fix": "ā yí"
+    },
+    {
+      "word_id": 233,
+      "hanzi": "附近",
+      "hsk_level": 2,
+      "pinyin": "fùjìn",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fùjìn'",
+      "severity": "medium",
+      "suggested_fix": "fù jì n"
+    },
+    {
+      "word_id": 233,
+      "hanzi": "附近",
+      "hsk_level": 2,
+      "pinyin": "fùjìn",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '附近' (2) vs pinyin syllables (3): ['fù', 'jì', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 233,
+      "hanzi": "附近",
+      "hsk_level": 2,
+      "pinyin": "fùjìn",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 204,
+      "hanzi": "难",
+      "hsk_level": 2,
+      "pinyin": "nán",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '难' (1) vs pinyin syllables (2): ['ná', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 204,
+      "hanzi": "难",
+      "hsk_level": 2,
+      "pinyin": "nán",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 1 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 296,
+      "hanzi": "零钱",
+      "hsk_level": 2,
+      "pinyin": "língqián",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'língqián'",
+      "severity": "medium",
+      "suggested_fix": "lí ngqiá n"
+    },
+    {
+      "word_id": 296,
+      "hanzi": "零钱",
+      "hsk_level": 2,
+      "pinyin": "língqián",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '零钱' (2) vs pinyin syllables (3): ['lí', 'ngqiá', 'n']",
+      "severity": "high"
+    },
+    {
+      "word_id": 296,
+      "hanzi": "零钱",
+      "hsk_level": 2,
+      "pinyin": "língqián",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('n'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 302,
+      "hanzi": "预约",
+      "hsk_level": 2,
+      "pinyin": "yùyuē",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'yùyuē'",
+      "severity": "medium",
+      "suggested_fix": "yù yuē"
+    },
+    {
+      "word_id": 270,
+      "hanzi": "飞机",
+      "hsk_level": 2,
+      "pinyin": "fēijī",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'fēijī'",
+      "severity": "medium",
+      "suggested_fix": "fēi jī"
+    },
+    {
+      "word_id": 216,
+      "hanzi": "马上",
+      "hsk_level": 2,
+      "pinyin": "mǎshàng",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'mǎshàng'",
+      "severity": "medium",
+      "suggested_fix": "mǎ shà ng"
+    },
+    {
+      "word_id": 216,
+      "hanzi": "马上",
+      "hsk_level": 2,
+      "pinyin": "mǎshàng",
+      "error_type": "syllable_count_mismatch",
+      "detail": "Hanzi '马上' (2) vs pinyin syllables (3): ['mǎ', 'shà', 'ng']",
+      "severity": "high"
+    },
+    {
+      "word_id": 216,
+      "hanzi": "马上",
+      "hsk_level": 2,
+      "pinyin": "mǎshàng",
+      "error_type": "invalid_syllable",
+      "detail": "Syllable 2 ('ng'): no_vowel",
+      "severity": "high"
+    },
+    {
+      "word_id": 275,
+      "hanzi": "马路",
+      "hsk_level": 2,
+      "pinyin": "mǎlù",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'mǎlù'",
+      "severity": "medium",
+      "suggested_fix": "mǎ lù"
+    },
+    {
+      "word_id": 253,
+      "hanzi": "鼻子",
+      "hsk_level": 2,
+      "pinyin": "bízi",
+      "error_type": "unspaced_pinyin",
+      "detail": "Pinyin should have spaces between syllables (convention). Saw: 'bízi'",
+      "severity": "medium",
+      "suggested_fix": "bí zi"
+    }
+  ],
+  "pinyin_audit": {
+    "total_errors": 3,
+    "by_severity": {
+      "high": 2,
+      "medium": 1
+    },
+    "errors": [
+      {
+        "word_id": 1,
+        "hanzi": "们",
+        "hsk_level": 1,
+        "pinyin": "men",
+        "error_type": "no_tone_indication",
+        "detail": "Pinyin has no tone marks or tone numbers",
+        "severity": "high"
+      },
+      {
+        "word_id": 6,
+        "hanzi": "哪儿",
+        "hsk_level": 1,
+        "pinyin": "nǎr",
+        "error_type": "unspaced_pinyin",
+        "detail": "Pinyin should have spaces between syllables (HSK convention)",
+        "severity": "medium"
+      },
+      {
+        "word_id": 143,
+        "hanzi": "长",
+        "hsk_level": 1,
+        "pinyin": "cháng",
+        "error_type": "pinyin_mismatch_vs_pypinyin",
+        "detail": "Syl 0: DB='chang' vs pypinyin='zhang'",
+        "severity": "high",
+        "pypinyin_reference": "zhǎng"
+      }
+    ],
+    "pypinyin_available": true
+  }
+}

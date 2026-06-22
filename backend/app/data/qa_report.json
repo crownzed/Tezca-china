@@ -1,0 +1,471 @@
+{
+  "run_id": "qa-2026-06-21T174850Z",
+  "generated_at": "2026-06-21T17:48:50Z",
+  "checks": {
+    "pinyin": {
+      "passed": false,
+      "total_errors": 3,
+      "by_severity": {
+        "high": 2,
+        "medium": 1
+      },
+      "errors": [
+        {
+          "word_id": 1,
+          "hanzi": "们",
+          "hsk_level": 1,
+          "pinyin": "men",
+          "error_type": "no_tone_indication",
+          "detail": "Pinyin has no tone marks or tone numbers",
+          "severity": "high"
+        },
+        {
+          "word_id": 6,
+          "hanzi": "哪儿",
+          "hsk_level": 1,
+          "pinyin": "nǎr",
+          "error_type": "unspaced_pinyin",
+          "detail": "Pinyin should have spaces between syllables (HSK convention)",
+          "severity": "medium"
+        },
+        {
+          "word_id": 143,
+          "hanzi": "长",
+          "hsk_level": 1,
+          "pinyin": "cháng",
+          "error_type": "pinyin_mismatch_vs_pypinyin",
+          "detail": "Syl 0: DB='chang' vs pypinyin='zhang'",
+          "severity": "high",
+          "pypinyin_reference": "zhǎng"
+        }
+      ]
+    },
+    "grammar": {
+      "passed": false,
+      "total_issues": 45,
+      "by_severity": {
+        "low": 44,
+        "critical": 1
+      },
+      "diversity_gaps": 48,
+      "issues": [
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很好。",
+          "severity": "low",
+          "example_id": 9,
+          "word_id": 9,
+          "hanzi": "很",
+          "sentence_cn": "很好。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 门后。",
+          "severity": "low",
+          "example_id": 19,
+          "word_id": 19,
+          "hanzi": "后",
+          "sentence_cn": "门后。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 八点。",
+          "severity": "low",
+          "example_id": 27,
+          "word_id": 27,
+          "hanzi": "点",
+          "sentence_cn": "八点。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 五月。",
+          "severity": "low",
+          "example_id": 30,
+          "word_id": 30,
+          "hanzi": "月",
+          "sentence_cn": "五月。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 开门。",
+          "severity": "low",
+          "example_id": 52,
+          "word_id": 52,
+          "hanzi": "门",
+          "sentence_cn": "开门。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 开窗。",
+          "severity": "low",
+          "example_id": 53,
+          "word_id": 53,
+          "hanzi": "窗",
+          "sentence_cn": "开窗。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 喝茶。",
+          "severity": "low",
+          "example_id": 68,
+          "word_id": 68,
+          "hanzi": "茶",
+          "sentence_cn": "喝茶。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 回家。",
+          "severity": "low",
+          "example_id": 77,
+          "word_id": 77,
+          "hanzi": "家",
+          "sentence_cn": "回家。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 请进。",
+          "severity": "low",
+          "example_id": 101,
+          "word_id": 100,
+          "hanzi": "请",
+          "sentence_cn": "请进。"
+        },
+        {
+          "type": "target_word_missing",
+          "detail": "'再见' not found in sentence: 明天见。...",
+          "severity": "critical",
+          "example_id": 105,
+          "word_id": 104,
+          "hanzi": "再见",
+          "sentence_cn": "明天见。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 给我。",
+          "severity": "low",
+          "example_id": 112,
+          "word_id": 111,
+          "hanzi": "给",
+          "sentence_cn": "给我。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 找人。",
+          "severity": "low",
+          "example_id": 113,
+          "word_id": 112,
+          "hanzi": "找",
+          "sentence_cn": "找人。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 等我。",
+          "severity": "low",
+          "example_id": 114,
+          "word_id": 113,
+          "hanzi": "等",
+          "sentence_cn": "等我。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 送你。",
+          "severity": "low",
+          "example_id": 119,
+          "word_id": 118,
+          "hanzi": "送",
+          "sentence_cn": "送你。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 就去。",
+          "severity": "low",
+          "example_id": 127,
+          "word_id": 126,
+          "hanzi": "就",
+          "sentence_cn": "就去。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 最好。",
+          "severity": "low",
+          "example_id": 128,
+          "word_id": 127,
+          "hanzi": "最",
+          "sentence_cn": "最好。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 真好。",
+          "severity": "low",
+          "example_id": 129,
+          "word_id": 128,
+          "hanzi": "真",
+          "sentence_cn": "真好。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 对了。",
+          "severity": "low",
+          "example_id": 130,
+          "word_id": 129,
+          "hanzi": "对",
+          "sentence_cn": "对了。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 错了。",
+          "severity": "low",
+          "example_id": 131,
+          "word_id": 130,
+          "hanzi": "错",
+          "sentence_cn": "错了。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很少。",
+          "severity": "low",
+          "example_id": 133,
+          "word_id": 132,
+          "hanzi": "少",
+          "sentence_cn": "很少。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很远。",
+          "severity": "low",
+          "example_id": 136,
+          "word_id": 135,
+          "hanzi": "远",
+          "sentence_cn": "很远。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很近。",
+          "severity": "low",
+          "example_id": 137,
+          "word_id": 136,
+          "hanzi": "近",
+          "sentence_cn": "很近。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 新书。",
+          "severity": "low",
+          "example_id": 138,
+          "word_id": 137,
+          "hanzi": "新",
+          "sentence_cn": "新书。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 旧书。",
+          "severity": "low",
+          "example_id": 139,
+          "word_id": 138,
+          "hanzi": "旧",
+          "sentence_cn": "旧书。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很高。",
+          "severity": "low",
+          "example_id": 142,
+          "word_id": 141,
+          "hanzi": "高",
+          "sentence_cn": "很高。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很矮。",
+          "severity": "low",
+          "example_id": 143,
+          "word_id": 142,
+          "hanzi": "矮",
+          "sentence_cn": "很矮。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很长。",
+          "severity": "low",
+          "example_id": 144,
+          "word_id": 143,
+          "hanzi": "长",
+          "sentence_cn": "很长。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很短。",
+          "severity": "low",
+          "example_id": 145,
+          "word_id": 144,
+          "hanzi": "短",
+          "sentence_cn": "很短。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很胖。",
+          "severity": "low",
+          "example_id": 146,
+          "word_id": 145,
+          "hanzi": "胖",
+          "sentence_cn": "很胖。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很瘦。",
+          "severity": "low",
+          "example_id": 147,
+          "word_id": 146,
+          "hanzi": "瘦",
+          "sentence_cn": "很瘦。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 问路。",
+          "severity": "low",
+          "example_id": 181,
+          "word_id": 179,
+          "hanzi": "问",
+          "sentence_cn": "问路。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很难。",
+          "severity": "low",
+          "example_id": 206,
+          "word_id": 204,
+          "hanzi": "难",
+          "sentence_cn": "很难。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 很累。",
+          "severity": "low",
+          "example_id": 207,
+          "word_id": 205,
+          "hanzi": "累",
+          "sentence_cn": "很累。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 十岁。",
+          "severity": "low",
+          "example_id": 220,
+          "word_id": 218,
+          "hanzi": "岁",
+          "sentence_cn": "十岁。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 一次。",
+          "severity": "low",
+          "example_id": 221,
+          "word_id": 219,
+          "hanzi": "次",
+          "sentence_cn": "一次。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 老了。",
+          "severity": "low",
+          "example_id": 253,
+          "word_id": 249,
+          "hanzi": "老",
+          "sentence_cn": "老了。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 张嘴。",
+          "severity": "low",
+          "example_id": 254,
+          "word_id": 250,
+          "hanzi": "嘴",
+          "sentence_cn": "张嘴。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 洗脸。",
+          "severity": "low",
+          "example_id": 259,
+          "word_id": 255,
+          "hanzi": "脸",
+          "sentence_cn": "洗脸。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 头疼。",
+          "severity": "low",
+          "example_id": 260,
+          "word_id": 256,
+          "hanzi": "头",
+          "sentence_cn": "头疼。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 洗脚。",
+          "severity": "low",
+          "example_id": 261,
+          "word_id": 257,
+          "hanzi": "脚",
+          "sentence_cn": "洗脚。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 洗手。",
+          "severity": "low",
+          "example_id": 262,
+          "word_id": 258,
+          "hanzi": "手",
+          "sentence_cn": "洗手。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 腿疼。",
+          "severity": "low",
+          "example_id": 263,
+          "word_id": 259,
+          "hanzi": "腿",
+          "sentence_cn": "腿疼。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 刷牙。",
+          "severity": "low",
+          "example_id": 265,
+          "word_id": 261,
+          "hanzi": "牙",
+          "sentence_cn": "刷牙。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 吃药。",
+          "severity": "low",
+          "example_id": 269,
+          "word_id": 265,
+          "hanzi": "药",
+          "sentence_cn": "吃药。"
+        },
+        {
+          "type": "sentence_too_short",
+          "detail": "Sentence is only 3 chars: 坐船。",
+          "severity": "low",
+          "example_id": 275,
+          "word_id": 271,
+          "hanzi": "船",
+          "sentence_cn": "坐船。"
+        }
+      ]
+    }
+  },
+  "health": {
+    "db_connected": true,
+    "word_count": 313,
+    "example_count": 322,
+    "question_count": 0,
+    "total_attempts": 0,
+    "unique_users": 0,
+    "questions_per_level": {}
+  },
+  "status": "failed",
+  "duration_ms": 283
+}

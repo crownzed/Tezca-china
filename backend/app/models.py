@@ -26,6 +26,8 @@ class QuizType(str, Enum):
     translation = "translation"
     cloze = "cloze"
     dialogue = "dialogue"
+    drag_drop = "drag_drop"  # Kéo thả sắp xếp từ thành câu
+    voice = "voice"  # Ghi âm phát âm
 
 
 class Word(Base):
@@ -45,6 +47,7 @@ class Word(Base):
     confusable_words_json: Mapped[list[str]] = mapped_column(JSON, default=list)
     topic: Mapped[str] = mapped_column(String(64), default="core")
     frequency_band: Mapped[str] = mapped_column(String(32), default="core_hsk")
+    pos: Mapped[str] = mapped_column(String(16), default="")
 
     examples: Mapped[list["Example"]] = relationship(back_populates="word", cascade="all, delete-orphan")
 

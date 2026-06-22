@@ -1,15 +1,125 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from random import shuffle
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress
+from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress, Word
 from ..schemas import AnswerResult, QuizSubmitRequest, QuizSubmitResponse
 from .event_service import LearningEventService
 from .item_difficulty import difficulty_fit, is_low_quality
-from .question_generator import QuestionGeneratorService, RICH_PARAGRAPH_MARKERS
+from .question_generator import QUESTION_SUBTYPE_DIALOGUE, QUESTION_SUBTYPE_PARAGRAPH, QUESTION_SUBTYPE_SENTENCE, QuestionGeneratorService
 from .srs_service import SRSService
+
+
+def _build_user_confusion_map(db: Session, user_id: str) -> dict[int, list[int]]:
+    """Quét QuizAttempt để tìm các cặp từ người dùng từng nhầm lẫn.
+
+    Trả về dict[target_word_id] = [confused_word_id_1, confused_word_id_2, ...].
+    Các confused_word_id được sắp xếp theo tần suất nhầm giảm dần.
+    """
+    attempts = db.scalars(
+        select(QuizAttempt)
+        .where(QuizAttempt.user_id == user_id)
+        .order_by(QuizAttempt.created_at.desc())
+        .limit(40)
+    ).all()
+    if not attempts:
+        return {}
+
+    question_ids: set[int] = set()
+    wrong_pairs: list[tuple[int, int]] = []  # (question_id, selected_index)
+    for attempt in attempts:
+        for answer in attempt.answers or []:
+            if not answer.get("correct") and answer.get("selected_index") is not None:
+                qid = answer.get("question_id")
+                if qid is not None:
+                    question_ids.add(int(qid))
+                    wrong_pairs.append((int(qid), int(answer["selected_index"])))
+
+    if not question_ids:
+        return {}
+
+    questions = db.scalars(select(Question).where(Question.id.in_(question_ids))).all()
+    q_by_id = {q.id: q for q in questions}
+
+    confusion: dict[int, dict[int, int]] = {}  # target_word_id -> {confused_word_id: count}
+    for qid, selected_idx in wrong_pairs:
+        q = q_by_id.get(qid)
+        if not q or not q.word_id:
+            continue
+        option_wids = (q.metadata_json or {}).get("option_word_ids") or []
+        if selected_idx >= len(option_wids):
+            continue
+        confused_wid = option_wids[selected_idx]
+        if confused_wid is None or confused_wid == q.word_id:
+            continue
+        inner = confusion.setdefault(q.word_id, {})
+        inner[confused_wid] = inner.get(confused_wid, 0) + 1
+
+    result: dict[int, list[int]] = {}
+    for target_wid, counts in confusion.items():
+        sorted_pairs = sorted(counts.items(), key=lambda x: -x[1])
+        result[target_wid] = [wid for wid, _ in sorted_pairs]
+    return result
+
+
+def _inject_user_distractors(
+    question: Question,
+    confusion_map: dict[int, list[int]],
+    db: Session,
+) -> None:
+    """Thay thế tối đa 1 distractor bằng từ người dùng từng nhầm với từ đích."""
+    if not question.word_id or question.word_id not in confusion_map:
+        return
+    confused_ids = confusion_map[question.word_id]
+    if not confused_ids:
+        return
+
+    option_wids = (question.metadata_json or {}).get("option_word_ids") or []
+    if len(option_wids) < 4:
+        return
+
+    correct_idx = question.correct_index
+    options = list(question.options or [])
+
+    # Lấy confused word đầu tiên chưa có trong options
+    existing_wids = {wid for wid in option_wids if wid is not None}
+    confused_word = None
+    for cid in confused_ids:
+        if cid not in existing_wids:
+            confused_word = db.scalar(select(Word).where(Word.id == cid))
+            if confused_word:
+                break
+
+    if not confused_word:
+        return
+
+    # Tìm một vị trí distractor (không phải correct) để thay thế
+    distractor_positions = [i for i in range(len(options)) if i != correct_idx]
+    if not distractor_positions:
+        return
+
+    # Xác định text cho confused word dựa trên quiz_type
+    if question.quiz_type in (QuizType.vocab, QuizType.listening, QuizType.dialogue, QuizType.translation):
+        confused_text = confused_word.meaning_vi or confused_word.meaning_en
+    else:
+        confused_text = confused_word.hanzi
+
+    if not confused_text or confused_text in options:
+        return
+
+    # Thay thế distractor ở vị trí cuối cùng (xa correct nhất)
+    swap_pos = distractor_positions[-1]
+    options[swap_pos] = confused_text
+    new_wids = list(option_wids)
+    new_wids[swap_pos] = confused_word.id
+
+    question.options = options
+    meta = dict(question.metadata_json or {})
+    meta["option_word_ids"] = new_wids
+    meta["personalized"] = True
+    question.metadata_json = meta
 
 
 class QuizService:
@@ -27,18 +137,21 @@ class QuizService:
             .limit(bank_size * 3)
         ).all()
         if quiz_type == QuizType.listening:
-            candidates = [q for q in candidates if q.prompt.startswith("Nghe câu")]
+            candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_SENTENCE]
         if quiz_type == QuizType.dialogue:
-            candidates = [q for q in candidates if q.prompt.startswith("Nghe đoạn hội thoại")]
+            candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_DIALOGUE]
             self._refresh_dialogue_options(candidates)
         if quiz_type == QuizType.translation:
-            paragraph_candidates = [q for q in candidates if q.prompt.startswith("Dịch đoạn nói") and any(marker in q.prompt for marker in RICH_PARAGRAPH_MARKERS)]
-            candidates = paragraph_candidates
+            candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_PARAGRAPH]
         if quiz_type == QuizType.cloze:
-            rich_candidates = [q for q in candidates if len(q.prompt) >= 90]
-            candidates = rich_candidates
+            candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_SENTENCE]
         if not candidates:
             return []
+
+        confusion_map = _build_user_confusion_map(self.db, user_id)
+        if confusion_map:
+            for q in candidates:
+                _inject_user_distractors(q, confusion_map, self.db)
 
         last_question_ids = self._recent_question_ids(user_id, level, quiz_type, attempt_count=1)
         recent_question_ids = self._recent_question_ids(user_id, level, quiz_type, attempt_count=3)
@@ -59,18 +172,21 @@ class QuizService:
 
     def _refresh_dialogue_options(self, questions: list[Question]) -> None:
         changed = False
+        import random
+        seed = random.randint(0, 1000000)
         for question in questions:
             if not question.word or not any(len(option) > 55 for option in question.options or []):
                 continue
-            options, correct_index, option_word_ids = self.generator._options_with_words(question.word, QuizType.dialogue)
+            options, correct_index, option_word_ids = self.generator._options_with_words(question.word, QuizType.dialogue, seed)
             if len(options) < 4:
                 continue
             question.options = options
             question.correct_index = correct_index
-            question.explanation = self.generator._explanation_for(question.word, QuizType.dialogue)
-            question.audio_text = self.generator._audio_for(question.word, QuizType.dialogue)
+            question.explanation = self.generator._explanation_for(question.word, QuizType.dialogue, seed)
+            question.audio_text = self.generator._audio_for(question.word, QuizType.dialogue, seed)
             meta = dict(question.metadata_json or {})
             meta["option_word_ids"] = option_word_ids
+            meta["question_subtype"] = meta.get("question_subtype", QUESTION_SUBTYPE_DIALOGUE)
             question.metadata_json = meta
             changed = True
         if changed:
@@ -102,7 +218,6 @@ class QuizService:
                     answer.latency_ms,
                     answer.error_tag,
                     session_id=payload.session_id,
-                    selected_index=answer.selected_index,
                 )
             result = AnswerResult(
                 question_id=question.id,
@@ -199,7 +314,7 @@ class QuizService:
             progress = progress_by_word.get(question.word_id or -1)
             if not progress:
                 knowledge_rank = 0
-            elif progress.next_review_at is None or progress.next_review_at <= datetime.utcnow():
+            elif progress.next_review_at is None or progress.next_review_at <= datetime.now(timezone.utc):
                 knowledge_rank = 0
             elif progress.wrong > 0 and progress.correct / max(1, progress.seen) < 0.75:
                 knowledge_rank = 1
@@ -239,4 +354,4 @@ class QuizService:
         progress.correct += 1 if correct else 0
         progress.wrong += 0 if correct else 1
         progress.mastery = max(0, min(100, progress.mastery + (12 if correct else -18)))
-        progress.last_seen_at = datetime.utcnow()
+        progress.last_seen_at = datetime.now(timezone.utc)
