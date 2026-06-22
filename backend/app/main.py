@@ -1,3 +1,7 @@
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
@@ -44,4 +48,42 @@ def startup() -> None:
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    with SessionLocal() as db:
+        word_count = db.scalar(select(func.count()).select_from(Word)) or 0
+        from .models import Example, Question, QuizAttempt
+
+        example_count = db.scalar(select(func.count()).select_from(Example)) or 0
+        question_count = db.scalar(select(func.count()).select_from(Question)) or 0
+        attempt_count = db.scalar(select(func.count()).select_from(QuizAttempt)) or 0
+
+        level_dist = {}
+        rows = db.execute(
+            select(Question.level, func.count(Question.id)).group_by(Question.level)
+        ).all()
+        for level, count in rows:
+            level_dist[f"HSK_{level}"] = count
+
+        audit_path = Path(__file__).resolve().parents[1] / "data" / "qa_report.json"
+        last_audit = None
+        if audit_path.exists():
+            try:
+                raw = json.loads(audit_path.read_text(encoding="utf-8"))
+                last_audit = {
+                    "run_id": raw.get("run_id"),
+                    "status": raw.get("status"),
+                    "generated_at": raw.get("generated_at"),
+                }
+            except Exception:
+                pass
+
+        return {
+            "status": "ok",
+            "db_connected": True,
+            "word_count": word_count,
+            "example_count": example_count,
+            "question_count": question_count,
+            "total_attempts": attempt_count,
+            "questions_per_level": level_dist,
+            "last_audit": last_audit,
+            "server_time": datetime.now(timezone.utc).isoformat(),
+        }
