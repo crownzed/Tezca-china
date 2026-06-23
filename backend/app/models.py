@@ -28,6 +28,9 @@ class QuizType(str, Enum):
     dialogue = "dialogue"
     drag_drop = "drag_drop"  # Kéo thả sắp xếp từ thành câu
     voice = "voice"  # Ghi âm phát âm
+    error_fix = "error_fix"  # Tìm và sửa lỗi sai ngữ pháp
+    matching = "matching"  # Nối từ Trung-Việt / Trung-Pinyin
+    reading_comp = "reading_comp"  # Đọc hiểu đoạn văn dài + câu hỏi phụ
 
 
 class Word(Base):

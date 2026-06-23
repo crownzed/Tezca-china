@@ -52,8 +52,10 @@ class QuestionOut(BaseModel):
     quiz_type: QuizType
     prompt: str
     options: list[str]
+    correct_index: int = 0
     audio_text: str = ""
     explanation: str = ""
+    metadata_json: dict = Field(default_factory=dict)
     word: QuestionWordOut | None = None
 
 
