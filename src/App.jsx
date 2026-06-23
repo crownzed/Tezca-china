@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessagesSquare, Moon, PenTool, Play, RotateCcw, Search, Send, ScrollText, ShieldCheck, Sun, Trophy, User, Wrench, XCircle } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessagesSquare, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Trophy, User, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
 import { AuthControls, AuthModalHost, LeaderboardPanel, ProfilePanel } from './auth-ui';
 import { useAuth } from './auth-context';
@@ -41,7 +41,6 @@ const NAV = [
   { id: 'dashboard', label: 'Trang chính', icon: BarChart3 },
   { id: 'quiz', label: 'Luyện tập', icon: Play },
   { id: 'vocab', label: 'Từ vựng', icon: Search },
-  { id: 'apply', label: 'Luyện dùng', icon: Languages },
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
   { id: 'leaderboard', label: 'Xếp hạng', icon: Trophy },
   { id: 'profile', label: 'Hồ sơ', icon: User },
@@ -93,15 +92,13 @@ function getInitialTopics() {
 }
 
 function QuizAudioPanel({ audioText, audioPlaying, audioPlayed, audioError, isListeningMode, playAudio }) {
-  const src = getLocalAudioSrc(audioText);
   return (
-    <div className={`audio-panel audio-panel--compact ${isListeningMode ? 'audio-panel--focus' : ''} ${audioError ? 'audio-panel--error' : ''}`}>
-      {src && <audio className="audio-native" controls preload="auto" src={src} key={src} />}
-      <button className="btn-primary audio-play-btn" type="button" onClick={() => playAudio(0.82)} disabled={audioPlaying}>
-        <Headphones size={16} />
+    <div className={`audio-panel premium-audio-panel ${isListeningMode ? 'audio-panel--focus' : ''} ${audioError ? 'audio-panel--error' : ''}`}>
+      <button className={`btn-primary audio-play-btn ${audioPlaying ? 'playing' : ''}`} type="button" onClick={() => playAudio(0.82)} disabled={audioPlaying}>
+        <Headphones size={20} className={audioPlaying ? 'pulse-anim' : ''} />
         {audioPlaying ? 'Đang phát...' : audioPlayed ? 'Nghe lại' : 'Nghe'}
       </button>
-      {audioError && <p className="audio-error-text">Bấm nút play trên thanh âm thanh.</p>}
+      {audioError && <p className="audio-error-text">Không thể phát âm thanh. Hãy thử dùng tính năng Đọc AI.</p>}
     </div>
   );
 }
@@ -255,9 +252,16 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
   return (
     <section className="analytics-panel page-enter" aria-label="Phân tích dữ liệu người học">
       <div className="analytics-head">
+        <div className="daily-progress-ring">
+          <svg width="64" height="64" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(var(--shadow-color), 0.1)" strokeWidth="6" />
+            <circle cx="32" cy="32" r="28" fill="none" stroke="var(--modern-zen-primary)" strokeWidth="6" strokeDasharray="175" strokeDashoffset={175 - (175 * Math.min(100, (eventCount / 50) * 100) / 100)} transform="rotate(-90 32 32)" strokeLinecap="round" />
+            <text x="32" cy="36" textAnchor="middle" fill="var(--ink)" fontSize="14" fontWeight="800">{Math.round(Math.min(100, (eventCount / 50) * 100))}%</text>
+          </svg>
+        </div>
         <div>
-          <h2>Phân tích</h2>
-          <p className="hide-mobile">{hasData ? `Nguồn: ${dataSourceLabel}.` : 'Chưa có lịch sử học.'}</p>
+          <h2>Phân tích & Tiến độ</h2>
+          <p className="hide-mobile">Mục tiêu: {eventCount}/50 câu hôm nay.</p>
         </div>
         <div className="analytics-kpis">
           <span><strong>{analytics?.accuracy || 0}%</strong>Đúng</span>
@@ -367,15 +371,17 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
           </div>
           <button className="btn-primary" onClick={() => onStartRecommended({ ...recommendation, recommended_strategy: recommendedStrategy })}><Play size={16} /> Luyện đề phù hợp</button>
         </div>
-        <div className="weak-word-strip">
-          {(weakWords.length ? weakWords : recommendation.focus_words?.map(word => ({ hanzi: word, pinyin: '', meaning_vi: '', accuracy: 0 })) || []).slice(0, 4).map(item => (
-            <span key={`${item.hanzi}-${item.pinyin}`}>
-              <strong>{item.hanzi}</strong>
-              <small>{item.pinyin || item.meaning_vi || 'Cần ôn'}</small>
-              <em>{item.accuracy ? `${item.accuracy}%` : 'Mới'}</em>
-            </span>
-          ))}
-          {!weakWords.length && !recommendation.focus_words?.length && <span><strong>HSK 1</strong><small>Tạo dữ liệu đầu tiên</small><em>Mới</em></span>}
+        <div className="recent-words-grid">
+          <span className="core-eyebrow">Từ vựng vừa ôn</span>
+          <div className="recent-chips">
+            {(weakWords.length ? weakWords : recommendation.focus_words?.map(word => ({ hanzi: word, pinyin: '', meaning_vi: '', accuracy: 0 })) || []).slice(0, 6).map(item => (
+              <div key={`${item.hanzi}-${item.pinyin}`} className="recent-word-chip">
+                <strong>{item.hanzi}</strong>
+                <TonedPinyin pinyin={item.pinyin} />
+              </div>
+            ))}
+            {!weakWords.length && !recommendation.focus_words?.length && <span>Chưa có dữ liệu. Hãy học thêm.</span>}
+          </div>
         </div>
       </div>
     </section>
@@ -676,6 +682,8 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioPlayed, setAudioPlayed] = useState(false);
   const [audioError, setAudioError] = useState(false);
+  const [dragOrder, setDragOrder] = useState([]);
+  const [voiceDone, setVoiceDone] = useState(false);
   const answersRef = useRef([]);
   const questionStartedAtRef = useRef(0);
 
@@ -703,6 +711,8 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     setAudioPlaying(false);
     setAudioPlayed(false);
     setAudioError(false);
+    setDragOrder([]);
+    setVoiceDone(false);
     answersRef.current = [];
     stopSpeech();
   };
@@ -919,6 +929,82 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     setFeedback(null);
     setAudioPlaying(false);
     setAudioPlayed(false);
+    setDragOrder([]);
+    setVoiceDone(false);
+  };
+
+  // ---- Drag-drop handlers ----
+  const dragSegments = question?.metadata_json?.segments || [];
+  const dragCorrectOrder = question?.metadata_json?.correct_order || [];
+
+  const toggleDragToken = (tokenIndex) => {
+    setDragOrder(prev => {
+      if (prev.includes(tokenIndex)) {
+        return prev.filter(i => i !== tokenIndex);
+      }
+      return [...prev, tokenIndex];
+    });
+  };
+
+  const submitDragDrop = () => {
+    if (dragOrder.length !== dragCorrectOrder.length) return;
+    const userOrder = dragOrder.map(i => dragSegments[i]);
+    const isCorrect = userOrder.every((token, i) => token === dragCorrectOrder[i]);
+    setSelected(isCorrect ? 0 : 1);
+    setPendingLatency(Math.max(0, performance.now() - questionStartedAtRef.current));
+    setTimeout(() => handleQuizAnswer(isCorrect), 300);
+  };
+
+  // ---- Voice handler ----
+  const submitVoiceAttempt = () => {
+    setVoiceDone(true);
+    setSelected(0);
+    setPendingLatency(Math.max(0, performance.now() - questionStartedAtRef.current));
+    setTimeout(() => handleQuizAnswer(true), 300);
+  };
+
+  // Unified answer submission
+  const handleQuizAnswer = async (directResult = null) => {
+    if (!question || submitting) return;
+    setSubmitting(true);
+    try {
+      const confidenceValue = directResult !== null ? (directResult ? 3 : 2) : null;
+      const selectedIndex = directResult !== null ? (directResult ? 0 : 1) : selected;
+      const review = await recordLearningEvent({
+        user_id: userId,
+        session_id: session?.id,
+        question_id: question.id,
+        selected_index: selectedIndex,
+        confidence: confidenceValue,
+        latency_ms: pendingLatency,
+        item_type: sessionItemType(question, isRepair),
+      }, question);
+      const answerRecord = {
+        question_id: question.id,
+        quiz_type: activeQuizType,
+        item_type: sessionItemType(question, isRepair),
+        selected_index: selectedIndex,
+        confidence: confidenceValue,
+        latency_ms: pendingLatency,
+        correct: review.correct,
+        correct_index: review.correct_index,
+        explanation: review.explanation || question.explanation || '',
+        next_review_at: review.next_review_at,
+        error_tag: review.error_tag || null,
+        prompt: question.prompt,
+        word: question.word || null,
+        is_repair: isRepair,
+      };
+      const nextAnswers = [...answersRef.current, answerRecord];
+      answersRef.current = nextAnswers;
+      setAnswers(nextAnswers);
+      if (!isRepair && (!review.correct || (confidenceValue || 0) <= 2)) {
+        queueRepairItem(review, selectedIndex, confidenceValue || 0);
+      }
+      setFeedback({ review, confidence: confidenceValue, selectedIndex });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (result) {
@@ -1041,7 +1127,22 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               <span>Ôn lại câu này</span>
             </div>
           )}
-          <h2>{question.prompt}</h2>
+          {activeQuizType === 'cloze' ? (
+            <h2 className="cloze-prompt">
+              {question.prompt.split('___').map((part, i, arr) => (
+                <Fragment key={i}>
+                  {part}
+                  {i < arr.length - 1 && (
+                    <span className={`cloze-blank ${selected !== null ? 'filled' : ''}`}>
+                      {selected !== null ? question.options[selected] : ''}
+                    </span>
+                  )}
+                </Fragment>
+              ))}
+            </h2>
+          ) : (
+            <h2>{question.prompt}</h2>
+          )}
           {showAudioPanel && (
             <QuizAudioPanel
               audioText={questionAudioText}
@@ -1052,21 +1153,70 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               playAudio={playAudio}
             />
           )}
-          <div className="option-grid">
-            {question.options.map((option, optionIndex) => (
-              <button
-                key={`${question.id}-${option}`}
-                className={`${selected === optionIndex ? 'selected' : ''} ${selected !== null && selected !== optionIndex ? 'muted-option' : ''}`}
-                onClick={(event) => answerQuestion(optionIndex, event.timeStamp)}
-                disabled={selected !== null || submitting || Boolean(feedback) || loading}
-              >
-                <span>{String.fromCharCode(65 + optionIndex)}</span>
-                {option}
+          {activeQuizType === 'drag_drop' && dragSegments.length > 0 ? (
+            <div className="drag-drop-area">
+              <div className="drag-selected-zone">
+                {dragOrder.map((tokenIndex, pos) => (
+                  <button key={`sel-${pos}`} className="drag-chip drag-chip--selected" onClick={() => toggleDragToken(tokenIndex)}>
+                    {dragSegments[tokenIndex]}
+                  </button>
+                ))}
+                {dragOrder.length === 0 && <span className="drag-hint">Bấm vào từ bên dưới để sắp xếp câu</span>}
+              </div>
+              <div className="drag-available-zone">
+                {dragSegments.map((token, i) => (
+                  <button
+                    key={i}
+                    className={`drag-chip ${dragOrder.includes(i) ? 'drag-chip--used' : ''}`}
+                    onClick={() => toggleDragToken(i)}
+                    disabled={dragOrder.includes(i)}
+                  >
+                    {token}
+                  </button>
+                ))}
+              </div>
+              <button className="btn-primary" onClick={submitDragDrop} disabled={dragOrder.length !== dragCorrectOrder.length || submitting || Boolean(feedback)}>
+                Kiểm tra
               </button>
-            ))}
-          </div>
+            </div>
+          ) : activeQuizType === 'voice' ? (
+            <div className="voice-area">
+              <div className="voice-word-hero">{question.word?.hanzi || ''}</div>
+              <TonedPinyin pinyin={question.word?.pinyin || ''} className="voice-pinyin" />
+              {showAudioPanel && (
+                <QuizAudioPanel
+                  audioText={questionAudioText}
+                  audioPlaying={audioPlaying}
+                  audioPlayed={audioPlayed}
+                  audioError={audioError}
+                  isListeningMode={true}
+                  playAudio={playAudio}
+                />
+              )}
+              <p className="voice-meaning">{question.word?.meaning_vi || ''}</p>
+              {!voiceDone && !feedback && (
+                <button className="btn-primary" onClick={submitVoiceAttempt} disabled={submitting}>
+                  Đã đọc xong
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="option-grid">
+              {question.options.map((option, optionIndex) => (
+                <button
+                  key={`${question.id}-${option}`}
+                  className={`${selected === optionIndex ? 'selected' : ''} ${selected !== null && selected !== optionIndex ? 'muted-option' : ''}`}
+                  onClick={(event) => answerQuestion(optionIndex, event.timeStamp)}
+                  disabled={selected !== null || submitting || Boolean(feedback) || loading}
+                >
+                  <span>{String.fromCharCode(65 + optionIndex)}</span>
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {selected !== null && !feedback && (
+          {selected !== null && !feedback && activeQuizType !== 'drag_drop' && activeQuizType !== 'voice' && (
             <div className="confidence-panel">
               <p className="confidence-label">Mức tự tin?</p>
               <div className="confidence-grid">
@@ -2277,7 +2427,7 @@ function mergeProductionResult(remoteResult, localResult) {
   };
 }
 
-function VocabLibrary({ focusLevel, onPracticeWord }) {
+function VocabLibrary({ focusLevel }) {
   const [cards, setCards] = useState([]);
   const [query, setQuery] = useState('');
   const [levelFilter, setLevelFilter] = useState(focusLevel);
@@ -2350,7 +2500,7 @@ function VocabLibrary({ focusLevel, onPracticeWord }) {
                 <div className="hanzi-hero">{visibleSelectedWord.hanzi}</div>
                 <div>
                   <span className="core-eyebrow">HSK {visibleSelectedWord.level}</span>
-                  <h2>{visibleSelectedWord.pinyin}</h2>
+                  <h2><TonedPinyin pinyin={visibleSelectedWord.pinyin} /></h2>
                   <p>{visibleSelectedWord.meaning_vi}</p>
                   <div className="metadata-strip vocab-metadata-strip">
                     <span><strong>{visibleSelectedWord.category}</strong><small>Loại từ</small></span>
@@ -2376,7 +2526,6 @@ function VocabLibrary({ focusLevel, onPracticeWord }) {
                   ) : <blockquote>Chưa có ví dụ chuẩn cho mục này.<small>Ưu tiên luyện bằng câu tự đặt có ngữ cảnh.</small></blockquote>}
                   <div className="result-actions">
                     <button className="btn-secondary" type="button" onClick={() => speak(visibleSelectedWord.example_cn || visibleSelectedWord.hanzi, 0.82)}><Headphones size={16} /> Nghe</button>
-                    <button className="btn-primary" type="button" onClick={() => onPracticeWord(visibleSelectedWord)}><Languages size={16} /> Luyện dùng</button>
                   </div>
                 </div>
               </div>
@@ -2479,109 +2628,6 @@ function HandwritingPad({ targetWord }) {
   );
 }
 
-function buildApplyIntro(words) {
-  const primary = words[0];
-  const example = getPracticeExample(primary);
-  if (!primary) return 'Chọn một từ trong kho từ vựng để luyện đặt câu.';
-  if (example?.cn) return `Từ chính: ${primary.hanzi} (${primary.pinyin || primary.meaning_vi}). Mẫu đúng: ${example.cn}`;
-  return `Từ chính: ${primary.hanzi} (${primary.pinyin || primary.meaning_vi}). Viết câu chữ Hán có chủ ngữ và ngữ cảnh, không chỉ nhập riêng từ.`;
-}
-
-function ApplyPractice({ todayPlan, selectedWord, onStartToday }) {
-  const { userId } = useAuth();
-  const focusWords = todayPlan?.focusWords || EMPTY_WORDS;
-  const fallbackWord = useMemo(() => selectedWord || focusWords[0] || { hanzi: '学习', pinyin: 'xue2 xi2', meaning_vi: 'học tập' }, [selectedWord, focusWords]);
-  const targetWords = useMemo(() => [fallbackWord, ...focusWords]
-    .filter(item => item?.hanzi)
-    .filter((item, index, rows) => rows.findIndex(row => row.hanzi === item.hanzi) === index)
-    .slice(0, 3), [fallbackWord, focusWords]);
-  const targetKey = targetWords.map(item => item.hanzi).join('|');
-  const primaryTarget = targetWords[0];
-  const primaryExample = getPracticeExample(primaryTarget);
-  const practicePlaceholder = primaryExample?.cn || `Nhập một câu tiếng Trung có “${primaryTarget?.hanzi || ''}”`;
-  const [sentence, setSentence] = useState('');
-  const [outputResult, setOutputResult] = useState(null);
-  const [messages, setMessages] = useState([
-    { role: 'assistant', text: buildApplyIntro(targetWords) },
-  ]);
-  const [draft, setDraft] = useState('');
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSentence('');
-      setOutputResult(null);
-      setMessages([{ role: 'assistant', text: buildApplyIntro(targetWords) }]);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [targetKey, targetWords]);
-
-  const submitSentence = async () => {
-    const target = primaryTarget;
-    const localResult = assessSentenceDraft(sentence, target, targetWords);
-    if (!localResult.correct) {
-      setOutputResult(localResult);
-      return;
-    }
-    const result = await submitOutputEvent({ user_id: userId, target_word: target.hanzi, response_text: sentence, prompt: `Use ${target.hanzi}` });
-    setOutputResult(mergeProductionResult(result, localResult));
-  };
-
-  const sendMessage = () => {
-    const text = draft.trim();
-    if (!text) return;
-    const used = targetWords.filter(item => text.includes(item.hanzi)).map(item => item.hanzi);
-    const alreadyUsed = targetWords.filter(word => messages.some(message => message.role === 'user' && message.text.includes(word.hanzi))).map(word => word.hanzi);
-    const target = targetWords.find(item => used.includes(item.hanzi)) || targetWords.find(item => !alreadyUsed.includes(item.hanzi)) || primaryTarget;
-    const assessment = assessSentenceDraft(text, target, targetWords);
-    const remaining = targetWords.filter(item => !new Set([...alreadyUsed, ...used]).has(item.hanzi)).map(item => item.hanzi);
-    const assistant = assessment.correct
-      ? `${assessment.feedback}${remaining.length ? ` Lượt sau thử thêm “${remaining[0]}”.` : ' Đã dùng đủ nhóm từ mục tiêu.'}`
-      : assessment.feedback;
-    setMessages(current => [...current, { role: 'user', text }, { role: 'assistant', text: assistant }].slice(-12));
-    setDraft('');
-  };
-
-  const usedTotal = targetWords.filter(word => messages.some(message => message.role === 'user' && message.text.includes(word.hanzi))).length;
-
-  return (
-    <main className="core-page page-enter">
-      <section className="core-card core-section-head">
-        <span className="core-eyebrow">Apply</span>
-        <h1>Luyện dùng từ</h1>
-        <p>Chuyển từ nhận biết sang đặt câu và hội thoại có target words.</p>
-      </section>
-
-      <section className="apply-grid">
-        <div className="core-card apply-panel">
-          <div className="target-word-row">
-            {targetWords.map(word => <span key={word.hanzi}><strong>{word.hanzi}</strong><small>{word.pinyin || word.meaning_vi}</small></span>)}
-          </div>
-          <h2>Đặt câu với “{primaryTarget?.hanzi}”</h2>
-          <p>{primaryTarget?.meaning_vi}</p>
-          {primaryExample?.cn && <blockquote>{primaryExample.cn}<small>{primaryExample.pinyin}{primaryExample.pinyin && primaryExample.vi ? ' · ' : ''}{primaryExample.vi}</small></blockquote>}
-          <textarea className="practice-textarea" value={sentence} onChange={event => setSentence(event.target.value)} placeholder={practicePlaceholder} />
-          <div className="result-actions">
-            <button className="btn-primary" type="button" onClick={submitSentence} disabled={!sentence.trim()}><Send size={16} /> Chấm câu</button>
-            <button className="btn-secondary" type="button" onClick={() => onStartToday(todayPlan)}><Play size={16} /> Vào phiên đầy đủ</button>
-          </div>
-          {outputResult && <div className={`feedback-panel ${outputResult.correct ? 'feedback-panel--correct' : 'feedback-panel--wrong'}`}><p>{outputResult.feedback}</p><strong>Production {outputResult.score}%</strong></div>}
-        </div>
-
-        <div className="core-card chat-panel">
-          <div className="chat-head"><span className="core-eyebrow">Target Chat</span><strong>{usedTotal}/{targetWords.length} target</strong></div>
-          <div className="chat-log">
-            {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`chat-bubble chat-bubble--${message.role}`}>{message.text}</p>)}
-          </div>
-          <div className="chat-input-row">
-            <input value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') sendMessage(); }} placeholder="Nhập câu tiếng Trung" />
-            <button className="btn-primary" type="button" onClick={sendMessage}><Send size={16} /></button>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 function getInitialPlan() {
   try {
     return JSON.parse(window.localStorage.getItem('ifThenPlan')) || { cue: 'Sau bữa tối', time: '20:00', minutes: 5, muted: false };
@@ -2680,7 +2726,6 @@ export default function App() {
   const [quizStrategyHint, setQuizStrategyHint] = useState('targeted');
   const [selectedSessionMode, setSelectedSessionMode] = useState('standard');
   const [activeSessionPlan, setActiveSessionPlan] = useState(null);
-  const [selectedPracticeWord, setSelectedPracticeWord] = useState(null);
   const [backendTodayPlan, setBackendTodayPlan] = useState(null);
   const [autoStartKey, setAutoStartKey] = useState(0);
   const [theme, setTheme] = useState(getInitialTheme);
@@ -2809,12 +2854,6 @@ export default function App() {
     setActiveTab('progress');
   };
 
-  const practiceWord = (word) => {
-    setSelectedPracticeWord(word);
-    setGeneralCheckLevel(null);
-    setActiveTab('apply');
-  };
-
   const startGeneralCheck = (nextLevel = level) => {
     selectFocusLevel(nextLevel);
     setGeneralCheckLevel(Number(nextLevel));
@@ -2879,8 +2918,7 @@ export default function App() {
         {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
         {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} learningMode={learningMode} topics={topics} onSelectLearningMode={selectLearningMode} onToggleTopic={toggleTopic} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} onOpenProgress={openProgress} />}
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
-        {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} onPracticeWord={practiceWord} />}
-        {!generalCheckLevel && activeTab === 'apply' && <ApplyPractice todayPlan={todayPlan} selectedWord={selectedPracticeWord} onStartToday={startTodaySession} />}
+        {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
         {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
         {!generalCheckLevel && activeTab === 'leaderboard' && <LeaderboardPanel />}
         {!generalCheckLevel && activeTab === 'profile' && <ProfilePanel />}

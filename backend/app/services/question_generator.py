@@ -149,6 +149,21 @@ class QuestionGeneratorService:
             return QUESTION_SUBTYPE_VOICE
         return QUESTION_SUBTYPE_SIMPLE
 
+    def _extra_metadata(self, word: Word, quiz_type: QuizType, seed: int | None = None) -> dict:
+        """Trả về extra metadata cho từng quiz_type (segments cho drag_drop, v.v.)."""
+        if quiz_type == QuizType.drag_drop:
+            dd = self._drag_drop_for_word(word, seed)
+            if dd:
+                return {
+                    "segments": dd.get("segments", []),
+                    "correct_order": dd.get("correct_order", []),
+                }
+        if quiz_type == QuizType.voice:
+            vp = self._voice_prompt_for_word(word, seed)
+            if vp:
+                return {"voice_prompt": vp}
+        return {}
+
     def _get_or_create_question(self, word: Word, level: int, quiz_type: QuizType, seed: int | None = None) -> Question | None:
         from sqlalchemy import func
         base_prompt = self._prompt_for(word, quiz_type, seed)
@@ -188,7 +203,12 @@ class QuestionGeneratorService:
             correct_index=correct_index,
             explanation=self._explanation_for(word, quiz_type, seed),
             audio_text=audio_text,
-            metadata_json={"source": "generated", "option_word_ids": option_word_ids, "question_subtype": self._question_subtype(quiz_type, prompt)},
+            metadata_json={
+                "source": "generated",
+                "option_word_ids": option_word_ids,
+                "question_subtype": self._question_subtype(quiz_type, prompt),
+                **self._extra_metadata(word, quiz_type, seed),
+            },
         )
         self.db.add(question)
         self.db.flush()
@@ -431,29 +451,33 @@ class QuestionGeneratorService:
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if not example or not example.sentence_cn or word.hanzi not in example.sentence_cn:
             return None
-        # Split sentence into segments at word boundaries for drag-drop
         import re as _re
         cjk = r"一-鿿㐀-䶿豈-﫿"
-        # Tokenize: Chinese chars individually, other text as groups
-        tokens = _re.findall(f"[{cjk}]|[^{cjk}]+", example.sentence_cn)
-        # Merge non-CJK with preceding CJK if appropriate
-        merged = []
-        for t in tokens:
-            if _re.match(f"[{cjk}]", t):
-                merged.append(t)
-            elif merged:
-                merged[-1] += t
+        sentence = example.sentence_cn
+        # Split sentence into segments around the target word
+        escaped = _re.escape(word.hanzi)
+        parts = _re.split(f'({escaped})', sentence)
+        segments = [p for p in parts if p]
+        # Further split long segments (>2 CJK chars) into smaller chunks
+        result = []
+        for seg in segments:
+            if seg == word.hanzi:
+                result.append(seg)
+            elif len(seg) <= 3:
+                result.append(seg)
             else:
-                merged.append(t)
-        scrambled = list(merged)
+                # Split long segments at punctuation
+                sub = _re.split(r'([，。！？、：])', seg)
+                result.extend(p for p in sub if p)
+        scrambled = list(result)
         rng = random.Random(seed) if seed is not None else random
         rng.shuffle(scrambled)
         return {
-            "sentence_cn": example.sentence_cn,
+            "sentence_cn": sentence,
             "sentence_vi": example.sentence_vi or "",
             "scrambled": " · ".join(scrambled),
             "segments": scrambled,
-            "correct_order": merged,
+            "correct_order": result,
         }
 
     def _voice_prompt_for_word(self, word: Word, seed: int | None = None) -> str | None:
@@ -494,19 +518,19 @@ class QuestionGeneratorService:
         # Fallback: hardcoded variants
         variants = [
             {
-                “cn”: f”A：你今天在学习什么？B：我在学习”{word.hanzi}”。老师说：”{example.sentence_cn}” A：这个词是什么意思？B：它的意思是”{meaning}”，我晚上还会复习。”,
-                “vi”: f”A hỏi hôm nay đang học gì. B nói đang học từ “{word.hanzi}”, nghe câu ví dụ “{example.sentence_vi}”, giải thích nghĩa là “{meaning}” và tối sẽ ôn lại.”,
-                “option_vi”: f”B học từ “{word.hanzi}” và sẽ ôn lại.”,
+                "cn": f"A：你今天在学习什么？B：我在学习「{word.hanzi}」。老师说：「{example.sentence_cn}」 A：这个词是什么意思？B：它的意思是「{meaning}」，我晚上还会复习。",
+                "vi": f"A hỏi hôm nay đang học gì. B nói đang học từ 「{word.hanzi}」, nghe câu ví dụ 「{example.sentence_vi}」, giải thích nghĩa là 「{meaning}」 và tối sẽ ôn lại.",
+                "option_vi": f"B học từ 「{word.hanzi}」 và sẽ ôn lại.",
             },
             {
-                “cn”: f”A：刚才老师说了哪个句子？B：老师说：”{example.sentence_cn}” A：你听懂了吗？B：听懂了，重点词是”{word.hanzi}”，意思是”{meaning}”。”,
-                “vi”: f”A hỏi giáo viên vừa nói câu nào. B nhắc lại “{example.sentence_vi}”, nói đã nghe hiểu, từ trọng tâm là “{word.hanzi}”, nghĩa là “{meaning}”.”,
-                “option_vi”: f”B nghe hiểu câu về “{word.hanzi}”.”,
+                "cn": f"A：刚才老师说了哪个句子？B：老师说：「{example.sentence_cn}」 A：你听懂了吗？B：听懂了，重点词是「{word.hanzi}」，意思是「{meaning}」。",
+                "vi": f"A hỏi giáo viên vừa nói câu nào. B nhắc lại 「{example.sentence_vi}」, nói đã nghe hiểu, từ trọng tâm là 「{word.hanzi}」, nghĩa là 「{meaning}」.",
+                "option_vi": f"B nghe hiểu câu về 「{word.hanzi}」.",
             },
             {
-                “cn”: f”A：我们一起练口语吧。B：好，我先说一个句子：”{example.sentence_cn}” A：很好。这个句子里，”{word.hanzi}”怎么用？B：它可以放在完整句子里表达”{meaning}”。”,
-                “vi”: f”A rủ luyện nói. B đọc câu “{example.sentence_vi}”. A hỏi cách dùng “{word.hanzi}”, B giải thích từ này được đặt trong câu hoàn chỉnh để diễn đạt “{meaning}”.”,
-                “option_vi”: f”Hai người luyện cách dùng “{word.hanzi}”.”,
+                "cn": f"A：我们一起练口语吧。B：好，我先说一个句子：「{example.sentence_cn}」 A：很好。这个句子里，「{word.hanzi}」怎么用？B：它可以放在完整句子里表达「{meaning}」。",
+                "vi": f"A rủ luyện nói. B đọc câu 「{example.sentence_vi}」. A hỏi cách dùng 「{word.hanzi}」, B giải thích từ này được đặt trong câu hoàn chỉnh để diễn đạt 「{meaning}」.",
+                "option_vi": f"Hai người luyện cách dùng 「{word.hanzi}」.",
             },
         ]
         return variants[word.id % len(variants)]
@@ -532,20 +556,20 @@ class QuestionGeneratorService:
         # Fallback: hardcoded variants (giữ nguyên tiếng Trung để dùng khi JSON lỗi)
         variants = [
             {
-                “cn”: f”今天上午，我在学校学习中文。老师先说：“{first.sentence_cn}” 然后让我们解释“{word.hanzi}”的意思。下课以后，我把这个词、拼音和例句写在本子上，晚上再复习一遍。”,
-                “vi”: f”Sang nay, toi hoc tieng Trung o truong. Giao vien noi truoc: “{first.sentence_vi}” Sau do, giao vien yeu cau chung toi giai thich nghia cua “{word.hanzi}”. Sau gio hoc, toi ghi tu nay, pinyin va cau vi du vao vo, buoi toi on lai mot lan nua.”,
+                "cn": f"今天上午，我在学校学习中文。老师先说：「{first.sentence_cn}」 然后让我们解释「{word.hanzi}」的意思。下课以后，我把这个词、拼音和例句写在本子上，晚上再复习一遍。",
+                "vi": f"Sang nay, toi hoc tieng Trung o truong. Giao vien noi truoc: 「{first.sentence_vi}」 Sau do, giao vien yeu cau chung toi giai thich nghia cua 「{word.hanzi}」. Sau gio hoc, toi ghi tu nay, pinyin va cau vi du vao vo, buoi toi on lai mot lan nua.",
             },
             {
-                “cn”: f”昨天晚上，我和朋友练习口语。我们用“{word.hanzi}”造了一个句子：“{first.sentence_cn}” 因为这个词和日常生活有关，所以我觉得它很容易记住，也很适合在聊天时使用。”,
-                “vi”: f”Toi hom qua, toi luyen noi voi ban. Chung toi dung “{word.hanzi}” de dat mot cau: “{first.sentence_vi}” Vi tu nay lien quan den doi song hang ngay, nen toi thay no de nho va cung phu hop de dung khi tro chuyen.”,
+                "cn": f"昨天晚上，我和朋友练习口语。我们用「{word.hanzi}」造了一个句子：「{first.sentence_cn}」 因为这个词和日常生活有关，所以我觉得它很容易记住，也很适合在聊天时使用。",
+                "vi": f"Toi hom qua, toi luyen noi voi ban. Chung toi dung 「{word.hanzi}」 de dat mot cau: 「{first.sentence_vi}」 Vi tu nay lien quan den doi song hang ngay, nen toi thay no de nho va cung phu hop de dung khi tro chuyen.",
             },
             {
-                “cn”: f”这周我给自己定了一个小目标：每天记十个汉语词。今天的重点词是“{word.hanzi}”，意思是“{meaning}”。我先读例句“{first.sentence_cn}”，再听发音，最后用自己的话说一遍。”,
-                “vi”: f”Tuan nay toi dat cho minh mot muc tieu nho: moi ngay ghi nho muoi tu tieng Trung. Tu trong tam hom nay la “{word.hanzi}”, nghia la “{meaning}”. Toi doc cau vi du “{first.sentence_vi}” truoc, sau do nghe phat am, cuoi cung noi lai bang loi cua minh.”,
+                "cn": f"这周我给自己定了一个小目标：每天记十个汉语词。今天的重点词是「{word.hanzi}」，意思是「{meaning}」。我先读例句「{first.sentence_cn}」，再听发音，最后用自己的话说一遍。",
+                "vi": f"Tuan nay toi dat cho minh mot muc tieu nho: moi ngay ghi nho muoi tu tieng Trung. Tu trong tam hom nay la 「{word.hanzi}」, nghia la 「{meaning}」. Toi doc cau vi du 「{first.sentence_vi}」 truoc, sau do nghe phat am, cuoi cung noi lai bang loi cua minh.",
             },
             {
-                “cn”: f”如果只看生词，我常常忘得很快。现在我把“{word.hanzi}”放进完整的句子里学习，比如：“{first.sentence_cn}” 这样我不仅知道它的意思，还知道它出现在什么场景、和哪些词一起使用。”,
-                “vi”: f”Neu chi nhin tu moi, toi thuong quen rat nhanh. Bay gio toi dat “{word.hanzi}” vao cau hoan chinh de hoc, vi du: “{first.sentence_vi}” Nhu vay toi khong chi biet nghia cua no, ma con biet no xuat hien trong ngu canh nao va di cung nhung tu nao.”,
+                "cn": f"如果只看生词，我常常忘得很快。现在我把「{word.hanzi}」放进完整的句子里学习，比如：「{first.sentence_cn}」 这样我不仅知道它的意思，还知道它出现在什么场景、和哪些词一起使用。",
+                "vi": f"Neu chi nhin tu moi, toi thuong quen rat nhanh. Bay gio toi dat 「{word.hanzi}」 vao cau hoan chinh de hoc, vi du: 「{first.sentence_vi}」 Nhu vay toi khong chi biet nghia cua no, ma con biet no xuat hien trong ngu canh nao va di cung nhung tu nao.",
             },
         ]
         return variants[word.id % len(variants)]
@@ -557,5 +581,10 @@ class QuestionGeneratorService:
             return None
         prompt = _cloze_replace_all(example.sentence_cn, word.hanzi)
         if prompt is None:
+            return None
+        # Chỉ sinh cloze nếu còn ít nhất 2 ký tự ngữ cảnh ngoài ____
+        non_blank = prompt.replace('____', '').strip()
+        cjk_chars = len(re.findall(f'[{_CJK_RANGE}]', non_blank))
+        if cjk_chars < 2:
             return None
         return {"prompt": prompt, "answer_cn": example.sentence_cn, "vi": example.sentence_vi or ""}

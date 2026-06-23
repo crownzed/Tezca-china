@@ -130,6 +130,16 @@ function speakBrowser(text, rate, runId, onDone) {
   utter.lang = 'zh-CN';
   utter.rate = Math.max(0.45, Math.min(1.05, rate));
   utter.volume = 1;
+
+  const voices = synth.getVoices();
+  const zhVoices = voices.filter(v => v.lang.startsWith('zh-'));
+  const premium = zhVoices.find(v => v.name.includes('Google') || v.name.includes('Xiaoxiao') || v.name.includes('Tingting') || v.name.includes('Yaoyao') || v.name.includes('Yating'));
+  if (premium) {
+    utter.voice = premium;
+  } else if (zhVoices.length > 0) {
+    utter.voice = zhVoices[0];
+  }
+
   utter.onend = () => {
     if (runId === speechRunId) onDone(true);
   };

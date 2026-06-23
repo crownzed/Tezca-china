@@ -1,6 +1,6 @@
 {
-  "run_id": "qa-2026-06-21T174850Z",
-  "generated_at": "2026-06-21T17:48:50Z",
+  "run_id": "qa-2026-06-22T160016Z",
+  "generated_at": "2026-06-22T16:00:16Z",
   "checks": {
     "pinyin": {
       "passed": false,
@@ -47,7 +47,7 @@
         "low": 44,
         "critical": 1
       },
-      "diversity_gaps": 48,
+      "diversity_gaps": 66,
       "issues": [
         {
           "type": "sentence_too_short",
@@ -467,5 +467,5 @@
     "questions_per_level": {}
   },
   "status": "failed",
-  "duration_ms": 283
+  "duration_ms": 315
 }

@@ -23,6 +23,9 @@ TYPE_LABELS = {
     QuizType.cloze: "Điền từ",
     QuizType.drag_drop: "Sắp xếp câu",
     QuizType.voice: "Phát âm",
+    QuizType.error_fix: "Sửa lỗi sai",
+    QuizType.matching: "Nối từ",
+    QuizType.reading_comp: "Đọc hiểu sâu",
 }
 
 
@@ -35,6 +38,8 @@ def _question_out(q) -> QuestionOut:
     """
     out = QuestionOut.model_validate(q, from_attributes=True)
     out.word = QuestionWordOut.from_word(getattr(q, "word", None))
+    if out.metadata_json is None:
+        out.metadata_json = {}
     return out
 
 

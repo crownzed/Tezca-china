@@ -1,98 +1,358 @@
 {
   "_description": "Slot-based template system for generating diverse Chinese learning contexts. [SLOT] fills from dictionaries; {[FIELD]} fills from word/example data.",
-
   "slots": {
     "TIME": [
-      "今天上午", "昨天晚上", "这周", "昨天下午", "今天早上",
-      "前天", "上个月", "最近", "这几天", "周末",
-      "每天早上", "放学后", "午休时间", "晚饭后", "睡觉前",
-      "上周五", "放假的时候", "开学第一天", "考试前", "每天下午"
+      "今天上午",
+      "昨天晚上",
+      "这周",
+      "昨天下午",
+      "今天早上",
+      "前天",
+      "上个月",
+      "最近",
+      "这几天",
+      "周末",
+      "每天早上",
+      "放学后",
+      "午休时间",
+      "晚饭后",
+      "睡觉前",
+      "上周五",
+      "放假的时候",
+      "开学第一天",
+      "考试前",
+      "每天下午"
     ],
     "SUBJECT": [
-      "我", "我们", "老师", "我的同学", "我的朋友",
-      "妈妈", "爸爸", "哥哥", "姐姐", "汉语老师",
-      "同桌", "室友", "同事们", "邻居", "男朋友",
-      "女朋友", "孩子们", "学生们", "一位老人", "新同学"
+      "我",
+      "我们",
+      "老师",
+      "我的同学",
+      "我的朋友",
+      "妈妈",
+      "爸爸",
+      "哥哥",
+      "姐姐",
+      "汉语老师",
+      "同桌",
+      "室友",
+      "同事们",
+      "邻居",
+      "男朋友",
+      "女朋友",
+      "孩子们",
+      "学生们",
+      "一位老人",
+      "新同学"
     ],
     "PLACE": [
-      "在学校", "在家", "在图书馆", "在教室里", "在咖啡店",
-      "在公园", "在书店", "在宿舍", "在办公室", "在地铁上",
-      "在公交车上", "在超市", "在医院", "在机场", "在博物馆",
-      "在操场", "在河边", "在山上", "在花园里", "在厨房"
+      "在学校",
+      "在家",
+      "在图书馆",
+      "在教室里",
+      "在咖啡店",
+      "在公园",
+      "在书店",
+      "在宿舍",
+      "在办公室",
+      "在地铁上",
+      "在公交车上",
+      "在超市",
+      "在医院",
+      "在机场",
+      "在博物馆",
+      "在操场",
+      "在河边",
+      "在山上",
+      "在花园里",
+      "在厨房"
     ],
     "ACTION_STUDY": [
-      "学习中文", "练习口语", "记汉语词", "读课文", "写汉字",
-      "做练习", "复习生词", "听录音", "查词典", "准备考试",
-      "背课文", "练书法", "做笔记", "看中文视频", "朗读课文",
-      "抄写汉字", "造句练习", "做听力训练", "默写生词", "练发音"
+      "学习中文",
+      "练习口语",
+      "记汉语词",
+      "读课文",
+      "写汉字",
+      "做练习",
+      "复习生词",
+      "听录音",
+      "查词典",
+      "准备考试",
+      "背课文",
+      "练书法",
+      "做笔记",
+      "看中文视频",
+      "朗读课文",
+      "抄写汉字",
+      "造句练习",
+      "做听力训练",
+      "默写生词",
+      "练发音"
     ],
     "ACTION_DAILY": [
-      "去散步", "做饭", "看电视", "听音乐", "打电话",
-      "买东西", "打扫房间", "写日记", "上网", "看书",
-      "锻炼身体", "喝茶", "洗衣服", "整理书桌", "收邮件",
-      "给花浇水", "遛狗", "拍照", "画素描", "弹吉他"
+      "去散步",
+      "做饭",
+      "看电视",
+      "听音乐",
+      "打电话",
+      "买东西",
+      "打扫房间",
+      "写日记",
+      "上网",
+      "看书",
+      "锻炼身体",
+      "喝茶",
+      "洗衣服",
+      "整理书桌",
+      "收邮件",
+      "给花浇水",
+      "遛狗",
+      "拍照",
+      "画素描",
+      "弹吉他"
     ],
     "MANNER": [
-      "认真地", "慢慢地", "高兴地", "努力地", "仔细地",
-      "一遍一遍地", "耐心地", "积极地", "轻松地", "专心地",
-      "反复地", "默默地", "快速地", "悄悄地", "大声地",
-      "小声地", "自信地", "紧张地", "好奇地", "熟练地"
+      "认真地",
+      "慢慢地",
+      "高兴地",
+      "努力地",
+      "仔细地",
+      "一遍一遍地",
+      "耐心地",
+      "积极地",
+      "轻松地",
+      "专心地",
+      "反复地",
+      "默默地",
+      "快速地",
+      "悄悄地",
+      "大声地",
+      "小声地",
+      "自信地",
+      "紧张地",
+      "好奇地",
+      "熟练地"
     ],
     "FREQUENCY": [
-      "每天", "经常", "有时候", "总是", "从来不",
-      "偶尔", "常常", "很少", "天天", "时不时",
-      "每周三次", "有空就", "每次上课都", "一有空就", "坚持每天"
+      "每天",
+      "经常",
+      "有时候",
+      "总是",
+      "从来不",
+      "偶尔",
+      "常常",
+      "很少",
+      "天天",
+      "时不时",
+      "每周三次",
+      "有空就",
+      "每次上课都",
+      "一有空就",
+      "坚持每天"
     ],
     "EMOTION": [
-      "很高兴", "觉得很有意思", "感到有点难", "觉得很自信", "很开心",
-      "觉得有进步", "感到很满足", "觉得很实用", "越学越喜欢", "充满动力",
-      "有点担心", "觉得很值得", "特别有成就感", "越来越有兴趣", "感到轻松",
-      "觉得不无聊", "很期待", "感到骄傲", "觉得方便多了", "很兴奋"
+      "很高兴",
+      "觉得很有意思",
+      "感到有点难",
+      "觉得很自信",
+      "很开心",
+      "觉得有进步",
+      "感到很满足",
+      "觉得很实用",
+      "越学越喜欢",
+      "充满动力",
+      "有点担心",
+      "觉得很值得",
+      "特别有成就感",
+      "越来越有兴趣",
+      "感到轻松",
+      "觉得不无聊",
+      "很期待",
+      "感到骄傲",
+      "觉得方便多了",
+      "很兴奋"
     ],
     "TRANSITION": [
-      "然后", "接着", "之后", "所以", "因此",
-      "不过", "但是", "而且", "另外", "同时",
-      "后来", "没想到", "突然", "慢慢地", "不久"
+      "然后",
+      "接着",
+      "之后",
+      "所以",
+      "因此",
+      "不过",
+      "但是",
+      "而且",
+      "另外",
+      "同时",
+      "后来",
+      "没想到",
+      "突然",
+      "慢慢地",
+      "不久"
     ],
     "OPINION": [
-      "我觉得", "我认为", "在我看来", "说实话", "其实",
-      "老实说", "个人觉得", "看起来", "听起来", "事实证明",
-      "不得不承认", "显而易见", "众所周知", "对我来说", "据我所知"
+      "我觉得",
+      "我认为",
+      "在我看来",
+      "说实话",
+      "其实",
+      "老实说",
+      "个人觉得",
+      "看起来",
+      "听起来",
+      "事实证明",
+      "不得不承认",
+      "显而易见",
+      "众所周知",
+      "对我来说",
+      "据我所知"
     ],
     "MEMORY_HINT": [
-      "把词写在本子上", "用这个词造句", "和图片联想在一起",
-      "反复读几遍", "用手机app复习", "制作生词卡片",
-      "贴在墙上每天看", "录音然后听自己的发音", "找例句来理解用法",
-      "教给别人加深印象", "画思维导图", "编一个小故事",
-      "用手写几遍汉字", "和学过的词做对比", "做成Anki卡片"
+      "把词写在本子上",
+      "用这个词造句",
+      "和图片联想在一起",
+      "反复读几遍",
+      "用手机app复习",
+      "制作生词卡片",
+      "贴在墙上每天看",
+      "录音然后听自己的发音",
+      "找例句来理解用法",
+      "教给别人加深印象",
+      "画思维导图",
+      "编一个小故事",
+      "用手写几遍汉字",
+      "和学过的词做对比",
+      "做成Anki卡片"
     ],
     "GOAL": [
-      "学好汉语", "通过HSK考试", "能和中国人聊天",
-      "看懂中文电影", "去中国旅游", "在中国工作",
-      "读懂中文新闻", "交中国朋友", "提高口语水平",
-      "掌握基础词汇", "看懂中文菜单", "读中文小说",
-      "看懂中文字幕", "在工作中使用中文", "通过期末考试"
+      "学好汉语",
+      "通过HSK考试",
+      "能和中国人聊天",
+      "看懂中文电影",
+      "去中国旅游",
+      "在中国工作",
+      "读懂中文新闻",
+      "交中国朋友",
+      "提高口语水平",
+      "掌握基础词汇",
+      "看懂中文菜单",
+      "读中文小说",
+      "看懂中文字幕",
+      "在工作中使用中文",
+      "通过期末考试"
     ],
     "CHALLENGE": [
-      "有时候会忘记声调", "写字容易少笔画", "近义词容易混淆",
-      "听力速度跟不上", "口语表达不够流利", "多音字很难记",
-      "量词的搭配", "语法顺序不习惯", "听不出相近的发音",
-      "记不住长句子", "不知道什么时候用哪个词", "阅读速度不够快"
+      "有时候会忘记声调",
+      "写字容易少笔画",
+      "近义词容易混淆",
+      "听力速度跟不上",
+      "口语表达不够流利",
+      "多音字很难记",
+      "量词的搭配",
+      "语法顺序不习惯",
+      "听不出相近的发音",
+      "记不住长句子",
+      "不知道什么时候用哪个词",
+      "阅读速度不够快"
     ],
     "ADVICE": [
-      "多听多说", "每天坚持十分钟", "找语伴练习",
-      "看中文动画片", "用中文写日记", "不要怕犯错",
-      "先听懂再说", "利用碎片时间", "把手机设成中文",
-      "模仿母语者的语气", "从简单的开始", "多用才是王道"
+      "多听多说",
+      "每天坚持十分钟",
+      "找语伴练习",
+      "看中文动画片",
+      "用中文写日记",
+      "不要怕犯错",
+      "先听懂再说",
+      "利用碎片时间",
+      "把手机设成中文",
+      "模仿母语者的语气",
+      "从简单的开始",
+      "多用才是王道"
     ],
     "GROUP_ACTIVITY": [
-      "互相听写", "角色扮演", "一起读课文",
-      "用中文聊天", "比赛造句", "互相纠正发音",
-      "玩词语接龙", "分享学习方法", "轮流当小老师",
-      "一起看中文视频", "互相出题考试", "讨论一个话题"
+      "互相听写",
+      "角色扮演",
+      "一起读课文",
+      "用中文聊天",
+      "比赛造句",
+      "互相纠正发音",
+      "玩词语接龙",
+      "分享学习方法",
+      "轮流当小老师",
+      "一起看中文视频",
+      "互相出题考试",
+      "讨论一个话题"
+    ],
+    "BUSINESS_ACTION": [
+      "开会",
+      "谈判",
+      "签合同",
+      "做报告",
+      "出差",
+      "接待客户",
+      "分析数据",
+      "制定计划",
+      "核对账目",
+      "提交方案",
+      "拜访合作伙伴",
+      "准备标书",
+      "跟进项目进度",
+      "整理财务报表",
+      "安排商务宴请",
+      "讨论预算",
+      "审核合同条款",
+      "撰写商业计划书",
+      "联系供应商",
+      "评估风险"
+    ],
+    "WORKPLACE_SCENE": [
+      "在会议室里",
+      "在工位上",
+      "在前台",
+      "在茶水间",
+      "在老板办公室",
+      "在培训室",
+      "在开放式办公区",
+      "在公司楼下",
+      "在共享空间",
+      "在视频会议室"
+    ],
+    "SHOPPING_SCENE": [
+      "在商场里",
+      "在超市",
+      "在便利店",
+      "在菜市场",
+      "在网上商城",
+      "在品牌专卖店",
+      "在折扣店",
+      "在家居城",
+      "在数码产品店",
+      "在书店"
+    ],
+    "TRAVEL_SCENE": [
+      "在机场候机厅",
+      "在高铁站",
+      "在酒店大堂",
+      "在旅游景点入口",
+      "在地铁换乘站",
+      "在游客中心",
+      "在博物馆门口",
+      "在古镇小巷",
+      "在缆车上",
+      "在海滩度假村"
+    ],
+    "COMMERCE_TOPIC": [
+      "谈价格",
+      "讨论交货期",
+      "质量检测",
+      "售后服务",
+      "市场推广",
+      "品牌定位",
+      "渠道管理",
+      "库存周转",
+      "客户满意度",
+      "竞争优势"
     ]
   },
-
   "paragraph_templates": [
     {
       "cn": "[TIME]，[SUBJECT]在[PLACE]看手机，收到了一条很有意思的消息。消息上写着：“{[EXAMPLE_CN]}”看到“{[TARGET]}”这个词，[SUBJECT]马上明白了它的意思是“{[MEANING]}”。",
@@ -118,9 +378,68 @@
       "cn": "[TIME]，[SUBJECT]回忆起一件往事。[TRANSITION]，那时候最常听到的一句话就是：“{[EXAMPLE_CN]}”如今回想起来，“{[TARGET]}”所代表的“{[MEANING]}”，真的让人感慨万千。",
       "vi": "[TIME], [SUBJECT] nhớ lại một chuyện cũ. [TRANSITION], lúc đó câu thường nghe nhất là: “{[EXAMPLE_VI]}” Giờ nhớ lại, “{[MEANING]}” mà từ “{[TARGET]}” đại diện, thật khiến người ta vô cùng bùi ngùi.",
       "option_vi": "Từ {[TARGET]} gợi lại một kỷ niệm cũ."
+    },
+    {
+      "cn": "今天[SUBJECT]在工作时遇到一个小麻烦。当时老板发来邮件说：“{[EXAMPLE_CN]}”看到“{[TARGET]}”这个词，[SUBJECT]突然忘记了怎么用。经过查阅资料，[SUBJECT]明白它实际上是在强调“{[MEANING]}”，这真是上了宝贵的一课。",
+      "vi": "Hôm nay [SUBJECT] gặp một rắc rối nhỏ lúc làm việc. Lúc đó sếp gửi email nói: “{[EXAMPLE_VI]}” Thấy từ “{[TARGET]}”, [SUBJECT] bỗng quên mất cách dùng. Sau khi tra cứu, [SUBJECT] hiểu ra thực chất nó nhấn mạnh “{[MEANING]}”, đây quả là một bài học quý giá.",
+      "option_vi": "[SUBJECT] tra cứu và hiểu cách dùng từ {[TARGET]} trong email của sếp."
+    },
+    {
+      "cn": "上个周末，[SUBJECT]去旅行，在路上遇到了一位热情的当地人。他一边指路一边说：“{[EXAMPLE_CN]}”[OPINION]，这里的“{[TARGET]}”用得很地道，让人立刻感受到了“{[MEANING]}”的涵义。",
+      "vi": "Cuối tuần trước, [SUBJECT] đi du lịch, trên đường gặp một người dân địa phương nhiệt tình. Anh ấy vừa chỉ đường vừa nói: “{[EXAMPLE_VI]}” [OPINION], từ “{[TARGET]}” ở đây dùng rất chuẩn, khiến người ta lập tức cảm nhận được ý nghĩa “{[MEANING]}”.",
+      "option_vi": "Người dân địa phương dùng từ {[TARGET]} rất chuẩn khi chỉ đường."
+    },
+    {
+      "cn": "在最近的一次会议上，[SUBJECT]分享了一个重要的观点：“{[EXAMPLE_CN]}”在这句话中，“{[TARGET]}”是核心词。可以说，要想彻底理解“{[MEANING]}”，就必须掌握这个词的用法。",
+      "vi": "Trong một cuộc họp gần đây, [SUBJECT] đã chia sẻ một quan điểm quan trọng: “{[EXAMPLE_VI]}” Trong câu này, “{[TARGET]}” là từ cốt lõi. Có thể nói, muốn hiểu triệt để “{[MEANING]}”, thì phải nắm vững cách dùng của từ này.",
+      "option_vi": "Từ {[TARGET]} là trọng tâm trong quan điểm chia sẻ ở cuộc họp."
+    },
+    {
+      "cn": "[TIME]，[SUBJECT]在写日记时写下了这样一句话：“{[EXAMPLE_CN]}”[TRANSITION]，[SUBJECT]发现如果没有“{[TARGET]}”这个词，整段话就失去了“{[MEANING]}”的意境。",
+      "vi": "[TIME], [SUBJECT] viết một câu như thế này vào nhật ký: “{[EXAMPLE_VI]}” [TRANSITION], [SUBJECT] phát hiện ra nếu không có từ “{[TARGET]}”, cả đoạn sẽ mất đi ý cảnh “{[MEANING]}”.",
+      "option_vi": "Từ {[TARGET]} tạo nên ý cảnh đặc biệt cho câu nhật ký."
+    },
+    {
+      "cn": "大家都知道，网络上流行一句话：“{[EXAMPLE_CN]}”很多网友热烈讨论“{[TARGET]}”的具体含义。[OPINION]，它其实就是想传达“{[MEANING]}”，非常贴近我们的生活。",
+      "vi": "Mọi người đều biết trên mạng đang hot câu: “{[EXAMPLE_VI]}” Rất nhiều cư dân mạng thảo luận sôi nổi về ý nghĩa của “{[TARGET]}”. [OPINION], thực ra nó muốn truyền tải “{[MEANING]}”, rất gần gũi với đời sống của chúng ta.",
+      "option_vi": "Cư dân mạng thảo luận về từ {[TARGET]} đang hot trên mạng."
+    },
+    {
+      "cn": "[TIME]，[SUBJECT][PLACE]参加了一个重要的商务会议。[BUSINESS_ACTION]的时候，对方提到了{[TARGET]}这个词。[OPINION]，在商业语境中它的意思是{[MEANING]}，对我们理解合同条款很有帮助。",
+      "vi": "[TIME], [SUBJECT] tham gia mot cuoc hop kinh doanh quan trong tai [PLACE]. Khi [BUSINESS_ACTION], doi tac co nhac den tu {[TARGET]}. [OPINION], trong ngu canh thuong mai no co nghia la {[MEANING]}, rat huu ich de hieu cac dieu khoan hop dong.",
+      "option_vi": "Trong cuoc hop kinh doanh, tu {[TARGET]} mang nghia thuong mai."
+    },
+    {
+      "cn": "最近公司安排[SUBJECT]去[TRAVEL_SCENE]出差。[TRANSITION]，在[WORKPLACE_SCENE]准备材料的时候，同事提醒说要注意{[TARGET]}的用法，因为在当地{[MEANING]}是非常常见的表达。",
+      "vi": "Gan day cong ty sap xep [SUBJECT] di cong tac o [TRAVEL_SCENE]. [TRANSITION], khi chuan bi tai lieu o [WORKPLACE_SCENE], dong nghiep nhac nho phai chu y cach dung cua {[TARGET]}, vi o dia phuong {[MEANING]} la cach dien dat rat pho bien.",
+      "option_vi": "Dong nghiep nhac [SUBJECT] chu y cach dung cua {[TARGET]} khi di cong tac."
+    },
+    {
+      "cn": "[SUBJECT][SHOPPING_SCENE]购物时，看到了一个产品说明上写着{[MEANING]}。[OPINION]，这个词对应的中文就是{[TARGET]}，以后买东西就能看懂了。",
+      "vi": "Khi [SUBJECT] mua sam o [SHOPPING_SCENE], nhin thay tren huong dan san pham co viet {[MEANING]}. [OPINION], tu nay trong tieng Trung chinh la {[TARGET]}, sau nay di mua do la co the hieu duoc.",
+      "option_vi": "[SUBJECT] hoc duoc tu {[TARGET]} khi di mua sam."
+    },
+    {
+      "cn": "今天[SUBJECT]在[SHOPPING_SCENE]想买一样东西，但不知道怎么用中文表达。[TRANSITION]想起了之前学过的{[TARGET]}，正好就是{[MEANING]}的意思。店员听了立刻就明白了。",
+      "vi": "Hom nay [SUBJECT] o [SHOPPING_SCENE] muon mua mot mon do, nhung khong biet dien dat bang tieng Trung the nao. [TRANSITION] nho ra tu {[TARGET]} da hoc truoc do, dung nghia la {[MEANING]}. Nhan vien nghe xong lien hieu ngay.",
+      "option_vi": "[SUBJECT] dung tu {[TARGET]} de giao tiep khi mua sam."
+    },
+    {
+      "cn": "[SUBJECT]在[WORKPLACE_SCENE]和同事[GROUP_ACTIVITY]。[TRANSITION]，一位资深同事分享了经验，特别强调了{[TARGET]}在工作沟通中的重要性，它传达的是{[MEANING]}的含义。",
+      "vi": "[SUBJECT] o [WORKPLACE_SCENE] cung dong nghiep [GROUP_ACTIVITY]. [TRANSITION], mot dong nghiep ky cuu chia se kinh nghiem, dac biet nhan manh tam quan trong cua {[TARGET]} trong giao tiep cong viec, no truyen tai y nghia {[MEANING]}.",
+      "option_vi": "Dong nghiep ky cuu nhan manh tam quan trong cua tu {[TARGET]} trong cong viec."
+    },
+    {
+      "cn": "[TIME]，[SUBJECT]来到了[TRAVEL_SCENE]。[EMOTION]，因为在这里听到了当地人很自然地使用{[TARGET]}这个词，意思是{[MEANING]}。[TRANSITION]，真希望以后也能用得这么地道。",
+      "vi": "[TIME], [SUBJECT] den [TRAVEL_SCENE]. [EMOTION], vi o day nghe thay nguoi dia phuong rat tu nhien su dung tu {[TARGET]}, nghia la {[MEANING]}. [TRANSITION], that mong sau nay cung co the dung chuan nhu vay.",
+      "option_vi": "[SUBJECT] nghe nguoi ban dia dung tu {[TARGET]} khi di du lich."
+    },
+    {
+      "cn": "会议中，[SUBJECT]需要用中文做[BUSINESS_ACTION]。[TRANSITION]，想到了可以用{[TARGET]}来表达{[MEANING]}的意思，果然对方一听就懂了要点。",
+      "vi": "Trong cuoc hop, [SUBJECT] can dung tieng Trung de [BUSINESS_ACTION]. [TRANSITION], nghi ra co the dung {[TARGET]} de dien dat y {[MEANING]}, qua nhien doi phuong vua nghe da hieu y chinh.",
+      "option_vi": "[SUBJECT] dung tu {[TARGET]} trong cuoc hop kinh doanh."
     }
   ],
-
   "dialogue_templates": [
     {
       "cn": "A：你在看什么？看得这么专心。\nB：我朋友给我发了一条消息，他说：“{[EXAMPLE_CN]}”\nA：这里的“{[TARGET]}”是什么意思？\nB：结合语境看，应该就是“{[MEANING]}”的意思吧。",
@@ -146,6 +465,51 @@
       "cn": "A：你看这段视频里的话：“{[EXAMPLE_CN]}”\nB：我听到了。他在用到“{[TARGET]}”的时候，语气很重。\nA：是啊，毕竟事关“{[MEANING]}”，肯定不能随便说。\nB：同意，语言的魅力就在这里。",
       "vi": "A: Bạn xem câu nói trong video này: “{[EXAMPLE_VI]}”\nB: Tôi nghe rồi. Khi anh ta dùng đến “{[TARGET]}”, giọng rất nặng.\nA: Đúng vậy, xét cho cùng liên quan đến “{[MEANING]}”, chắc chắn không thể nói bừa.\nB: Đồng ý, sức hấp dẫn của ngôn ngữ chính là ở đây.",
       "option_vi": "Hai người thảo luận về sắc thái khi sử dụng từ {[TARGET]} trong video."
+    },
+    {
+      "cn": "A：经理，这份报告里的这句话：“{[EXAMPLE_CN]}”\nB：怎么了？看不懂吗？\nA：这个“{[TARGET]}”在这里具体指什么呢？\nB：很简单，在商务场合，它的意思就是“{[MEANING]}”。",
+      "vi": "A: Thưa giám đốc, câu này trong bản báo cáo: “{[EXAMPLE_VI]}”\nB: Sao thế? Đọc không hiểu à?\nA: Từ “{[TARGET]}” ở đây cụ thể chỉ điều gì vậy?\nB: Rất đơn giản, trong ngữ cảnh thương mại, nghĩa của nó là “{[MEANING]}”.",
+      "option_vi": "B giải thích nghĩa thương mại của từ {[TARGET]} trong báo cáo."
+    },
+    {
+      "cn": "A：服务员，你好！刚才那位客人说：“{[EXAMPLE_CN]}”\nB：是的，客人是在向我们提出要求。\nA：我不常听见“{[TARGET]}”这个说法。\nB：这在我们店里很常见，就是“{[MEANING]}”的意思。",
+      "vi": "A: Xin chào phục vụ! Vị khách ban nãy nói: “{[EXAMPLE_VI]}”\nB: Vâng, khách đang đưa ra yêu cầu với chúng ta.\nA: Tôi không thường nghe thấy cách nói “{[TARGET]}” này.\nB: Ở quán chúng tôi rất hay dùng, chính là có nghĩa “{[MEANING]}”.",
+      "option_vi": "B giải thích yêu cầu của khách hàng liên quan đến từ {[TARGET]}."
+    },
+    {
+      "cn": "A：昨天面试的时候，面试官对我说：“{[EXAMPLE_CN]}”\nB：哇，那听起来是个好消息！\nA：不过我当时没马上反应过来“{[TARGET]}”是什么意思。\nB：别担心，他其实是在表达“{[MEANING]}”，你表现得很棒。",
+      "vi": "A: Hôm qua lúc phỏng vấn, người phỏng vấn nói với tôi: “{[EXAMPLE_VI]}”\nB: Wow, nghe có vẻ là tin tốt đấy!\nA: Nhưng lúc đó tôi không phản ứng kịp “{[TARGET]}” có nghĩa là gì.\nB: Đừng lo, thực ra anh ấy đang diễn đạt “{[MEANING]}”, bạn đã làm rất tốt.",
+      "option_vi": "A không phản ứng kịp với từ {[TARGET]} trong lúc phỏng vấn."
+    },
+    {
+      "cn": "A：你看外面的广告牌写着：“{[EXAMPLE_CN]}”\nB：现在的广告词真有创意，连“{[TARGET]}”都用上了。\nA：你能给我解释一下它的言外之意吗？\nB：其实它主要是想吸引年轻人，带有一种“{[MEANING]}”的感觉。",
+      "vi": "A: Bạn xem biển quảng cáo bên ngoài viết: “{[EXAMPLE_VI]}”\nB: Câu quảng cáo thời nay thật sáng tạo, dùng cả “{[TARGET]}” nữa.\nA: Bạn giải thích giúp tôi hàm ý của nó được không?\nB: Thực ra nó chủ yếu muốn thu hút giới trẻ, mang một cảm giác “{[MEANING]}”.",
+      "option_vi": "Hai người thảo luận về sự sáng tạo của từ {[TARGET]} trên biển quảng cáo."
+    },
+    {
+      "cn": "A：我想拜托你一件事：“{[EXAMPLE_CN]}”\nB：等等，你用了“{[TARGET]}”这个词，听起来有点严肃。\nA：我是认真的。我想确切地表达“{[MEANING]}”。\nB：既然如此，那我就答应你吧。",
+      "vi": "A: Tôi muốn nhờ bạn một chuyện: “{[EXAMPLE_VI]}”\nB: Khoan đã, bạn dùng từ “{[TARGET]}”, nghe có vẻ hơi nghiêm túc.\nA: Tôi nghiêm túc mà. Tôi muốn diễn đạt chính xác “{[MEANING]}”.\nB: Đã vậy thì tôi đồng ý với bạn.",
+      "option_vi": "A cố ý dùng từ {[TARGET]} để diễn tả sự nghiêm túc khi nhờ vả."
+    },
+    {
+      "cn": "A：你在[WORKPLACE_SCENE]做什么呢？\nB：我在准备明天[BUSINESS_ACTION]的资料。\nA：有什么重点吗？\nB：有一个关键词{[TARGET]}，意思是{[MEANING]}，要重点向客户解释。",
+      "vi": "A: Ban dang lam gi o [WORKPLACE_SCENE] the?\nB: Toi dang chuan bi tai lieu cho [BUSINESS_ACTION] ngay mai.\nA: Co diem gi quan trong khong?\nB: Co mot tu khoa {[TARGET]}, nghia la {[MEANING]}, can giai thich ky cho khach hang.",
+      "option_vi": "B can giai thich tu {[TARGET]} cho khach hang trong buoi hop."
+    },
+    {
+      "cn": "A：欢迎光临！您在找什么？\nB：我在找{[TARGET]}，就是{[MEANING]}那种东西。\nA：好的，请跟我来。\nB：谢谢你用中文跟我确认了这个词，我更自信了。",
+      "vi": "A: Xin chao quy khach! Ban dang tim gi a?\nB: Toi dang tim {[TARGET]}, chinh la loai {[MEANING]} do.\nA: Vang, moi di theo toi.\nB: Cam on ban da xac nhan tu nay bang tieng Trung voi toi, toi tu tin hon roi.",
+      "option_vi": "B tu tin dung tu {[TARGET]} khi mua sam."
+    },
+    {
+      "cn": "A：你刚从[TRAVEL_SCENE]回来吗？好玩吗？\nB：很好玩！我还学了一个很有用的词。\nA：是什么？\nB：{[TARGET]}，当地人经常用，意思大概是{[MEANING]}。",
+      "vi": "A: Ban vua tu [TRAVEL_SCENE] ve a? Co vui khong?\nB: Rat vui! Toi con hoc duoc mot tu rat huu ich.\nA: La tu gi?\nB: {[TARGET]}, nguoi dia phuong hay dung, y nghia dai khai la {[MEANING]}.",
+      "option_vi": "B hoc duoc tu {[TARGET]} tu nguoi dia phuong khi di du lich."
+    },
+    {
+      "cn": "A：[BUSINESS_ACTION]进行得怎么样？\nB：还行，不过有个术语需要确认。\nA：什么术语？\nB：{[TARGET]}，对方一直在强调，意思是{[MEANING]}，看来很关键。",
+      "vi": "A: [BUSINESS_ACTION] tien trien the nao roi?\nB: Cung duoc, nhung co mot thuat ngu can xac nhan.\nA: Thuat ngu gi?\nB: {[TARGET]}, doi tac cu nhan manh mai, nghia la {[MEANING]}, xem ra rat quan trong.",
+      "option_vi": "B phat hien tu {[TARGET]} la thuat ngu then chot trong dam phan."
     }
   ]
 }
