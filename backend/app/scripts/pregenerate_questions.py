@@ -31,7 +31,7 @@ def pregenerate_questions(db: Session) -> dict[str, int]:
     gen = QuestionGeneratorService(db)
     stats = {}
 
-    for level in range(1, 6):  # HSK 1-5
+    for level in range(1, 7):  # HSK 1-6
         for quiz_type in ALL_QUIZ_TYPES:
             key = f"HSK{level}_{quiz_type.value}"
             try:
