@@ -772,6 +772,35 @@ h1, h2, h3 {
 }
 
 /* Dashboard Progress Ring */
+/* Voice self-assessment */
+.voice-rating-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+}
+.voice-rating-btn {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(var(--shadow-color), 0.12);
+  background: var(--modern-zen-card);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-snappy);
+}
+.voice-rating-btn:hover {
+  border-color: var(--modern-zen-primary);
+  background: rgba(18, 122, 93, 0.05);
+}
+.voice-rating-btn--done {
+  background: var(--jade-soft);
+  border-color: var(--modern-zen-primary);
+  color: var(--modern-zen-primary);
+}
+
 .daily-progress-ring {
   flex-shrink: 0;
   margin-right: 16px;
