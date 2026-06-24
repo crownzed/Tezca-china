@@ -64,7 +64,7 @@ export function resolveQuestionAudioText(question) {
   const direct = String(question.audio_text || '').trim();
   if (direct) return direct;
   const quizType = question.quiz_type || '';
-  if (quizType === 'listening' || quizType === 'dialogue' || quizType === 'translation') {
+  if (quizType === 'listening' || quizType === 'translation') {
     const explanation = String(question.explanation || '').trim();
     if (explanation) {
       const cn = explanation.split(' · ')[0]?.trim();
@@ -89,7 +89,7 @@ export function getVoiceStatus() {
   return {
     supported: true,
     ready: true,
-    label: count ? `File am thanh · ${count} cau` : 'Dang tai file am thanh',
+    label: count ? `File am thanh · ${count} cau` : 'Dang tai am thanh',
     quality: count ? 'natural' : 'loading',
     engine: 'local',
   };
@@ -119,109 +119,96 @@ function stopActiveAudio() {
   activeAudio = null;
 }
 
-function resolveBestChineseVoice() {
-  const synth = window.speechSynthesis;
-  const voices = synth.getVoices();
-  if (voices.length === 0) return null;
-
-  const zhVoices = voices.filter(v => v.lang.startsWith('zh-'));
-  if (zhVoices.length === 0) return null;
-
-  // Prioritize premium Chinese voices
-  const priority = [
-    'Xiaoxiao', 'Yunxi', 'Xiaoyi', 'Yunjian', 'Xiaobei', // Microsoft Azure
-    'Tingting', 'Yaoyao', 'Yating',                         // older voices
-    'Google', '普通话', '國語',                               // Google + generic
-  ];
-  for (const prefix of priority) {
-    const found = zhVoices.find(v => v.name.includes(prefix));
-    if (found) return found;
-  }
-  // Pick the first zh-CN or zh-TW voice
-  const mandarin = zhVoices.find(v => v.lang === 'zh-CN') || zhVoices.find(v => v.lang === 'zh-TW');
-  if (mandarin) return mandarin;
-
-  return zhVoices[0];
+// Youdao TTS: natural-sounding Chinese voice via dict.youdao.com
+function youdaoTtsUrl(text) {
+  const encoded = encodeURIComponent(text);
+  return `https://dict.youdao.com/dictvoice?audio=${encoded}&type=2`;
 }
 
-// Ensure voices are loaded (Chrome loads them async)
-async function ensureVoices() {
-  if (cachedVoices) return cachedVoices;
-  const synth = window.speechSynthesis;
-  const voices = synth.getVoices();
-  if (voices.length > 0) {
-    cachedVoices = voices;
-    return voices;
-  }
-  return new Promise(resolve => {
-    const onVoicesChanged = () => {
-      synth.removeEventListener('voiceschanged', onVoicesChanged);
-      cachedVoices = synth.getVoices();
-      resolve(cachedVoices);
-    };
-    synth.addEventListener('voiceschanged', onVoicesChanged);
-    // Timeout fallback after 2s
-    setTimeout(() => {
-      synth.removeEventListener('voiceschanged', onVoicesChanged);
-      cachedVoices = synth.getVoices();
-      resolve(cachedVoices);
-    }, 2000);
+function playOnlineTts(text, rate, runId, onDone) {
+  const url = youdaoTtsUrl(text);
+  const audio = new Audio(url);
+  audio.preload = 'auto';
+  audio.playbackRate = Math.max(0.6, Math.min(1.1, rate));
+  activeAudio = audio;
+
+  let resolved = false;
+  audio.onended = () => {
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) onDone(true); }
+  };
+  audio.onerror = () => {
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) speakBrowser(text, rate, runId, onDone); }
+  };
+  audio.play().catch(() => {
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) speakBrowser(text, rate, runId, onDone); }
   });
 }
 
+// Browser TTS — last resort fallback
 async function speakBrowser(text, rate, runId, onDone) {
-  if (!hasSpeechSupport()) {
-    onDone(false);
-    return;
-  }
+  if (!hasSpeechSupport()) { onDone(false); return; }
   const synth = window.speechSynthesis;
   synth.cancel();
   synth.resume?.();
 
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'zh-CN';
-  utter.rate = Math.max(0.5, Math.min(1.0, rate));
+  utter.rate = Math.max(0.55, Math.min(0.9, rate));
   utter.volume = 1;
-  utter.pitch = 1;
+  utter.pitch = 0.95;
 
   await ensureVoices();
   if (runId !== speechRunId) { onDone(false); return; }
 
   const bestVoice = resolveBestChineseVoice();
-  if (bestVoice) {
-    utter.voice = bestVoice;
-  }
+  if (bestVoice) utter.voice = bestVoice;
 
-  utter.onend = () => {
-    if (runId === speechRunId) onDone(true);
-  };
-  utter.onerror = (e) => {
-    if (runId === speechRunId) onDone(false);
-  };
-
+  utter.onend = () => { if (runId === speechRunId) onDone(true); };
+  utter.onerror = () => { if (runId === speechRunId) onDone(false); };
   synth.speak(utter);
+}
+
+async function ensureVoices() {
+  if (cachedVoices) return cachedVoices;
+  const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  if (voices.length > 0) { cachedVoices = voices; return voices; }
+  return new Promise(resolve => {
+    const handler = () => {
+      synth.removeEventListener('voiceschanged', handler);
+      cachedVoices = synth.getVoices();
+      resolve(cachedVoices);
+    };
+    synth.addEventListener('voiceschanged', handler);
+    setTimeout(() => { synth.removeEventListener('voiceschanged', handler); cachedVoices = synth.getVoices(); resolve(cachedVoices); }, 2000);
+  });
+}
+
+function resolveBestChineseVoice() {
+  const voices = cachedVoices || window.speechSynthesis.getVoices();
+  const zh = voices.filter(v => v.lang.startsWith('zh-'));
+  if (!zh.length) return null;
+  const prio = ['Xiaoxiao', 'Yunxi', 'Xiaoyi', 'Yunjian', 'Xiaobei', 'Tingting', 'Yaoyao', 'Yating', 'Google', 'Microsoft'];
+  for (const p of prio) {
+    const found = zh.find(v => v.name.includes(p));
+    if (found) return found;
+  }
+  return zh.find(v => v.lang === 'zh-CN') || zh.find(v => v.lang === 'zh-TW') || zh[0];
 }
 
 export function stopSpeech() {
   speechRunId += 1;
   stopActiveAudio();
-  if (hasSpeechSupport()) {
-    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
-  }
+  if (hasSpeechSupport()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
 }
 
 export function speak(text, rate = 0.82, onDone, mode = 'sentence') {
   const clean = String(text || '').trim();
-  if (!clean) {
-    onDone?.(false);
-    return '';
-  }
+  if (!clean) { onDone?.(false); return ''; }
   unlockSpeech();
   const runId = ++speechRunId;
   stopActiveAudio();
-  if (hasSpeechSupport()) {
-    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
-  }
+  if (hasSpeechSupport()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
 
   const src = getLocalAudioSrc(clean);
   const audio = new Audio(src);
@@ -229,19 +216,20 @@ export function speak(text, rate = 0.82, onDone, mode = 'sentence') {
   audio.playbackRate = Math.max(0.5, Math.min(1.15, rate));
   activeAudio = audio;
 
+  let resolved = false;
   const finish = (success) => {
     if (runId !== speechRunId) return;
     if (activeAudio === audio) activeAudio = null;
     onDone?.(success);
   };
 
-  let resolved = false;
   audio.onended = () => { if (!resolved) { resolved = true; finish(true); } };
   audio.onerror = () => {
     if (!resolved) {
       resolved = true;
       if (runId !== speechRunId) return;
-      speakBrowser(clean, rate, runId, finish);
+      // Local MP3 not found → try Youdao TTS online
+      playOnlineTts(clean, rate, runId, finish);
     }
   };
 
@@ -249,7 +237,7 @@ export function speak(text, rate = 0.82, onDone, mode = 'sentence') {
     if (!resolved) {
       resolved = true;
       if (runId !== speechRunId) return;
-      speakBrowser(clean, rate, runId, finish);
+      playOnlineTts(clean, rate, runId, finish);
     }
   });
 
@@ -257,8 +245,8 @@ export function speak(text, rate = 0.82, onDone, mode = 'sentence') {
 }
 
 export function getAudioHint(audioPlaying, audioPlayed, audioError) {
-  if (audioError) return 'Khong phat duoc am thanh. Thu dung nut Nghe ben duoi.';
+  if (audioError) return 'Khong phat duoc am thanh.';
   if (audioPlaying) return 'Dang phat...';
   if (audioPlayed) return 'Co the nghe lai.';
-  return 'Bam Nghe de phat am thanh.';
+  return 'Bam Nghe de phat.';
 }
