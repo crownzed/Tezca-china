@@ -84,7 +84,7 @@ Reply in JSON only (no markdown):
 {{"grammar_ok": true/false, "translation_ok": "yes"/"partial"/"no", "word_usage_natural": true/false, "grammar_issues": [], "confidence": 0.0-1.0}}"""
 
     payload = json.dumps({
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": "You are a Chinese grammar validator. Reply ONLY in JSON, no explanation."},
             {"role": "user", "content": prompt},

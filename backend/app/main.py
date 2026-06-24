@@ -11,6 +11,7 @@ from .models import Word
 from .routers.auth import router as auth_router
 from .routers.leaderboard import router as leaderboard_router
 from .routers.quiz import router as quiz_router
+from .routers.custom_vocab import router as custom_vocab_router
 from .settings import settings
 
 app = FastAPI(title=settings.app_name)
@@ -26,6 +27,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(leaderboard_router)
 app.include_router(quiz_router)
+app.include_router(custom_vocab_router)
 
 
 def _seed_if_empty() -> None:

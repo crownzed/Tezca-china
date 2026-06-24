@@ -418,3 +418,12 @@ class ProfileStatsOut(BaseModel):
 class ProfileOut(BaseModel):
     user: UserOut
     stats: ProfileStatsOut
+
+class CustomVocabGenerateRequest(BaseModel):
+    words: list[str] = Field(min_length=1, max_length=20)
+
+class CustomVocabGenerateResponse(BaseModel):
+    session_id: int
+    message: str
+    questions: list[QuestionOut] = []
+

@@ -690,3 +690,8 @@ export async function getUserProfile() {
     };
   }
 }
+
+export async function generateCustomVocabExercises(payload) {
+  return request('/api/custom-vocab/generate', { method: 'POST', body: JSON.stringify(payload) });
+}
+
