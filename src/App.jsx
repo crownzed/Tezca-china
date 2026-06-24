@@ -1,8 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessagesSquare, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Trophy, User, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessagesSquare, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
-import { AuthControls, AuthModalHost, LeaderboardPanel, ProfilePanel } from './auth-ui';
-import { useAuth } from './auth-context';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
@@ -42,8 +40,6 @@ const NAV = [
   { id: 'quiz', label: 'Luyện tập', icon: Play },
   { id: 'vocab', label: 'Từ vựng', icon: Search },
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
-  { id: 'leaderboard', label: 'Xếp hạng', icon: Trophy },
-  { id: 'profile', label: 'Hồ sơ', icon: User },
   { id: 'progress', label: 'Tiến độ', icon: LineChart },
 ];
 
@@ -665,7 +661,7 @@ function buildQuizStrategySummary(answerRows) {
 }
 
 function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartKey, limit = 10, strategyHint = 'targeted' }) {
-  const { userId } = useAuth();
+  const userId = 'local-user';
   const [session, setSession] = useState(null);
   const [quizItems, setQuizItems] = useState([]);
   const [primaryQuestions, setPrimaryQuestions] = useState([]);
@@ -1457,7 +1453,7 @@ function isPracticeItem(item) {
 }
 
 function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
-  const { userId } = useAuth();
+  const userId = 'local-user';
   const [session, setSession] = useState(null);
   const [items, setItems] = useState([]);
   const [index, setIndex] = useState(0);
@@ -2010,7 +2006,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
 }
 
 function GeneralCheck({ level, onExit, onComplete }) {
-  const { userId } = useAuth();
+  const userId = 'local-user';
   const [questions, setQuestions] = useState([]);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -2718,7 +2714,7 @@ function Progress({ stats, analytics, onStartRecommended }) {
 }
 
 export default function App() {
-  const { userId, isAuthenticated } = useAuth();
+  const userId = 'local-user';
   const [activeTab, setActiveTab] = useState('dashboard');
   const [level, setLevel] = useState(getInitialFocusLevel);
   const [quizType, setQuizType] = useState('vocab');
@@ -2769,7 +2765,7 @@ export default function App() {
     if (activeTab === 'session') return 'Học hôm nay';
     return NAV.find(item => item.id === activeTab)?.label || 'Trang chính';
   }, [activeTab, generalCheckLevel]);
-  const statusLabel = isAuthenticated ? 'Đã đăng nhập' : stats.offline ? 'Chế độ local' : 'Đồng bộ';
+  const statusLabel = stats.offline ? 'Chế độ local' : 'Đồng bộ';
   const isDark = theme === 'dark';
   const localTodayPlan = useMemo(() => buildTodaySessionPlan({ analytics, stats, focusLevel: level, modeId: selectedSessionMode }), [analytics, stats, level, selectedSessionMode]);
   const todayPlan = useMemo(() => normalizeBackendTodayPlan(backendTodayPlan, localTodayPlan), [backendTodayPlan, localTodayPlan]);
@@ -2902,7 +2898,6 @@ export default function App() {
         </div>
           <div className="topbar-actions">
             <span className="core-status hide-mobile">{statusLabel}</span>
-            <AuthControls />
             <button
               className="theme-toggle"
               type="button"
@@ -2920,12 +2915,9 @@ export default function App() {
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
         {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
-        {!generalCheckLevel && activeTab === 'leaderboard' && <LeaderboardPanel />}
-        {!generalCheckLevel && activeTab === 'profile' && <ProfilePanel />}
         {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
         {!generalCheckLevel && activeTab === 'progress' && <Progress stats={stats} analytics={analytics} onStartRecommended={startRecommendedQuiz} />}
       </section>
-      <AuthModalHost />
     </div>
   );
 }
