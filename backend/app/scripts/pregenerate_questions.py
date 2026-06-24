@@ -21,7 +21,7 @@ ALL_QUIZ_TYPES = [
     QuizType.reading,
 ]
 
-TARGET_PER_TYPE = 12  # questions per quiz_type per level
+TARGET_PER_TYPE = 20  # questions per quiz_type per level
 
 
 def pregenerate_questions(db: Session) -> dict[str, int]:
@@ -31,7 +31,7 @@ def pregenerate_questions(db: Session) -> dict[str, int]:
     gen = QuestionGeneratorService(db)
     stats = {}
 
-    for level in range(1, 5):  # HSK 1-4 (HSK 5-6 have fewer words)
+    for level in range(1, 6):  # HSK 1-5
         for quiz_type in ALL_QUIZ_TYPES:
             key = f"HSK{level}_{quiz_type.value}"
             try:
