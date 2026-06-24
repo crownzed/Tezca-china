@@ -5,6 +5,7 @@ let speechRunId = 0;
 let speechUnlocked = false;
 let activeAudio = null;
 let audioIndex = null;
+let cachedVoices = null;
 
 const SILENT_MP3 = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+1DEAAAGAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
 
@@ -26,7 +27,7 @@ export function unlockSpeech() {
   if (!hasSpeechSupport()) return;
   const synth = window.speechSynthesis;
   synth.resume?.();
-  const utter = new SpeechSynthesisUtterance('\u200b');
+  const utter = new SpeechSynthesisUtterance('​');
   utter.volume = 0.01;
   utter.lang = 'zh-CN';
   synth.speak(utter);
@@ -88,7 +89,7 @@ export function getVoiceStatus() {
   return {
     supported: true,
     ready: true,
-    label: count ? `File âm thanh · ${count} câu` : 'Đang tải file âm thanh',
+    label: count ? `File am thanh · ${count} cau` : 'Dang tai file am thanh',
     quality: count ? 'natural' : 'loading',
     engine: 'local',
   };
@@ -118,7 +119,57 @@ function stopActiveAudio() {
   activeAudio = null;
 }
 
-function speakBrowser(text, rate, runId, onDone) {
+function resolveBestChineseVoice() {
+  const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  if (voices.length === 0) return null;
+
+  const zhVoices = voices.filter(v => v.lang.startsWith('zh-'));
+  if (zhVoices.length === 0) return null;
+
+  // Prioritize premium Chinese voices
+  const priority = [
+    'Xiaoxiao', 'Yunxi', 'Xiaoyi', 'Yunjian', 'Xiaobei', // Microsoft Azure
+    'Tingting', 'Yaoyao', 'Yating',                         // older voices
+    'Google', '普通话', '國語',                               // Google + generic
+  ];
+  for (const prefix of priority) {
+    const found = zhVoices.find(v => v.name.includes(prefix));
+    if (found) return found;
+  }
+  // Pick the first zh-CN or zh-TW voice
+  const mandarin = zhVoices.find(v => v.lang === 'zh-CN') || zhVoices.find(v => v.lang === 'zh-TW');
+  if (mandarin) return mandarin;
+
+  return zhVoices[0];
+}
+
+// Ensure voices are loaded (Chrome loads them async)
+async function ensureVoices() {
+  if (cachedVoices) return cachedVoices;
+  const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  if (voices.length > 0) {
+    cachedVoices = voices;
+    return voices;
+  }
+  return new Promise(resolve => {
+    const onVoicesChanged = () => {
+      synth.removeEventListener('voiceschanged', onVoicesChanged);
+      cachedVoices = synth.getVoices();
+      resolve(cachedVoices);
+    };
+    synth.addEventListener('voiceschanged', onVoicesChanged);
+    // Timeout fallback after 2s
+    setTimeout(() => {
+      synth.removeEventListener('voiceschanged', onVoicesChanged);
+      cachedVoices = synth.getVoices();
+      resolve(cachedVoices);
+    }, 2000);
+  });
+}
+
+async function speakBrowser(text, rate, runId, onDone) {
   if (!hasSpeechSupport()) {
     onDone(false);
     return;
@@ -126,33 +177,37 @@ function speakBrowser(text, rate, runId, onDone) {
   const synth = window.speechSynthesis;
   synth.cancel();
   synth.resume?.();
+
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'zh-CN';
-  utter.rate = Math.max(0.45, Math.min(1.05, rate));
+  utter.rate = Math.max(0.5, Math.min(1.0, rate));
   utter.volume = 1;
+  utter.pitch = 1;
 
-  const voices = synth.getVoices();
-  const zhVoices = voices.filter(v => v.lang.startsWith('zh-'));
-  const premium = zhVoices.find(v => v.name.includes('Google') || v.name.includes('Xiaoxiao') || v.name.includes('Tingting') || v.name.includes('Yaoyao') || v.name.includes('Yating'));
-  if (premium) {
-    utter.voice = premium;
-  } else if (zhVoices.length > 0) {
-    utter.voice = zhVoices[0];
+  await ensureVoices();
+  if (runId !== speechRunId) { onDone(false); return; }
+
+  const bestVoice = resolveBestChineseVoice();
+  if (bestVoice) {
+    utter.voice = bestVoice;
   }
 
   utter.onend = () => {
     if (runId === speechRunId) onDone(true);
   };
-  utter.onerror = () => {
+  utter.onerror = (e) => {
     if (runId === speechRunId) onDone(false);
   };
+
   synth.speak(utter);
 }
 
 export function stopSpeech() {
   speechRunId += 1;
   stopActiveAudio();
-  if (hasSpeechSupport()) window.speechSynthesis.cancel();
+  if (hasSpeechSupport()) {
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  }
 }
 
 export function speak(text, rate = 0.82, onDone, mode = 'sentence') {
@@ -164,35 +219,46 @@ export function speak(text, rate = 0.82, onDone, mode = 'sentence') {
   unlockSpeech();
   const runId = ++speechRunId;
   stopActiveAudio();
-  if (hasSpeechSupport()) window.speechSynthesis.cancel();
+  if (hasSpeechSupport()) {
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  }
 
   const src = getLocalAudioSrc(clean);
   const audio = new Audio(src);
+  audio.preload = 'auto';
   audio.playbackRate = Math.max(0.5, Math.min(1.15, rate));
   activeAudio = audio;
 
   const finish = (success) => {
     if (runId !== speechRunId) return;
+    if (activeAudio === audio) activeAudio = null;
     onDone?.(success);
   };
 
-  audio.onended = () => finish(true);
+  let resolved = false;
+  audio.onended = () => { if (!resolved) { resolved = true; finish(true); } };
   audio.onerror = () => {
-    if (runId !== speechRunId) return;
-    speakBrowser(clean, rate, runId, finish);
+    if (!resolved) {
+      resolved = true;
+      if (runId !== speechRunId) return;
+      speakBrowser(clean, rate, runId, finish);
+    }
   };
 
   audio.play().catch(() => {
-    if (runId !== speechRunId) return;
-    speakBrowser(clean, rate, runId, finish);
+    if (!resolved) {
+      resolved = true;
+      if (runId !== speechRunId) return;
+      speakBrowser(clean, rate, runId, finish);
+    }
   });
 
   return src;
 }
 
 export function getAudioHint(audioPlaying, audioPlayed, audioError) {
-  if (audioError) return 'Không phát được. Thử nút play trên thanh âm thanh bên dưới.';
-  if (audioPlaying) return 'Đang phát âm thanh...';
-  if (audioPlayed) return 'Có thể nghe lại hoặc dùng thanh play bên dưới.';
-  return 'Bấm Nghe ngay hoặc dùng thanh play bên dưới.';
+  if (audioError) return 'Khong phat duoc am thanh. Thu dung nut Nghe ben duoi.';
+  if (audioPlaying) return 'Dang phat...';
+  if (audioPlayed) return 'Co the nghe lai.';
+  return 'Bam Nghe de phat am thanh.';
 }
