@@ -76,7 +76,7 @@ LƯU Ý QUAN TRỌNG:
     }
 
     data = {
-        "model": "deepseek-v4-pro",
+        "model": "deepseek-flash",
         "messages": [
             {"role": "system", "content": "You are a helpful Chinese teaching assistant that outputs pure JSON."},
             {"role": "user", "content": prompt}
