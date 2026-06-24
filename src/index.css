@@ -1887,6 +1887,8 @@ textarea {
   line-height: 1.22;
   margin-bottom: 18px;
   overflow-wrap: anywhere;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .option-grid {
@@ -1894,6 +1896,8 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 18px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .option-grid button {

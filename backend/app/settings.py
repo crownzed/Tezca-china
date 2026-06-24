@@ -10,6 +10,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173,http://localhost:5173,"
         "https://tiengtrung-49e13.web.app,https://tiengtrung-49e13.firebaseapp.com"
     )
+    deepseek_api_key: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

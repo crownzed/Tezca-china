@@ -7,7 +7,7 @@ Checks:
   3. Vietnamese translations are accurate (basic check)
   4. Audio text matches prompt content
 
-Uses DeepSeek API (deepseek-chat) for grammar validation.
+Uses DeepSeek API (deepseek-v4-pro) for grammar validation.
 Set DEEPSEEK_API_KEY env var before running.
 Rate limited to 10 req/s to stay within free tier limits.
 """
@@ -173,7 +173,7 @@ def check_sentences_with_deepseek(
             )
 
             payload = json.dumps({
-                "model": "deepseek-chat",
+                "model": "deepseek-v4-pro",
                 "messages": [
                     {"role": "system", "content": "You are a Chinese grammar validator. Reply only in JSON."},
                     {"role": "user", "content": prompt},

@@ -6,6 +6,7 @@ import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
 import { strategyFlags } from './strategy-flags';
 import { bindSpeechUnlock, getLocalAudioSrc, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
+import CustomVocabInput from './components/CustomVocabInput.jsx';
 
 const THEME_PALETTE_VERSION = 'modern-zen-v1';
 const LEVELS = [1, 2, 3, 4, 5, 6];
@@ -35,6 +36,7 @@ const NAV = [
   { id: 'dashboard', label: 'Trang chính', icon: BarChart3 },
   { id: 'quiz', label: 'Luyện tập', icon: Play },
   { id: 'vocab', label: 'Từ vựng', icon: Search },
+  { id: 'custom', label: 'Tự tạo', icon: PenTool },
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
   { id: 'progress', label: 'Tiến độ', icon: LineChart },
 ];
@@ -1533,7 +1535,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     finishedRef.current = false;
     stopSpeech();
     try {
-      const started = await startLearningSession({
+      const started = plan?.source === 'custom' ? { id: plan.id, session_type: modeId, behavior_state: 'learning', estimated_minutes: 20 } : await startLearningSession({
         user_id: userId,
         session_type: modeId,
         behavior_state: plan?.behaviorState || 'maintenance',
@@ -1542,7 +1544,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
         target_skills_json: [quizType],
         reason: plan?.reason || '',
       });
-      const data = await startQuiz({ user_id: userId, level, quiz_type: quizType, limit });
+      const data = plan?.preloadedQuestions ? { questions: plan.preloadedQuestions } : await startQuiz({ user_id: userId, level, quiz_type: quizType, limit });
       const quizItems = (data.questions || []).map((row, rowIndex) => ({
         id: `quiz-${row.id}-${rowIndex}`,
         type: 'quiz_item',
@@ -2850,6 +2852,16 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
+  const handleCustomSessionCreated = (sessionId, questions) => {
+    // Để frontend có thể vào session mới, ta cần load thông tin session đó
+    // Tuy nhiên api-core.js chỉ có getTodaySession.
+    // Nếu thiết kế hiện tại dùng startLearningSession để chạy, thì ta có thể
+    // trực tiếp set activeTab='session' và cho phép nó nạp sessionId nếu App có hỗ trợ.
+    // Tạm thời truyền 1 plan tối thiểu:
+    setActiveSessionPlan({ id: sessionId, source: 'custom', title: 'Từ vựng tùy chỉnh', mode: { id: 'standard' }, action: { quizType: 'vocab' }, preloadedQuestions: questions });
+    setActiveTab('session');
+  };
+
   const openProgress = () => {
     setGeneralCheckLevel(null);
     setActiveTab('progress');
@@ -2919,6 +2931,7 @@ export default function App() {
         {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} learningMode={learningMode} topics={topics} onSelectLearningMode={selectLearningMode} onToggleTopic={toggleTopic} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} onOpenProgress={openProgress} />}
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
+        {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
         {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
         {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
         {!generalCheckLevel && activeTab === 'progress' && <Progress stats={stats} analytics={analytics} onStartRecommended={startRecommendedQuiz} />}
