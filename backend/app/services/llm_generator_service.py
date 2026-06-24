@@ -5,7 +5,7 @@ import re
 from typing import List, Dict, Any
 from ..settings import settings
 
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_API_URL = "https://api.ai-box.vn/v1/chat/completions"
 
 def _clean_json_response(content: str) -> str:
     """Loại bỏ markdown formatting nếu DeepSeek trả về ```json ... ```"""
@@ -76,7 +76,7 @@ LƯU Ý QUAN TRỌNG:
     }
 
     data = {
-        "model": "deepseek-flash",
+        "model": "deepseek-v4-flash",
         "messages": [
             {"role": "system", "content": "You are a helpful Chinese teaching assistant that outputs pure JSON."},
             {"role": "user", "content": prompt}
