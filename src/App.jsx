@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessagesSquare, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -12,12 +12,10 @@ const LEVELS = [1, 2, 3, 4, 5, 6];
 const QUIZ_TYPES = [
   { id: 'vocab', label: 'Từ vựng', icon: BookOpen },
   { id: 'listening', label: 'Nghe', icon: Headphones },
-  { id: 'dialogue', label: 'Hội thoại', icon: MessagesSquare },
   { id: 'reading', label: 'Đọc hiểu', icon: ScrollText },
   { id: 'translation', label: 'Dịch đoạn', icon: Languages },
   { id: 'cloze', label: 'Điền từ', icon: ScrollText },
   { id: 'drag_drop', label: 'Sắp xếp câu', icon: PenTool },
-  { id: 'voice', label: 'Phát âm', icon: Headphones },
 ];
 const FOCUS_LEVELS = [1, 2, 3, 4];
 const GENERAL_CHECK_TYPES = QUIZ_TYPES.map(type => type.id);
@@ -27,11 +25,9 @@ const EMPTY_WORDS = [];
 function quizTypeDescription(typeId) {
   if (typeId === 'vocab') return 'Nghĩa và chữ';
   if (typeId === 'listening') return 'Nghe câu chọn nghĩa';
-  if (typeId === 'dialogue') return 'Nghe đoạn A/B';
   if (typeId === 'translation') return 'Dịch đoạn nói';
   if (typeId === 'cloze') return 'Chọn từ còn thiếu';
   if (typeId === 'drag_drop') return 'Sắp xếp từ thành câu';
-  if (typeId === 'voice') return 'Luyện phát âm';
   return 'Câu và ngữ cảnh';
 }
 
