@@ -33,11 +33,13 @@ def _pos_filtered_pool(word: Word, pool: list[Word], quiz_type: QuizType) -> lis
 
 
 def _cloze_replace(text: str, hanzi: str) -> str:
-    """Thay thế lần xuất hiện đầu tiên của ``hanzi`` như một từ độc lập.
+    """Thay thế lần xuất hiện đầu tiên của ``hanzi``.
 
-    Dùng ranh giới ký tự CJK để tránh thay thế từ con (vd "生" trong "学生").
-    Nếu không tìm thấy ranh giới phù hợp, fallback sang ``str.replace``.
+    Từ ghép (2+ ký tự) dùng str.replace trực tiếp.
+    Từ đơn (1 ký tự) dùng ranh giới CJK để tránh thay thế từ con.
     """
+    if len(hanzi) >= 2:
+        return text.replace(hanzi, "____", 1)
     cjk = _CJK_RANGE
     pattern = r"(?<![%s])%s(?![%s])" % (cjk, re.escape(hanzi), cjk)
     result = re.sub(pattern, "____", text, count=1)
@@ -47,12 +49,10 @@ def _cloze_replace(text: str, hanzi: str) -> str:
 
 
 def _cloze_replace_all(text: str, hanzi: str) -> str | None:
-    """Như ``_cloze_replace`` nhưng thay TẤT CẢ lần xuất hiện của ``hanzi``.
-
-    Trả về None nếu không tìm thấy lần xuất hiện độc lập nào của hanzi
-    (tức hanzi chỉ xuất hiện như từ con trong từ dài hơn). Lúc đó
-    ``_cloze_for_word`` sẽ từ chối tạo câu hỏi thay vì sinh câu sai.
-    """
+    """Như ``_cloze_replace`` nhưng thay TẤT CẢ lần xuất hiện."""
+    if len(hanzi) >= 2:
+        result = text.replace(hanzi, "____")
+        return result if result != text else None
     cjk = _CJK_RANGE
     pattern = r"(?<![%s])%s(?![%s])" % (cjk, re.escape(hanzi), cjk)
     result = re.sub(pattern, "____", text)
@@ -99,7 +99,7 @@ class QuestionGeneratorService:
         for word in words:
             if len(existing) >= limit:
                 break
-            for _ in range(3):
+            for _ in range(6):  # 6 variants per word for question diversity
                 seed = random.randint(0, 1000000)
                 q = self._get_or_create_question(word, level, quiz_type, seed)
                 if q and q not in existing:

@@ -40,10 +40,33 @@ def _seed_if_empty() -> None:
         seed_examples(db)
 
 
+def _ensure_vocab() -> None:
+    """Import HSK 3-5 vocabulary from frontend vocab-bank if not already present."""
+    with SessionLocal() as db:
+        from sqlalchemy import func, select
+        from .models import Word
+        hsk3_count = db.scalar(select(func.count()).select_from(Word).where(Word.hsk_level >= 3)) or 0
+        if hsk3_count > 0:
+            return
+        from .scripts.import_vocab_bank import main as import_vocab
+        import_vocab()
+
+
 @app.on_event("startup")
 def startup() -> None:
     init_db()
     _seed_if_empty()
+    try:
+        _ensure_vocab()
+    except Exception:
+        pass
+    try:
+        from .scripts.pregenerate_questions import pregenerate_questions
+        with SessionLocal() as db:
+            pregenerate_questions(db)
+            db.commit()
+    except Exception:
+        pass  # non-critical, questions generated on-demand anyway
 
 
 @app.get("/health")
