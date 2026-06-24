@@ -119,14 +119,15 @@ function stopActiveAudio() {
   activeAudio = null;
 }
 
-// Youdao TTS: natural-sounding Chinese voice via dict.youdao.com
+// Online TTS sources — natural Chinese voices
 function youdaoTtsUrl(text) {
-  const encoded = encodeURIComponent(text);
-  return `https://dict.youdao.com/dictvoice?audio=${encoded}&type=2`;
+  return `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&type=2`;
+}
+function googleTtsUrl(text) {
+  return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=${encodeURIComponent(text)}`;
 }
 
-function playOnlineTts(text, rate, runId, onDone) {
-  const url = youdaoTtsUrl(text);
+function tryPlayUrl(url, rate, runId, onDone, fallback) {
   const audio = new Audio(url);
   audio.preload = 'auto';
   audio.playbackRate = Math.max(0.6, Math.min(1.1, rate));
@@ -137,11 +138,17 @@ function playOnlineTts(text, rate, runId, onDone) {
     if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) onDone(true); }
   };
   audio.onerror = () => {
-    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) speakBrowser(text, rate, runId, onDone); }
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) fallback(); }
   };
   audio.play().catch(() => {
-    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) speakBrowser(text, rate, runId, onDone); }
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) fallback(); }
   });
+}
+
+function playOnlineTts(text, rate, runId, onDone) {
+  const goBrowser = () => speakBrowser(text, rate, runId, onDone);
+  const goGoogle = () => tryPlayUrl(googleTtsUrl(text), rate, runId, onDone, goBrowser);
+  tryPlayUrl(youdaoTtsUrl(text), rate, runId, onDone, goGoogle);
 }
 
 // Browser TTS — last resort fallback
