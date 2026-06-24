@@ -109,7 +109,7 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES) -> dict:
         temperature = 0.7 + (attempt * 0.1)
 
         data = {
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-v4-pro",
             "messages": [
                 {"role": "system", "content": "You are an expert Chinese language teacher who outputs ONLY valid JSON. Never include markdown fences or explanations outside the JSON."},
                 {"role": "user", "content": prompt_text}
