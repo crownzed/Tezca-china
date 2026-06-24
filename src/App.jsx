@@ -1191,9 +1191,18 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               )}
               <p className="voice-meaning">{question.word?.meaning_vi || ''}</p>
               {!voiceDone && !feedback && (
-                <button className="btn-primary" onClick={submitVoiceAttempt} disabled={submitting}>
-                  Đã đọc xong
-                </button>
+                <div className="voice-rating-grid">
+                  {question.options.map((option, optionIndex) => (
+                    <button
+                      key={option}
+                      className={`voice-rating-btn ${optionIndex === 0 ? 'voice-rating-btn--done' : ''}`}
+                      onClick={() => { setSelected(optionIndex); setTimeout(() => handleQuizAnswer(optionIndex === 0), 200); }}
+                      disabled={submitting}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           ) : (

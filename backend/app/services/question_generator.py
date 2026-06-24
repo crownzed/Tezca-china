@@ -374,14 +374,8 @@ class QuestionGeneratorService:
                 if text:
                     pairs.append((text, item.id))
         elif quiz_type == QuizType.voice:
-            vp = self._voice_prompt_for_word(word, seed)
-            if not vp:
-                return [], 0, []
-            pairs = [(vp, word.id)]
-            for item in distractors:
-                item_vp = self._voice_prompt_for_word(item, seed)
-                text = item_vp if item_vp else item.hanzi
-                pairs.append((text, item.id))
+            # Voice is self-assessment: no correct answer leaked in options
+            pairs = [("Đã đọc xong", word.id), ("Chưa đọc được", word.id), ("Cần luyện thêm", word.id), ("Quá dễ", word.id)]
         elif quiz_type == QuizType.vocab:
             pairs = [(word.meaning_vi or word.meaning_en, word.id)]
             pairs.extend([(w.meaning_vi or w.meaning_en, w.id) for w in distractors])
@@ -442,7 +436,12 @@ class QuestionGeneratorService:
             dd = self._drag_drop_for_word(word, seed)
             return dd["sentence_cn"] if dd else ""
         if quiz_type == QuizType.voice:
-            return word.hanzi
+            vp = self._voice_prompt_for_word(word, seed)
+            if vp and vp.startswith('Đọc to câu sau: '):
+                return vp.replace('Đọc to câu sau: ', '').strip()
+            examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+            ex = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
+            return ex.sentence_cn if ex and ex.sentence_cn else word.hanzi
         return ""
 
 
