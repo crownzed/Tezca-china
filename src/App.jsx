@@ -2879,7 +2879,7 @@ export default function App() {
   return (
     <div className="core-app">
       <aside className="core-sidebar">
-        <div className="core-logo">中</div>
+        <div className="core-logo">T</div>
         {NAV.map(item => {
           const Icon = item.icon;
           return (
