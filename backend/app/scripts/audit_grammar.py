@@ -7,7 +7,7 @@ Checks:
   3. Vietnamese translations are accurate (basic check)
   4. Audio text matches prompt content
 
-Uses DeepSeek API (deepseek-flash) for grammar validation.
+Uses DeepSeek API (deepseek-v4-flash) for grammar validation.
 Set DEEPSEEK_API_KEY env var before running.
 Rate limited to 10 req/s to stay within free tier limits.
 """
@@ -27,7 +27,7 @@ from app.db import SessionLocal
 from app.models import Example, Question, Word
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_BASE = "https://api.ai-box.vn/v1/chat/completions"
 
 # ── Rule-based checks (fast, no API call) ────────────────────────────────
 
@@ -173,7 +173,7 @@ def check_sentences_with_deepseek(
             )
 
             payload = json.dumps({
-                "model": "deepseek-flash",
+                "model": "deepseek-v4-flash",
                 "messages": [
                     {"role": "system", "content": "You are a Chinese grammar validator. Reply only in JSON."},
                     {"role": "user", "content": prompt},

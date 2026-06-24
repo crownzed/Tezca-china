@@ -28,7 +28,7 @@ class GrammarResult(TypedDict):
 
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_BASE = "https://api.ai-box.vn/v1/chat/completions"
 
 _CACHE: dict[str, GrammarResult] = {}
 _CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "grammar_cache.json"
@@ -84,7 +84,7 @@ Reply in JSON only (no markdown):
 {{"grammar_ok": true/false, "translation_ok": "yes"/"partial"/"no", "word_usage_natural": true/false, "grammar_issues": [], "confidence": 0.0-1.0}}"""
 
     payload = json.dumps({
-        "model": "deepseek-flash",
+        "model": "deepseek-v4-flash",
         "messages": [
             {"role": "system", "content": "You are a Chinese grammar validator. Reply ONLY in JSON, no explanation."},
             {"role": "user", "content": prompt},
