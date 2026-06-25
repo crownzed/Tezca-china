@@ -1,3 +1,9 @@
+databases:
+  - name: tiengtrung-db
+    plan: free
+    databaseName: tiengtrung
+    postgresMajorVersion: "16"
+
 services:
   - type: web
     name: tiengtrung-api
@@ -6,8 +12,18 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     plan: free
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
+      # Postgres connection string, auto-wired from the database above.
+      # Render emits a postgresql:// URL; db.py rewrites it to the psycopg3 driver.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tiengtrung-db
+          property: connectionString
+      # Strong secret generated and persisted by Render on first deploy.
+      - key: JWT_SECRET
+        generateValue: true
       - key: CORS_ORIGINS
-        value: https://tiengtrung-49e13.web.app,https://tiengtrung-49e13.firebaseapp.com
+        value: https://tezca-china.vercel.app,https://poseidonz227.id.vn,https://www.poseidonz227.id.vn,https://tiengtrung-49e13.web.app,https://tiengtrung-49e13.firebaseapp.com
