@@ -6,8 +6,27 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from .settings import settings
 
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)
+def _normalize_database_url(url: str) -> str:
+    """Force the psycopg3 driver for Postgres URLs.
+
+    Managed providers (Neon, Supabase, Cloud SQL) hand out URLs like
+    ``postgres://`` or ``postgresql://``, which SQLAlchemy maps to the
+    psycopg2 driver. Only psycopg3 (``psycopg[binary]``) is installed, so we
+    rewrite the scheme to ``postgresql+psycopg://`` to avoid a boot-time
+    ImportError. Leaves sqlite and already-qualified URLs untouched.
+    """
+    if url.startswith("postgresql+") or url.startswith("postgres+"):
+        return url
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://"):]
+    return url
+
+
+database_url = _normalize_database_url(settings.database_url)
+connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
