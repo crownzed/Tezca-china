@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,13 +69,20 @@ def startup() -> None:
 
 
 def _warm_up_data() -> None:
-    """Tạo bảng + seed + import + pregenerate chạy nền. Lỗi ở đây không được
-    làm sập app: dữ liệu vẫn sinh on-demand khi có request."""
+    """Tạo bảng (nhẹ) ở thread nền. Phần seed/import/pregenerate NẶNG chỉ chạy
+    khi bật RUN_SEED=1 — trên free tier 512MB, seed 1825 từ + 720 câu hỏi làm
+    OOM -> bị kill -> restart liên tục -> request luôn 000 dù dashboard báo Live.
+    Các endpoint hub mới (/draft/*, /save) gọi thẳng LLM, không cần seed."""
     try:
         init_db()
     except Exception:
         logger.exception("init_db failed")
         return  # không có bảng thì các bước sau vô nghĩa
+
+    if os.getenv("RUN_SEED", "").strip() not in ("1", "true", "True"):
+        logger.info("RUN_SEED không bật -> bỏ qua seed nặng (tránh OOM free tier).")
+        return
+
     try:
         _seed_if_empty()
     except Exception:
