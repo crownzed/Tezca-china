@@ -422,8 +422,53 @@ class ProfileOut(BaseModel):
 class CustomVocabGenerateRequest(BaseModel):
     words: list[str] = Field(min_length=1, max_length=20)
 
+class PassageGenerateRequest(BaseModel):
+    text: str = Field(min_length=4, max_length=2000)
+    hsk_level: int = Field(default=1, ge=1, le=6)
+    count: int = Field(default=5, ge=1, le=20)
+    question_types: list[str] | None = None
+
+class TopicGenerateRequest(BaseModel):
+    topic: str = Field(min_length=1, max_length=120)
+    hsk_level: int = Field(default=1, ge=1, le=6)
+    count: int = Field(default=5, ge=1, le=20)
+    question_types: list[str] | None = None
+
 class CustomVocabGenerateResponse(BaseModel):
     session_id: int
     message: str
     questions: list[QuestionOut] = []
+
+
+# --- Multi-source quiz hub: draft (preview) + save ---------------------------
+
+class DraftWord(BaseModel):
+    hanzi: str
+    pinyin: str = ""
+    meaning_vi: str = ""
+    hsk_level: int = Field(default=1, ge=1, le=6)
+    pos: str = ""
+
+class DraftQuestion(BaseModel):
+    quiz_type: str
+    level: int = Field(default=1, ge=1, le=6)
+    prompt: str
+    options: list[str]
+    correct_index: int = Field(default=0, ge=0, le=3)
+    explanation: str = ""
+    subtype: str = ""
+    word: DraftWord | None = None
+
+class QuizDraftOut(BaseModel):
+    """Bo cau hoi sinh boi AI nhung CHUA luu DB (dung de preview)."""
+    quiz_title: str = ""
+    passage: str = ""
+    source: str = ""
+    questions: list[DraftQuestion] = []
+
+class SaveQuizRequest(BaseModel):
+    quiz_title: str = ""
+    source: str = "custom"
+    session_type: str = "custom_quiz"
+    questions: list[DraftQuestion] = Field(min_length=1)
 

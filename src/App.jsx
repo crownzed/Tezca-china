@@ -1,12 +1,55 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Trophy, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
 import { strategyFlags } from './strategy-flags';
 import { bindSpeechUnlock, getLocalAudioSrc, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
+import { AuthControls, AuthModalHost } from './auth-ui.jsx';
 import CustomVocabInput from './components/CustomVocabInput.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { loadAllFlashcards } from './vocab-loader.js';
+
+let globalDictionary = new Map();
+loadAllFlashcards().then(cards => {
+  cards.forEach(c => {
+    if (c.character && !globalDictionary.has(c.character)) {
+      globalDictionary.set(c.character, c);
+    }
+  });
+});
+
+function ClickableChineseText({ text, className = '' }) {
+  const [activeIdx, setActiveIdx] = useState(null);
+  
+  if (!text) return null;
+  
+  return (
+    <span className={`clickable-text ${className}`}>
+      {text.split('').map((char, index) => {
+        const card = globalDictionary.get(char);
+        const hasDict = Boolean(card);
+        return (
+          <span 
+            key={index} 
+            className={`tap-char ${hasDict ? 'has-dict' : ''} ${activeIdx === index ? 'active' : ''}`} 
+            onClick={() => hasDict && setActiveIdx(prev => prev === index ? null : index)}
+          >
+            {char}
+            {activeIdx === index && hasDict && (
+              <span className="tap-tooltip" onClick={(e) => e.stopPropagation()}>
+                <strong>{card.character}</strong>
+                <em>{card.pinyin}</em>
+                <small>{card.meaning}</small>
+              </span>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 const THEME_PALETTE_VERSION = 'modern-zen-v1';
 const LEVELS = [1, 2, 3, 4, 5, 6];
@@ -38,7 +81,6 @@ const NAV = [
   { id: 'vocab', label: 'Từ vựng', icon: Search },
   { id: 'custom', label: 'Tự tạo', icon: PenTool },
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
-  { id: 'progress', label: 'Tiến độ', icon: LineChart },
 ];
 
 function getInitialTheme() {
@@ -435,7 +477,7 @@ function LearningFocusPanel({ focusLevel, showFirstRun, learningMode, topics, on
   );
 }
 
-function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpenProgress }) {
+function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
   const [nudgeMuted, setNudgeMuted] = useState(() => window.localStorage.getItem('behaviorNudgeMuted') === '1');
   if (!plan) return null;
   const mode = plan.mode;
@@ -547,7 +589,6 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
           <div className="today-action-buttons">
             <button className="btn-secondary" type="button" onClick={startDueOnly}><ShieldCheck size={16} /> Ôn đến hạn</button>
             <button className="btn-secondary" type="button" onClick={startRepairOnly}><Wrench size={16} /> Sửa lỗi</button>
-            <button className="btn-secondary" type="button" onClick={onOpenProgress}><LineChart size={16} /> Xem tiến độ</button>
             <button className="btn-primary" type="button" onClick={() => onStartToday(plan)}><Play size={16} /> Học hôm nay</button>
           </div>
         </div>
@@ -556,7 +597,7 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday, onOpe
   );
 }
 
-function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, showFirstRun, learningMode, topics, onSelectLevel, onSelectLearningMode, onToggleTopic, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday, onOpenProgress }) {
+function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, showFirstRun, learningMode, topics, onSelectLevel, onSelectLearningMode, onToggleTopic, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday }) {
   return (
     <main className="core-dashboard page-enter">
       <LearningFocusPanel
@@ -577,7 +618,6 @@ function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, show
           selectedMode={selectedSessionMode}
           onSelectMode={onSelectSessionMode}
           onStartToday={onStartToday}
-          onOpenProgress={onOpenProgress}
         />
       )}
       <AnalyticsPanel analytics={analytics} onStartRecommended={onStartRecommended} />
@@ -1135,7 +1175,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               ))}
             </h2>
           ) : (
-            <h2>{question.prompt}</h2>
+            <h2>{(question.quiz_type === 'reading' || question.quiz_type === 'translation') ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
           )}
           {showAudioPanel && (
             <QuizAudioPanel
@@ -1205,17 +1245,30 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
             </div>
           ) : (
             <div className="option-grid">
-              {question.options.map((option, optionIndex) => (
-                <button
-                  key={`${question.id}-${option}`}
-                  className={`${selected === optionIndex ? 'selected' : ''} ${selected !== null && selected !== optionIndex ? 'muted-option' : ''}`}
-                  onClick={(event) => answerQuestion(optionIndex, event.timeStamp)}
-                  disabled={selected !== null || submitting || Boolean(feedback) || loading}
-                >
-                  <span>{String.fromCharCode(65 + optionIndex)}</span>
-                  {option}
-                </button>
-              ))}
+              {question.options.map((option, optionIndex) => {
+                const revealCorrect = feedback && optionIndex === feedback.review.correct_index;
+                const revealWrong = feedback && !feedback.review.correct && optionIndex === selected && optionIndex !== feedback.review.correct_index;
+                const isMuted = feedback
+                  ? !revealCorrect && !revealWrong
+                  : selected !== null && selected !== optionIndex;
+                const optionClass = [
+                  selected === optionIndex && !feedback ? 'selected' : '',
+                  revealCorrect ? 'option-correct' : '',
+                  revealWrong ? 'option-wrong' : '',
+                  isMuted ? 'muted-option' : '',
+                ].filter(Boolean).join(' ');
+                return (
+                  <button
+                    key={`${question.id}-${optionIndex}`}
+                    className={optionClass}
+                    onClick={(event) => answerQuestion(optionIndex, event.timeStamp)}
+                    disabled={selected !== null || submitting || Boolean(feedback) || loading}
+                  >
+                    <span>{revealCorrect ? '✓' : revealWrong ? '✕' : String.fromCharCode(65 + optionIndex)}</span>
+                    {option}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -1896,7 +1949,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
           {item.type === 'micro_reading' && (
             <div className="practice-stack">
               <span className="core-eyebrow">Micro Reading</span>
-              <h2>{item.sentence_cn}</h2>
+              <h2><ClickableChineseText text={item.sentence_cn} /></h2>
               <p>{item.sentence_vi}</p>
               <div className="metadata-strip">
                 {item.words.map(word => <span key={word.hanzi}><strong>{word.hanzi}</strong><small>{word.pinyin}</small></span>)}
@@ -1947,7 +2000,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
               <span>Ôn lại</span>
             </div>
           )}
-          <h2>{question.prompt}</h2>
+          <h2>{(question.quiz_type === 'reading' || question.quiz_type === 'translation') ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
           {showAudioPanel && (
             <QuizAudioPanel
               audioText={questionAudioText}
@@ -2687,39 +2740,6 @@ function StudyPlan({ todayPlan }) {
     </main>
   );
 }
-function Progress({ stats, analytics, onStartRecommended }) {
-  const accuracyLabel = stats.answered ? `${stats.accuracy}%` : 'Chưa có dữ liệu';
-  const accuracyValue = stats.answered ? stats.accuracy : 0;
-  return (
-    <main className="core-page page-enter">
-      <section className="core-card core-section-head">
-        <span className="core-eyebrow">Progress</span>
-        <h1>Tiến độ người học</h1>
-        <p>Tổng hợp hiệu suất học, độ chính xác và nhóm kiến thức cần luyện thêm.</p>
-      </section>
-      <section className="core-card progress-panel">
-        <div className="progress-ring" style={{ '--score': `${accuracyValue}%` }}>
-          <strong>{accuracyLabel}</strong>
-          <span>độ chính xác</span>
-        </div>
-        <div className="progress-copy">
-          <span className="core-eyebrow">Recommendation</span>
-          <h2>{stats.answered ? 'Giữ nhịp luyện ngắn, đều' : 'Bắt đầu bằng HSK 1'}</h2>
-          <p>{stats.weak_words ? 'Ưu tiên câu hỏi từ vựng và đọc hiểu để củng cố nhóm còn yếu.' : 'Hoàn thành một phiên quiz để hệ thống có dữ liệu đề xuất chính xác hơn.'}</p>
-        </div>
-      </section>
-      <AnalyticsPanel analytics={analytics} onStartRecommended={onStartRecommended} />
-
-      <section className="core-stats-grid">
-        <StatCard icon={Trophy} label="Memory" value={`${analytics?.memory_stability || 0}%`} tone="gold" />
-        <StatCard icon={Headphones} label="Listening" value={`${analytics?.listening_readiness || 0}%`} tone="jade" />
-        <StatCard icon={ScrollText} label="Context" value={`${analytics?.context_transfer || 0}%`} tone="blue" />
-        <StatCard icon={Languages} label="Production" value={`${analytics?.production_readiness || 0}%`} tone="cinnabar" />
-      </section>
-    </main>
-  );
-}
-
 export default function App() {
   const userId = 'local-user';
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -2740,9 +2760,17 @@ export default function App() {
   const [stats, setStats] = useState({ attempts: 0, answered: 0, accuracy: 0, mastery_label: 'Khởi động', weak_words: 0 });
 
   const refreshStats = useCallback(async () => {
-    const [nextStats, nextAnalytics] = await Promise.all([getStats(userId), getAnalytics(userId)]);
-    setStats(nextStats);
-    setAnalytics(nextAnalytics);
+    try {
+      const [nextStats, nextAnalytics] = await Promise.all([getStats(userId), getAnalytics(userId)]);
+      setStats(nextStats);
+      setAnalytics(nextAnalytics);
+    } catch (err) {
+      // getStats/getAnalytics đã tự degrade về local; nhánh này chỉ phòng reject
+      // bất ngờ. Đặt analytics khác null để tab Tiến độ vẫn render (UI coi null là
+      // "đang tải"), tránh kẹt ở trạng thái trống vô thời hạn.
+      console.error('[refreshStats]', err);
+      setAnalytics(current => current || { answered: 0, offline: true });
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -2762,10 +2790,58 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#FBF9F6' : '#141313');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#FBF9F6' : '#0a1626');
     window.localStorage.setItem('theme', theme);
     window.localStorage.setItem('themePaletteVersion', THEME_PALETTE_VERSION);
   }, [theme]);
+
+  // Cursor-driven parallax: write small offsets to CSS vars (--px/--py) that
+  // the immersive backdrop and cards read. Skipped when the user prefers
+  // reduced motion or on coarse (touch) pointers.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const root = document.documentElement;
+    const reduceMq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const coarseMq = window.matchMedia('(pointer: coarse)');
+    let frame = 0;
+    let attached = false;
+    const onMove = (event) => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const dx = (event.clientX / window.innerWidth - 0.5) * 2;
+        const dy = (event.clientY / window.innerHeight - 0.5) * 2;
+        root.style.setProperty('--px', `${(dx * 14).toFixed(2)}px`);
+        root.style.setProperty('--py', `${(dy * 14).toFixed(2)}px`);
+      });
+    };
+    // Re-evaluate whenever the user toggles reduced-motion or swaps input type,
+    // so parallax respects the live preference rather than only its value at mount.
+    const sync = () => {
+      const enable = !reduceMq.matches && !coarseMq.matches;
+      if (enable && !attached) {
+        window.addEventListener('pointermove', onMove, { passive: true });
+        attached = true;
+      } else if (!enable && attached) {
+        window.removeEventListener('pointermove', onMove);
+        attached = false;
+        if (frame) { window.cancelAnimationFrame(frame); frame = 0; }
+        root.style.setProperty('--px', '0px');
+        root.style.setProperty('--py', '0px');
+      }
+    };
+    sync();
+    reduceMq.addEventListener('change', sync);
+    coarseMq.addEventListener('change', sync);
+    return () => {
+      reduceMq.removeEventListener('change', sync);
+      coarseMq.removeEventListener('change', sync);
+      if (attached) window.removeEventListener('pointermove', onMove);
+      if (frame) window.cancelAnimationFrame(frame);
+      root.style.setProperty('--px', '0px');
+      root.style.setProperty('--py', '0px');
+    };
+  }, []);
 
   const currentTitle = useMemo(() => {
     if (generalCheckLevel) return `Kiểm tra HSK ${generalCheckLevel}`;
@@ -2862,11 +2938,6 @@ export default function App() {
     setActiveTab('session');
   };
 
-  const openProgress = () => {
-    setGeneralCheckLevel(null);
-    setActiveTab('progress');
-  };
-
   const startGeneralCheck = (nextLevel = level) => {
     selectFocusLevel(nextLevel);
     setGeneralCheckLevel(Number(nextLevel));
@@ -2895,6 +2966,15 @@ export default function App() {
 
   return (
     <div className="core-app">
+      <div className="immersive-bg" aria-hidden="true">
+        <span className="orb orb-1" />
+        <span className="orb orb-2" />
+        <span className="orb orb-3" />
+        <span className="stream stream-1" />
+        <span className="stream stream-2" />
+        <span className="stream stream-3" />
+        <span className="stream stream-4" />
+      </div>
       <aside className="core-sidebar">
         <div className="core-logo">T</div>
         {NAV.map(item => {
@@ -2914,6 +2994,7 @@ export default function App() {
           <h2>{currentTitle}</h2>
         </div>
           <div className="topbar-actions">
+            <AuthControls />
             <span className="core-status hide-mobile">{statusLabel}</span>
             <button
               className="theme-toggle"
@@ -2927,15 +3008,17 @@ export default function App() {
           </div>
         </header>
 
+        <ErrorBoundary key={generalCheckLevel ? 'general' : activeTab}>
         {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
-        {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} learningMode={learningMode} topics={topics} onSelectLearningMode={selectLearningMode} onToggleTopic={toggleTopic} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} onOpenProgress={openProgress} />}
+        {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} learningMode={learningMode} topics={topics} onSelectLearningMode={selectLearningMode} onToggleTopic={toggleTopic} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
         {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
         {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
         {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
-        {!generalCheckLevel && activeTab === 'progress' && <Progress stats={stats} analytics={analytics} onStartRecommended={startRecommendedQuiz} />}
+        </ErrorBoundary>
       </section>
+      <AuthModalHost />
     </div>
   );
 }
