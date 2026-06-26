@@ -60,17 +60,21 @@ def _ensure_vocab() -> None:
 
 @app.on_event("startup")
 def startup() -> None:
-    # Chỉ tạo bảng (nhanh) ở startup để uvicorn phục vụ /health ngay.
-    # Toàn bộ seed/import/pregenerate nặng đẩy sang thread nền — nếu chạy
-    # đồng bộ ở đây, trên free tier (512MB) server treo tới mức health check
-    # của Render timeout và deploy bị đánh trượt.
-    init_db()
+    # KHÔNG chạm DB đồng bộ ở đây. init_db() phải kết nối Postgres; nếu
+    # DATABASE_URL sai/không tới được, lệnh đó treo -> uvicorn không mở cổng
+    # -> mọi request timeout (000). Đẩy TẤT CẢ sang thread nền để cổng mở
+    # ngay; /health tự báo db_connected=false nếu DB chưa sẵn sàng.
     threading.Thread(target=_warm_up_data, name="warm-up-data", daemon=True).start()
 
 
 def _warm_up_data() -> None:
-    """Seed + import + pregenerate chạy nền. Lỗi ở đây không được làm sập app:
-    dữ liệu vẫn sinh on-demand khi có request."""
+    """Tạo bảng + seed + import + pregenerate chạy nền. Lỗi ở đây không được
+    làm sập app: dữ liệu vẫn sinh on-demand khi có request."""
+    try:
+        init_db()
+    except Exception:
+        logger.exception("init_db failed")
+        return  # không có bảng thì các bước sau vô nghĩa
     try:
         _seed_if_empty()
     except Exception:
@@ -90,42 +94,54 @@ def _warm_up_data() -> None:
 
 @app.get("/health")
 def health():
-    with SessionLocal() as db:
-        word_count = db.scalar(select(func.count()).select_from(Word)) or 0
-        from .models import Example, Question, QuizAttempt
+    # KHÔNG để health phụ thuộc DB đã seed xong. Trả 200 ngay cả khi DB chưa
+    # sẵn sàng để Render health check pass + giúp chẩn đoán (db_connected).
+    try:
+        with SessionLocal() as db:
+            word_count = db.scalar(select(func.count()).select_from(Word)) or 0
+            from .models import Example, Question, QuizAttempt
 
-        example_count = db.scalar(select(func.count()).select_from(Example)) or 0
-        question_count = db.scalar(select(func.count()).select_from(Question)) or 0
-        attempt_count = db.scalar(select(func.count()).select_from(QuizAttempt)) or 0
+            example_count = db.scalar(select(func.count()).select_from(Example)) or 0
+            question_count = db.scalar(select(func.count()).select_from(Question)) or 0
+            attempt_count = db.scalar(select(func.count()).select_from(QuizAttempt)) or 0
 
-        level_dist = {}
-        rows = db.execute(
-            select(Question.level, func.count(Question.id)).group_by(Question.level)
-        ).all()
-        for level, count in rows:
-            level_dist[f"HSK_{level}"] = count
-
-        audit_path = Path(__file__).resolve().parents[1] / "data" / "qa_report.json"
-        last_audit = None
-        if audit_path.exists():
-            try:
-                raw = json.loads(audit_path.read_text(encoding="utf-8"))
-                last_audit = {
-                    "run_id": raw.get("run_id"),
-                    "status": raw.get("status"),
-                    "generated_at": raw.get("generated_at"),
-                }
-            except Exception:
-                pass
-
+            level_dist = {}
+            rows = db.execute(
+                select(Question.level, func.count(Question.id)).group_by(Question.level)
+            ).all()
+            for level, count in rows:
+                level_dist[f"HSK_{level}"] = count
+    except Exception as exc:
+        # DB chưa sẵn sàng (đang warm-up hoặc DATABASE_URL sai) — vẫn trả 200
+        # nhưng nói rõ trạng thái thay vì treo/500.
         return {
-            "status": "ok",
-            "db_connected": True,
-            "word_count": word_count,
-            "example_count": example_count,
-            "question_count": question_count,
-            "total_attempts": attempt_count,
-            "questions_per_level": level_dist,
-            "last_audit": last_audit,
+            "status": "starting",
+            "db_connected": False,
+            "detail": str(exc)[:200],
             "server_time": datetime.now(timezone.utc).isoformat(),
         }
+
+    audit_path = Path(__file__).resolve().parents[1] / "data" / "qa_report.json"
+    last_audit = None
+    if audit_path.exists():
+        try:
+            raw = json.loads(audit_path.read_text(encoding="utf-8"))
+            last_audit = {
+                "run_id": raw.get("run_id"),
+                "status": raw.get("status"),
+                "generated_at": raw.get("generated_at"),
+            }
+        except Exception:
+            pass
+
+    return {
+        "status": "ok",
+        "db_connected": True,
+        "word_count": word_count,
+        "example_count": example_count,
+        "question_count": question_count,
+        "total_attempts": attempt_count,
+        "questions_per_level": level_dist,
+        "last_audit": last_audit,
+        "server_time": datetime.now(timezone.utc).isoformat(),
+    }
