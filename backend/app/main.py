@@ -1,4 +1,6 @@
 import json
+import logging
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +15,8 @@ from .routers.leaderboard import router as leaderboard_router
 from .routers.quiz import router as quiz_router
 from .routers.custom_vocab import router as custom_vocab_router
 from .settings import settings
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name)
 
@@ -56,19 +60,32 @@ def _ensure_vocab() -> None:
 
 @app.on_event("startup")
 def startup() -> None:
+    # Chỉ tạo bảng (nhanh) ở startup để uvicorn phục vụ /health ngay.
+    # Toàn bộ seed/import/pregenerate nặng đẩy sang thread nền — nếu chạy
+    # đồng bộ ở đây, trên free tier (512MB) server treo tới mức health check
+    # của Render timeout và deploy bị đánh trượt.
     init_db()
-    _seed_if_empty()
+    threading.Thread(target=_warm_up_data, name="warm-up-data", daemon=True).start()
+
+
+def _warm_up_data() -> None:
+    """Seed + import + pregenerate chạy nền. Lỗi ở đây không được làm sập app:
+    dữ liệu vẫn sinh on-demand khi có request."""
+    try:
+        _seed_if_empty()
+    except Exception:
+        logger.exception("seed_if_empty failed")
     try:
         _ensure_vocab()
     except Exception:
-        pass
+        logger.exception("ensure_vocab failed")
     try:
         from .scripts.pregenerate_questions import pregenerate_questions
         with SessionLocal() as db:
             pregenerate_questions(db)
             db.commit()
     except Exception:
-        pass  # non-critical, questions generated on-demand anyway
+        logger.exception("pregenerate_questions failed")  # non-critical
 
 
 @app.get("/health")
