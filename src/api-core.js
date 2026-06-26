@@ -21,6 +21,14 @@ async function request(path, options = {}) {
     } catch { /* ignore */ }
     throw new Error(detail);
   }
+  // Bảo vệ: nếu VITE_API_BASE trỏ nhầm sang host phục vụ SPA (trả index.html),
+  // fetch vẫn 200 nhưng body là HTML. res.json() khi đó ném SyntaxError khó đọc.
+  // Chặn sớm bằng một lỗi rõ ràng để tầng gọi (getStats/getAnalytics...) bắt
+  // được và degrade sạch về dữ liệu local thay vì làm hỏng UI.
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Expected JSON from ${path} but got "${contentType || 'unknown'}" (API_BASE may be misconfigured)`);
+  }
   return res.json();
 }
 
@@ -107,11 +115,13 @@ async function localQuestions({ level, quiz_type, limit }) {
         ? [listeningLine(card).vi, ...distractors.map(item => listeningLine(item).vi)]
         : quiz_type === 'dialogue'
           ? [dialogueLine(card, index).optionVi, ...distractors.map((item, itemIndex) => dialogueLine(item, itemIndex).optionVi)]
-      : quiz_type === 'translation'
-        ? [paragraph.vi, ...distractors.map((item, itemIndex) => richParagraph(item, itemIndex).vi)]
-        : quiz_type === 'cloze'
-          ? [card.character, ...distractors.map(item => item.character)]
-        : [card.character, ...distractors.map(item => item.character)];
+        : quiz_type === 'translation'
+          ? [paragraph.vi, ...distractors.map((item, itemIndex) => richParagraph(item, itemIndex).vi)]
+          : quiz_type === 'cloze'
+            ? [card.character, ...distractors.map(item => item.character)]
+          : quiz_type === 'drag_drop'
+            ? [card.character, ...distractors.map(item => item.character)]
+          : [card.character, ...distractors.map(item => item.character)];
     const correctValue = byType[0];
     const options = shuffle([...new Set(byType)]).slice(0, 4);
     return {
@@ -130,6 +140,8 @@ async function localQuestions({ level, quiz_type, limit }) {
             ? `Dịch đoạn nói sau sang tiếng Việt: ${paragraph.cn}`
             : quiz_type === 'cloze'
               ? `Chọn từ còn thiếu để hoàn chỉnh câu: ${paragraph.cn.replace(card.character, '____')}`
+            : quiz_type === 'drag_drop'
+              ? `Sắp xếp các từ sau thành câu đúng: ${paragraph.vi}`
             : `Đọc nghĩa và chọn từ phù hợp: ${card.meaning}`,
       options,
       audio_text: quiz_type === 'listening' || quiz_type === 'dialogue'
@@ -146,13 +158,26 @@ async function localQuestions({ level, quiz_type, limit }) {
             : `${card.character} · ${card.pinyin} · ${card.meaning}`,
       correct_index: Math.max(0, options.indexOf(correctValue)),
       word: {
-        level: card.hskLevel,
+        word_id: card.id,
         hanzi: card.character,
-        pinyin: card.pinyin || '',
-        meaning_vi: card.meaning || '',
+        pinyin: card.pinyin,
+        meaning_vi: card.meaning,
+        component_hint: card.mnemonic || '',
+        confusable_words: [],
       },
+      metadata_json: quiz_type === 'drag_drop' ? (() => {
+        const clean = paragraph.cn.replace(/[。？！，、]/g, '');
+        const tokens = [];
+        for (let i = 0; i < clean.length; i += 2) {
+          tokens.push(clean.slice(i, i + 2));
+        }
+        return {
+          segments: shuffle([...tokens]),
+          correct_order: tokens,
+        };
+      })() : {},
     };
-  }).filter(q => q.options.length === 4);
+  }).filter(q => q.options.length === 4 || q.quiz_type === 'drag_drop');
 }
 
 export async function startQuiz(payload) {
@@ -693,5 +718,34 @@ export async function getUserProfile() {
 
 export async function generateCustomVocabExercises(payload) {
   return request('/api/custom-vocab/generate', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function generateQuestionsFromText(payload) {
+  return request('/api/custom-vocab/generate-from-text', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// --- Hub đa nguồn: Tạo bản nháp (preview, chưa lưu) -> Lưu vào thư viện ---
+
+// Sinh bài tập từ danh sách từ vựng để xem trước. payload: { words: string[] }
+export async function draftQuizFromVocab(payload) {
+  return request('/api/custom-vocab/draft/vocab', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Sinh câu hỏi từ đoạn văn để xem trước.
+// payload: { text, hsk_level, count, question_types }
+export async function draftQuizFromPassage(payload) {
+  return request('/api/custom-vocab/draft/passage', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Sinh câu hỏi từ chủ đề (AI tự sinh đoạn văn theo chủ đề rồi ra câu hỏi).
+// payload: { topic, hsk_level, count, question_types }
+export async function draftQuizFromTopic(payload) {
+  return request('/api/custom-vocab/draft/topic', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Lưu bộ câu hỏi đã xem trước vào thư viện (DB) + tạo session để học lại.
+// payload: { quiz_title, source, session_type, questions }
+export async function saveQuizToLibrary(payload) {
+  return request('/api/custom-vocab/save', { method: 'POST', body: JSON.stringify(payload) });
 }
 

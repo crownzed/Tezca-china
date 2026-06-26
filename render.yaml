@@ -27,3 +27,9 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: https://tezca-china.vercel.app,https://poseidonz227.id.vn,https://www.poseidonz227.id.vn,https://tiengtrung-49e13.web.app,https://tiengtrung-49e13.firebaseapp.com
+      # LLM provider keys for AI quiz generation (/api/custom-vocab/*).
+      # Secrets — set the real values in the Render dashboard, never in git.
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: GEMINI_API_KEYS
+        sync: false
