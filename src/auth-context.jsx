@@ -1,26 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getMe, loginUser, registerUser, setAuthToken } from './api-core';
-
-const AUTH_STORAGE_KEY = 'hanziAuth';
-
-const AuthContext = createContext(null);
-
-function readStoredAuth() {
-  try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.token || !parsed?.user?.id) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
+import { AUTH_STORAGE_KEY, AuthContext, readStoredAuth } from './auth-core';
 
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => readStoredAuth());
   const [authModal, setAuthModal] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Lazy init: only "loading" when there's a stored session to validate.
+  // Avoids a synchronous setState(false) inside the effect below.
+  const [loading, setLoading] = useState(() => Boolean(readStoredAuth()));
 
   const persistAuth = useCallback((next) => {
     if (next) {
@@ -37,7 +24,6 @@ export function AuthProvider({ children }) {
     const stored = readStoredAuth();
     if (!stored) {
       setAuthToken(null);
-      setLoading(false);
       return;
     }
     setAuthToken(stored.token);
@@ -91,10 +77,4 @@ export function AuthProvider({ children }) {
   }), [auth, loading, authModal, login, register, logout, updateLocalUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
 }

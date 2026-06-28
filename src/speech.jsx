@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { audioKey, audioPath } from './audio-keys.js';
+import { audioPath } from './audio-keys.js';
 
 let speechRunId = 0;
 let speechUnlocked = false;
@@ -82,34 +81,6 @@ export function getLocalAudioSrc(text) {
   const indexed = audioIndex?.[clean];
   if (indexed) return `/audio/${indexed}.mp3`;
   return audioPath(clean);
-}
-
-export function getVoiceStatus() {
-  const count = audioIndex ? Object.keys(audioIndex).length : 0;
-  return {
-    supported: true,
-    ready: true,
-    label: count ? `File am thanh · ${count} cau` : 'Dang tai am thanh',
-    quality: count ? 'natural' : 'loading',
-    engine: 'local',
-  };
-}
-
-export function useVoiceStatus() {
-  const [, setVersion] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    preloadAudioIndex().then(() => {
-      if (alive) setVersion(value => value + 1);
-    });
-    return () => { alive = false; };
-  }, []);
-  return getVoiceStatus();
-}
-
-export function VoiceMeta() {
-  const status = useVoiceStatus();
-  return <small className={`voice-meta voice-meta--${status.quality}`}>{status.label}</small>;
 }
 
 function stopActiveAudio() {
@@ -209,7 +180,7 @@ export function stopSpeech() {
   if (hasSpeechSupport()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
 }
 
-export function speak(text, rate = 0.82, onDone, mode = 'sentence') {
+export function speak(text, rate = 0.82, onDone) {
   const clean = String(text || '').trim();
   if (!clean) { onDone?.(false); return ''; }
   unlockSpeech();

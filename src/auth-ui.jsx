@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Award, Flame, Loader2, LogIn, LogOut, Medal, Trophy, User, UserPlus, X } from 'lucide-react';
 import { getLeaderboard, getUserProfile, updateProfile } from './api-core';
-import { useAuth } from './auth-context';
+import { useAuth } from './auth-core';
 
 function AuthModal() {
   const { authModal, closeAuthModal, login, register } = useAuth();
-  const [mode, setMode] = useState('login');
+  const [mode, setMode] = useState(authModal);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -13,16 +13,6 @@ function AuthModal() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (authModal) {
-      setMode(authModal);
-      setError('');
-      setPassword('');
-    }
-  }, [authModal]);
-
-  if (!authModal) return null;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -115,23 +105,27 @@ export function LeaderboardPanel() {
   const { isAuthenticated, user, updateLocalUser } = useAuth();
   const [period, setPeriod] = useState('all_time');
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [optIn, setOptIn] = useState(user?.leaderboard_opt_in ?? true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  // Đồng bộ optIn khi prop user đổi — pattern điều chỉnh state lúc render.
+  const [prevOptIn, setPrevOptIn] = useState(user?.leaderboard_opt_in);
+  if (user?.leaderboard_opt_in !== prevOptIn) {
+    setPrevOptIn(user?.leaderboard_opt_in);
     setOptIn(user?.leaderboard_opt_in ?? true);
-  }, [user?.leaderboard_opt_in]);
+  }
+
+  const requestKey = `${period}:${isAuthenticated}`;
+  const loading = data?.key !== requestKey;
+  const board = data?.value;
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
     getLeaderboard(period)
-      .then(result => { if (alive) setData(result); })
-      .catch(() => { if (alive) setData({ period, entries: [], me: null }); })
-      .finally(() => { if (alive) setLoading(false); });
+      .then(result => { if (alive) setData({ key: requestKey, value: result }); })
+      .catch(() => { if (alive) setData({ key: requestKey, value: { period, entries: [], me: null } }); });
     return () => { alive = false; };
-  }, [period, isAuthenticated]);
+  }, [period, isAuthenticated, requestKey]);
 
   const toggleOptIn = async () => {
     if (!isAuthenticated) return;
@@ -159,11 +153,11 @@ export function LeaderboardPanel() {
         </div>
       </div>
 
-      {isAuthenticated && data?.me && (
+      {isAuthenticated && board?.me && (
         <article className="core-card leaderboard-me">
           <span>Hạng của bạn</span>
-          <strong>{data.me.rank ? `#${data.me.rank}` : 'Chưa có hạng'}</strong>
-          <strong className="leaderboard-points">{data.me.points} điểm</strong>
+          <strong>{board.me.rank ? `#${board.me.rank}` : 'Chưa có hạng'}</strong>
+          <strong className="leaderboard-points">{board.me.points} điểm</strong>
           <label className="leaderboard-optin">
             <input type="checkbox" checked={optIn} disabled={saving} onChange={toggleOptIn} />
             Hiển thị tên trên bảng xếp hạng
@@ -181,7 +175,7 @@ export function LeaderboardPanel() {
         <div className="leaderboard-loading"><Loader2 size={24} className="spin" /></div>
       ) : (
         <div className="leaderboard-list">
-          {data?.entries?.length ? data.entries.map(entry => (
+          {board?.entries?.length ? board.entries.map(entry => (
             <article
               key={entry.user_id}
               className={`core-card leaderboard-row ${entry.user_id === user?.id ? 'leaderboard-row--me' : ''}`}
@@ -240,7 +234,9 @@ export function AuthControls() {
 }
 
 export function AuthModalHost() {
-  return <AuthModal />;
+  const { authModal } = useAuth();
+  if (!authModal) return null;
+  return <AuthModal key={authModal} />;
 }
 
 function StreakCard({ icon: Icon, label, value, tone = 'jade' }) {
@@ -256,19 +252,19 @@ function StreakCard({ icon: Icon, label, value, tone = 'jade' }) {
 export function ProfilePanel() {
   const { isAuthenticated, user, openLogin, openRegister } = useAuth();
   const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+
+  const requestKey = `${isAuthenticated}:${user?.id ?? ''}`;
+  const loading = profile?.key !== requestKey;
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
     getUserProfile()
-      .then(data => { if (alive) setProfile(data); })
-      .catch(() => { if (alive) setProfile({ user: null, stats: null }); })
-      .finally(() => { if (alive) setLoading(false); });
+      .then(data => { if (alive) setProfile({ key: requestKey, value: data }); })
+      .catch(() => { if (alive) setProfile({ key: requestKey, value: { user: null, stats: null } }); });
     return () => { alive = false; };
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, requestKey]);
 
-  const stats = profile?.stats;
+  const stats = profile?.value?.stats;
   const earnedTitles = stats?.titles?.filter(item => item.earned) || [];
   const lockedTitles = stats?.titles?.filter(item => !item.earned) || [];
 

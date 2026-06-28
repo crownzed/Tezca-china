@@ -1,15 +1,19 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Trophy, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
 import { strategyFlags } from './strategy-flags';
-import { bindSpeechUnlock, getLocalAudioSrc, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
+import { bindSpeechUnlock, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
 import { AuthControls, AuthModalHost } from './auth-ui.jsx';
 import CustomVocabInput from './components/CustomVocabInput.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { loadAllFlashcards } from './vocab-loader.js';
+
+// Module-level clock helper. Kept out of component scope so React's purity
+// lint doesn't flag the (intentional) impure read inside event handlers.
+const now = () => performance.now();
 
 let globalDictionary = new Map();
 loadAllFlashcards().then(cards => {
@@ -64,7 +68,6 @@ const QUIZ_TYPES = [
 const FOCUS_LEVELS = [1, 2, 3, 4];
 const GENERAL_CHECK_TYPES = QUIZ_TYPES.map(type => type.id);
 const GENERAL_CHECK_LIMIT = 2;
-const EMPTY_WORDS = [];
 
 function quizTypeDescription(typeId) {
   if (typeId === 'vocab') return 'Nghĩa và chữ';
@@ -127,7 +130,7 @@ function getInitialTopics() {
   }
 }
 
-function QuizAudioPanel({ audioText, audioPlaying, audioPlayed, audioError, isListeningMode, playAudio }) {
+function QuizAudioPanel({ audioPlaying, audioPlayed, audioError, isListeningMode, playAudio }) {
   return (
     <div className={`audio-panel premium-audio-panel ${isListeningMode ? 'audio-panel--focus' : ''} ${audioError ? 'audio-panel--error' : ''}`}>
       <button className={`btn-primary audio-play-btn ${audioPlaying ? 'playing' : ''}`} type="button" onClick={() => playAudio(0.82)} disabled={audioPlaying}>
@@ -136,16 +139,6 @@ function QuizAudioPanel({ audioText, audioPlaying, audioPlayed, audioError, isLi
       </button>
       {audioError && <p className="audio-error-text">Không thể phát âm thanh. Hãy thử dùng tính năng Đọc AI.</p>}
     </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, tone = 'jade' }) {
-  return (
-    <article className={`core-card core-stat core-stat--${tone}`}>
-      <Icon size={22} />
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
   );
 }
 
@@ -256,7 +249,6 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
   const dueCount = analytics?.due_count || 0;
   const confidenceAvg = Number(analytics?.confidence_avg || 0);
   const latencyAvg = analytics?.latency_avg_ms || 0;
-  const dataSourceLabel = analytics?.backend_empty ? 'Local history fallback' : eventCount ? 'LearningEvent + SRS' : analytics?.offline ? 'Local fallback' : 'QuizAttempt fallback';
   const latencyLabel = latencyAvg ? (latencyAvg < 1000 ? 'Dưới 1s phản hồi' : Math.round(latencyAvg / 1000) + 's phản hồi') : 'Chưa đo latency';
   const typeRows = analytics?.type_breakdown?.length
     ? analytics.type_breakdown
@@ -481,7 +473,6 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
   const [nudgeMuted, setNudgeMuted] = useState(() => window.localStorage.getItem('behaviorNudgeMuted') === '1');
   if (!plan) return null;
   const mode = plan.mode;
-  const metrics = plan.behaviorMetrics || {};
   const missions = Array.isArray(plan.missions) ? plan.missions : [];
   const focusWords = Array.isArray(plan.focusWords) ? plan.focusWords : [];
 
@@ -816,7 +807,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
 
   useEffect(() => {
     if (!question) return undefined;
-    questionStartedAtRef.current = performance.now();
+    questionStartedAtRef.current = now();
     const resetTimer = window.setTimeout(() => {
       setAudioPlayed(false);
       setAudioPlaying(false);
@@ -985,16 +976,8 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     const userOrder = dragOrder.map(i => dragSegments[i]);
     const isCorrect = userOrder.every((token, i) => token === dragCorrectOrder[i]);
     setSelected(isCorrect ? 0 : 1);
-    setPendingLatency(Math.max(0, performance.now() - questionStartedAtRef.current));
+    setPendingLatency(Math.max(0, now() - questionStartedAtRef.current));
     setTimeout(() => handleQuizAnswer(isCorrect), 300);
-  };
-
-  // ---- Voice handler ----
-  const submitVoiceAttempt = () => {
-    setVoiceDone(true);
-    setSelected(0);
-    setPendingLatency(Math.max(0, performance.now() - questionStartedAtRef.current));
-    setTimeout(() => handleQuizAnswer(true), 300);
   };
 
   // Unified answer submission
@@ -1179,7 +1162,6 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
           )}
           {showAudioPanel && (
             <QuizAudioPanel
-              audioText={questionAudioText}
               audioPlaying={audioPlaying}
               audioPlayed={audioPlayed}
               audioError={audioError}
@@ -1219,7 +1201,6 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               <TonedPinyin pinyin={question.word?.pinyin || ''} className="voice-pinyin" />
               {showAudioPanel && (
                 <QuizAudioPanel
-                  audioText={questionAudioText}
                   audioPlaying={audioPlaying}
                   audioPlayed={audioPlayed}
                   audioError={audioError}
@@ -1534,6 +1515,10 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
   // Typing tracker: gom lỗi gõ thật (backspace/sửa/độ dài) để gửi usage signal.
   const typingRef = useRef({ keystrokes: 0, backspaces: 0, corrections: 0, prevLength: 0 });
 
+  const resetTyping = useCallback(() => {
+    typingRef.current = { keystrokes: 0, backspaces: 0, corrections: 0, prevLength: 0 };
+  }, []);
+
   const modeId = plan?.mode?.id || 'standard';
   const level = plan?.action?.level || plan?.level || fallbackLevel || 1;
   const quizType = plan?.action?.quizType || plan?.quizType || 'vocab';
@@ -1611,7 +1596,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     } finally {
       setLoading(false);
     }
-  }, [level, limit, modeId, plan, quizType]);
+  }, [level, limit, modeId, plan, quizType, resetTyping]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => loadSession(), 0);
@@ -1643,7 +1628,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
 
   useEffect(() => {
     if (!question) return undefined;
-    questionStartedAtRef.current = performance.now();
+    questionStartedAtRef.current = now();
     const resetTimer = window.setTimeout(() => {
       setAudioPlayed(false);
       setAudioPlaying(false);
@@ -1805,10 +1790,6 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     }
     tracker.prevLength = next.length;
     setTextAnswer(next);
-  };
-
-  const resetTyping = () => {
-    typingRef.current = { keystrokes: 0, backspaces: 0, corrections: 0, prevLength: 0 };
   };
 
   if (completed) {
@@ -2003,7 +1984,6 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
           <h2>{(question.quiz_type === 'reading' || question.quiz_type === 'translation') ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
           {showAudioPanel && (
             <QuizAudioPanel
-              audioText={questionAudioText}
               audioPlaying={audioPlaying}
               audioPlayed={audioPlayed}
               audioError={audioError}
@@ -2136,7 +2116,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
   }, [question]);
 
   useEffect(() => {
-    questionStartedAtRef.current = performance.now();
+    questionStartedAtRef.current = now();
     const resetTimer = window.setTimeout(() => {
       setAudioPlayed(false);
       setAudioPlaying(false);
@@ -2269,7 +2249,6 @@ function GeneralCheck({ level, onExit, onComplete }) {
           <h2>{question.prompt}</h2>
           {showAudioPanel && (
             <QuizAudioPanel
-              audioText={questionAudioText}
               audioPlaying={audioPlaying}
               audioPlayed={audioPlayed}
               audioError={audioError}

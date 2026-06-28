@@ -39,6 +39,7 @@
   --badge-weak-text: #FA5252 !important;
   --badge-weak-bg: #FFF5F5 !important;
   --text: var(--modern-zen-text) !important;
+  --ink: var(--modern-zen-text) !important;
   --muted: #4B5563 !important;
   --dim: #687076 !important;
   --control-bg: var(--modern-zen-chip) !important;
@@ -711,6 +712,28 @@ h1, h2, h3 {
   color: white !important;
 }
 
+.option-grid button.option-correct {
+  background: rgba(18, 122, 93, 0.08) !important;
+  border-color: var(--modern-zen-primary) !important;
+  box-shadow: 0 8px 24px rgba(18, 122, 93, 0.12) !important;
+}
+
+.option-grid button.option-correct span {
+  background: var(--modern-zen-primary) !important;
+  color: white !important;
+}
+
+.option-grid button.option-wrong {
+  background: rgba(194, 64, 47, 0.08) !important;
+  border-color: #C2402F !important;
+  box-shadow: 0 8px 24px rgba(194, 64, 47, 0.12) !important;
+}
+
+.option-grid button.option-wrong span {
+  background: #C2402F !important;
+  color: white !important;
+}
+
 .cloze-blank {
   display: inline-block;
   min-width: 60px;
@@ -1033,3 +1056,281 @@ h1, h2, h3 {
   user-select: text !important;
   -webkit-user-select: text !important;
 }
+
+/* =========================================
+   IMMERSIVE GLASS LAYER — "深空 / Deep Space" overlay
+   Deep tech-blue + teal background, celadon accents,
+   glassmorphic floating cards, cursor parallax,
+   horizontal particle streams. Gated by reduced-motion.
+   ========================================= */
+
+:root {
+  /* parallax offsets written by JS (px); default 0 = no shift */
+  --px: 0px;
+  --py: 0px;
+  /* glass surface tuned per theme below */
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-blur: 18px;
+  --celadon: #5fd6b4;
+  --tech-blue: #0e2a4a;
+  --teal: #0f7d8c;
+  /* aurora orb colors */
+  --aurora-1: rgba(95, 214, 180, 0.30);
+  --aurora-2: rgba(15, 125, 140, 0.28);
+  --aurora-3: rgba(14, 42, 74, 0.30);
+  --stream-color: rgba(95, 214, 180, 0.55);
+}
+
+[data-theme='dark'] {
+  /* Re-skin dark mode to deep-blue / teal / celadon per the brief */
+  --modern-zen-bg: #0a1626 !important;
+  --modern-zen-card: #0f2138 !important;
+  --modern-zen-primary: #5fd6b4 !important;
+  --modern-zen-success: #4fd6a8 !important;
+  --modern-zen-text: #eaf4f2 !important;
+  --modern-zen-chip: #16304d !important;
+  --jade: var(--modern-zen-primary) !important;
+  --jade-gradient: linear-gradient(135deg, #6fe6c4, #2fae9e) !important;
+  --jade-soft: rgba(95, 214, 180, 0.16) !important;
+  --primary-start: #6fe6c4 !important;
+  --primary-end: #2fae9e !important;
+  --primary-text: #04201a !important;
+  --logo-text: #04201a !important;
+  --focus-ring: rgba(95, 214, 180, 0.45) !important;
+  --porcelain: #6aa8d8 !important;
+  --muted: #aebfce !important;
+  --dim: #7f93a8 !important;
+  --line: rgba(160, 200, 230, 0.10) !important;
+  --line-soft: rgba(160, 200, 230, 0.07) !important;
+
+  --glass-bg: rgba(18, 40, 66, 0.55) !important;
+  --glass-border: rgba(120, 190, 220, 0.18) !important;
+  --glass-blur: 20px !important;
+  --aurora-1: rgba(95, 214, 180, 0.22) !important;
+  --aurora-2: rgba(36, 130, 170, 0.26) !important;
+  --aurora-3: rgba(40, 90, 160, 0.24) !important;
+  --stream-color: rgba(120, 230, 200, 0.5) !important;
+}
+
+/* Fixed immersive backdrop behind the whole app */
+.immersive-bg {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  background:
+    radial-gradient(120% 120% at 80% -10%, color-mix(in srgb, var(--teal) 14%, transparent), transparent 55%),
+    radial-gradient(120% 120% at -10% 110%, color-mix(in srgb, var(--tech-blue) 18%, transparent), transparent 55%);
+}
+
+[data-theme='dark'] .immersive-bg {
+  background:
+    radial-gradient(130% 130% at 80% -10%, rgba(15, 125, 140, 0.18), transparent 55%),
+    radial-gradient(130% 130% at -10% 110%, rgba(14, 42, 74, 0.55), transparent 55%);
+}
+
+/* Soft drifting aurora orbs — also receive cursor parallax */
+.immersive-bg .orb {
+  position: absolute !important;
+  border-radius: 50% !important;
+  filter: blur(60px) !important;
+  opacity: 0.9 !important;
+  will-change: transform !important;
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.immersive-bg .orb-1 {
+  width: 46vw; height: 46vw; top: -8vw; left: -6vw;
+  background: var(--aurora-1) !important;
+  transform: translate3d(calc(var(--px) * 1.4), calc(var(--py) * 1.4), 0);
+  animation: orbDrift1 26s ease-in-out infinite alternate !important;
+}
+.immersive-bg .orb-2 {
+  width: 40vw; height: 40vw; bottom: -10vw; right: -6vw;
+  background: var(--aurora-2) !important;
+  transform: translate3d(calc(var(--px) * -1.1), calc(var(--py) * -1.1), 0);
+  animation: orbDrift2 32s ease-in-out infinite alternate !important;
+}
+.immersive-bg .orb-3 {
+  width: 34vw; height: 34vw; top: 28%; left: 38%;
+  background: var(--aurora-3) !important;
+  transform: translate3d(calc(var(--px) * 0.7), calc(var(--py) * 0.7), 0);
+  animation: orbDrift3 38s ease-in-out infinite alternate !important;
+}
+
+@keyframes orbDrift1 { to { translate: 6vw 4vw; } }
+@keyframes orbDrift2 { to { translate: -5vw -3vw; } }
+@keyframes orbDrift3 { to { translate: 3vw -5vw; } }
+
+/* Horizontal glowing data streams */
+.immersive-bg .stream {
+  position: absolute !important;
+  left: -20% !important;
+  width: 18% !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, var(--stream-color), transparent) !important;
+  box-shadow: 0 0 8px var(--stream-color) !important;
+  opacity: 0.6 !important;
+}
+.immersive-bg .stream-1 { top: 22%; animation: streamFlow 9s linear infinite !important; }
+.immersive-bg .stream-2 { top: 48%; width: 24% !important; animation: streamFlow 13s linear infinite 2s !important; }
+.immersive-bg .stream-3 { top: 71%; width: 14% !important; animation: streamFlow 11s linear infinite 4s !important; }
+.immersive-bg .stream-4 { top: 86%; animation: streamFlow 15s linear infinite 1s !important; }
+
+@keyframes streamFlow {
+  0%   { transform: translateX(0); opacity: 0; }
+  10%  { opacity: 0.7; }
+  90%  { opacity: 0.7; }
+  100% { transform: translateX(700%); opacity: 0; }
+}
+
+/* Lift the real app above the backdrop */
+.core-app {
+  position: relative !important;
+  z-index: 1 !important;
+  background: transparent !important;
+}
+.core-shell { background: transparent !important; }
+
+/* Glassmorphism on floating surfaces */
+.core-card, .analytics-panel, .today-queue-panel, .result-card {
+  background-color: var(--glass-bg) !important;
+  background-image: var(--bg-pattern) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow:
+    0 24px 48px rgba(8, 20, 38, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+.core-sidebar {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%) !important;
+  border-right: 1px solid var(--glass-border) !important;
+}
+
+/* Subtle parallax lives on the background orbs (above). Card-tilt on
+   .core-page is intentionally omitted: that element also runs the entrance
+   animation, whose fill state would mask a transform here. The orbs moving
+   behind the static glass cards already read as depth parallax. */
+
+/* Inner-glow interactive buttons */
+.btn-primary {
+  position: relative !important;
+  box-shadow:
+    0 4px 14px rgba(47, 174, 158, 0.28),
+    inset 0 0 0 rgba(255, 255, 255, 0) !important;
+}
+.btn-primary:hover {
+  box-shadow:
+    0 10px 28px rgba(47, 174, 158, 0.42),
+    inset 0 0 20px rgba(255, 255, 255, 0.28) !important;
+}
+
+/* Sidebar icons pulse + scale on hover */
+.core-sidebar button {
+  transition: transform var(--transition-snappy), background var(--transition-smooth), color var(--transition-smooth) !important;
+}
+.core-sidebar button:hover {
+  transform: scale(1.06) !important;
+}
+.core-sidebar button.active {
+  box-shadow: inset 0 0 0 1px var(--jade-soft), 0 0 18px var(--jade-soft) !important;
+}
+
+/* Slow-ease entrance: questions/cards merge in rather than jump.
+   No filter:blur here — a lingering filter (even blur(0) via fill mode) on a
+   glass card would disable its own backdrop-filter. */
+.page-enter, .question-card.learning-question-card {
+  animation: glassMergeIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+@keyframes glassMergeIn {
+  0%   { opacity: 0; transform: translateY(14px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Respect reduced motion: kill parallax, drift, streams, blur-in */
+@media (prefers-reduced-motion: reduce) {
+  .immersive-bg .orb,
+  .immersive-bg .stream { animation: none !important; transform: none !important; }
+  .core-page { transform: none !important; }
+  .page-enter, .question-card.learning-question-card { animation: none !important; }
+}
+
+/* =========================================
+   TAP-TO-TRANSLATE
+   ========================================= */
+.clickable-text {
+  position: relative;
+  display: inline-block;
+  line-height: 1.8;
+}
+.tap-char {
+  position: relative;
+  cursor: default;
+  transition: all 0.2s;
+  padding: 0 1px;
+}
+.tap-char.has-dict {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--line);
+}
+.tap-char.has-dict:hover, .tap-char.has-dict.active {
+  background: var(--porcelain-soft);
+  border-bottom-color: var(--porcelain);
+  color: var(--porcelain);
+}
+
+.tap-tooltip {
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+  z-index: 100;
+  pointer-events: auto;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.tap-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--paper) transparent transparent transparent;
+}
+
+.tap-tooltip strong {
+  font-size: 1.25rem;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.tap-tooltip em {
+  font-size: 0.9rem;
+  color: var(--porcelain);
+  font-style: normal;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.tap-tooltip small {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
