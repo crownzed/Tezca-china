@@ -3,9 +3,23 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { createHash } from 'node:crypto';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'public', 'audio');
+
+// Known-bad placeholder: Youdao/Google occasionally return a 1920-byte / 96ms
+// error blip with HTTP 200. Before this guard it was saved under 333 different
+// texts (see scripts/tts_qa.py). Reject it by exact md5, and floor the size
+// well below the smallest real clip (5760B) but above the junk (1920B).
+const BAD_AUDIO_MD5 = new Set([
+  'c9a91d0b09b0e40eeffc4c02b6cb26af',
+]);
+const MIN_AUDIO_BYTES = 3000;
+
+function md5(buf) {
+  return createHash('md5').update(buf).digest('hex');
+}
 
 function audioKey(text) {
   const clean = String(text || '').trim();
@@ -58,10 +72,17 @@ async function downloadMp3(text) {
     try {
       const res = await fetch(url, { redirect: 'follow' });
       if (!res.ok) continue;
-      const type = res.headers.get('content-type') || '';
-      if (type.includes('json')) continue;
+      const type = (res.headers.get('content-type') || '').toLowerCase();
+      // Must be audio: reject JSON/HTML error pages served with HTTP 200.
+      if (type.includes('json') || type.includes('html') || type.includes('text')) continue;
       const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length < 80) continue;
+      // Reject the known error blip and anything below a real clip's size.
+      if (buf.length < MIN_AUDIO_BYTES) continue;
+      if (BAD_AUDIO_MD5.has(md5(buf))) continue;
+      // Sanity: real MP3 starts with an ID3 tag or an MPEG frame sync (0xFFEx).
+      const isMp3 = (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33)
+        || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0);
+      if (!isMp3) continue;
       return buf;
     } catch {
       /* try next */

@@ -26,7 +26,6 @@ const QUESTION_TYPES = [
 
 const HSK_LEVELS = [1, 2, 3, 4, 5, 6];
 const COUNT_OPTIONS = [5, 10, 15];
-const PASSAGE_PLACEHOLDER = '每天早上，我习惯吃几片面包。下课以后，我经常去运动。每个星期我都会去健身房五次。';
 const VOCAB_PLACEHOLDER = '苹果\n香蕉\n电脑';
 
 const inputStyle = {
