@@ -33,3 +33,9 @@ services:
         sync: false
       - key: GEMINI_API_KEYS
         sync: false
+      # Native Google AI Studio keys — required by the speech features
+      # (pronunciation scoring + voice chat) which send audio to the native
+      # Gemini API. Without this, /api/speech/* raises and the UI shows
+      # "Failed to fetch". Comma-separated.
+      - key: GEMINI_NATIVE_API_KEYS
+        sync: false
