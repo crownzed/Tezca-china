@@ -472,3 +472,78 @@ class SaveQuizRequest(BaseModel):
     session_type: str = "custom_quiz"
     questions: list[DraftQuestion] = Field(min_length=1)
 
+
+# --- Speech features: pronunciation scoring + turn-based voice chat ----------
+
+class PracticeSentenceOut(BaseModel):
+    """Câu/từ luyện phát âm, kèm pinyin chuẩn (nếu lấy được từ DB)."""
+    hanzi: str
+    pinyin: str = ""
+    meaning_vi: str = ""
+    level: int = 1
+
+
+class PronunciationScoreRequest(BaseModel):
+    audio_base64: str = Field(min_length=16)
+    mime_type: str = "audio/webm"
+    target_hanzi: str = Field(min_length=1, max_length=200)
+    target_pinyin: str = Field(default="", max_length=400)
+
+
+class PronunciationToneError(BaseModel):
+    pos: int
+    expected_tone: int
+    got_tone: int
+    syllable: str
+
+
+class PronunciationSyllableError(BaseModel):
+    pos: int
+    type: str
+    expected: str | None = None
+    got: str | None = None
+
+
+class PronunciationToneSyllable(BaseModel):
+    """Acoustic (DSP) result for one syllable: how well the F0 contour matched
+    the expected Chao tone template."""
+    pos: int
+    tone: int
+    distance: float | None = None  # normalized DTW distance (lower = better)
+    ok: bool = False
+    feedback: str | None = None
+
+
+class PronunciationScoreOut(BaseModel):
+    score: int  # blended identity + acoustic
+    base_score: int
+    identity_score: int = 0  # pinyin_scorer (what was said)
+    tone_accuracy: float | None = None  # DSP acoustic accuracy 0-1 (None if skipped)
+    target_hanzi: str
+    target_pinyin: str
+    actual_hanzi: str = ""
+    actual_pinyin: str = ""
+    tone_errors: list[PronunciationToneError] = Field(default_factory=list)
+    syllable_errors: list[PronunciationSyllableError] = Field(default_factory=list)
+    tone_syllables: list[PronunciationToneSyllable] = Field(default_factory=list)
+    user_f0_contour: list[float] = Field(default_factory=list)
+    detailed_feedback: str = ""
+    tip: str = ""
+
+
+class VoiceChatTurn(BaseModel):
+    role: str = "user"  # "user" | "model"
+    text: str = ""
+
+
+class VoiceChatRequest(BaseModel):
+    audio_base64: str = Field(min_length=16)
+    mime_type: str = "audio/webm"
+    history: list[VoiceChatTurn] = Field(default_factory=list)
+
+
+class VoiceChatOut(BaseModel):
+    user_text: str = ""
+    reply_cn: str = ""
+    reply_vi: str = ""
+

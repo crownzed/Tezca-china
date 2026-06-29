@@ -16,6 +16,18 @@ class Settings(BaseSettings):
     gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
     gemini_model: str = "google/gemini-3.5-flash"
 
+    # Google Gemini TTS (native API key from aistudio, NOT vilao relay)
+    gemini_tts_api_key: str = ""
+    gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
+    gemini_tts_voice: str = "Kore"
+
+    # Native Google AI Studio keys (generativelanguage.googleapis.com) used for
+    # audio-input features (pronunciation scoring + voice chat). The vilao relay
+    # is text-only, so speech features must call the native API directly.
+    gemini_native_api_keys: str = ""  # comma-separated AI Studio keys
+    gemini_native_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_native_model: str = "gemini-2.5-flash"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property
@@ -25,6 +37,10 @@ class Settings(BaseSettings):
     @property
     def gemini_keys_list(self) -> list[str]:
         return [k.strip() for k in self.gemini_api_keys.split(",") if k.strip()]
+
+    @property
+    def gemini_native_keys_list(self) -> list[str]:
+        return [k.strip() for k in self.gemini_native_api_keys.split(",") if k.strip()]
 
 
 settings = Settings()

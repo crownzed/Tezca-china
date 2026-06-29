@@ -8,3 +8,5 @@ python-dotenv==1.0.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
 python-jose[cryptography]==3.3.0
+praat-parselmouth==0.4.7
+numpy==2.4.3

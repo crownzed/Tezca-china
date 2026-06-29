@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -8,6 +8,8 @@ import { strategyFlags } from './strategy-flags';
 import { bindSpeechUnlock, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
 import { AuthControls, AuthModalHost } from './auth-ui.jsx';
 import CustomVocabInput from './components/CustomVocabInput.jsx';
+import PronunciationPractice from './components/PronunciationPractice.jsx';
+import VoiceChat from './components/VoiceChat.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { loadAllFlashcards } from './vocab-loader.js';
 
@@ -66,7 +68,10 @@ const QUIZ_TYPES = [
   { id: 'drag_drop', label: 'Sắp xếp câu', icon: PenTool },
 ];
 const FOCUS_LEVELS = [1, 2, 3, 4];
-const GENERAL_CHECK_TYPES = QUIZ_TYPES.map(type => type.id);
+// drag_drop là bài sắp xếp token, chỉ render đúng trong Quiz. GeneralCheck là
+// lưới trắc nghiệm thuần nên loại drag_drop ra (nếu không sẽ lộ đáp án ở
+// option A + hiện chuỗi placeholder __drag_drop_dummy__).
+const GENERAL_CHECK_TYPES = QUIZ_TYPES.map(type => type.id).filter(id => id !== 'drag_drop');
 const GENERAL_CHECK_LIMIT = 2;
 
 function quizTypeDescription(typeId) {
@@ -78,11 +83,19 @@ function quizTypeDescription(typeId) {
   return 'Câu và ngữ cảnh';
 }
 
+// reading/translation hiển thị prompt dạng đoạn dài (căn trái, scroll) thay vì
+// chữ Hán khổng lồ căn giữa.
+function isPassagePrompt(quizType) {
+  return quizType === 'reading' || quizType === 'translation';
+}
+
 const NAV = [
   { id: 'dashboard', label: 'Trang chính', icon: BarChart3 },
   { id: 'quiz', label: 'Luyện tập', icon: Play },
   { id: 'vocab', label: 'Từ vựng', icon: Search },
   { id: 'custom', label: 'Tự tạo', icon: PenTool },
+  { id: 'speak', label: 'Phát âm', icon: Mic },
+  { id: 'voicechat', label: 'Hội thoại', icon: MessageCircle },
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
 ];
 
@@ -1146,7 +1159,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
           )}
           {activeQuizType === 'cloze' ? (
             <h2 className="cloze-prompt">
-              {question.prompt.split('___').map((part, i, arr) => (
+              {question.prompt.split(/_{2,}/).map((part, i, arr) => (
                 <Fragment key={i}>
                   {part}
                   {i < arr.length - 1 && (
@@ -1157,8 +1170,15 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
                 </Fragment>
               ))}
             </h2>
+          ) : activeQuizType === 'drag_drop' ? (
+            <div className="drag-drop-prompt">
+              <p className="drag-drop-label">Sắp xếp thành câu đúng</p>
+              {question.metadata_json?.sentence_vi && (
+                <p className="drag-drop-hint-vi">💬 {question.metadata_json.sentence_vi}</p>
+              )}
+            </div>
           ) : (
-            <h2>{(question.quiz_type === 'reading' || question.quiz_type === 'translation') ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
+            <h2 className={isPassagePrompt(question.quiz_type) ? 'prompt--passage' : ''}>{isPassagePrompt(question.quiz_type) ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
           )}
           {showAudioPanel && (
             <QuizAudioPanel
@@ -1171,30 +1191,67 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
           )}
           {activeQuizType === 'drag_drop' && dragSegments.length > 0 ? (
             <div className="drag-drop-area">
-              <div className="drag-selected-zone">
-                {dragOrder.map((tokenIndex, pos) => (
-                  <button key={`sel-${pos}`} className="drag-chip drag-chip--selected" onClick={() => toggleDragToken(tokenIndex)}>
-                    {dragSegments[tokenIndex]}
-                  </button>
-                ))}
-                {dragOrder.length === 0 && <span className="drag-hint">Bấm vào từ bên dưới để sắp xếp câu</span>}
+              {/* Vùng câu trả lời — các chip đã chọn, phân cách bằng / */}
+              <div className="drag-answer-zone">
+                {dragOrder.length === 0 ? (
+                  <span className="drag-hint">Bấm vào từ bên dưới để ghép câu…</span>
+                ) : (
+                  dragOrder.map((tokenIndex, pos) => (
+                    <Fragment key={`ans-${pos}`}>
+                      {pos > 0 && <span className="drag-slash">/</span>}
+                      <button
+                        className="drag-chip drag-chip--selected"
+                        onClick={() => toggleDragToken(tokenIndex)}
+                        title="Bấm để bỏ ra"
+                      >
+                        {dragSegments[tokenIndex]}
+                      </button>
+                    </Fragment>
+                  ))
+                )}
               </div>
-              <div className="drag-available-zone">
-                {dragSegments.map((token, i) => (
+
+              {/* Vùng nguồn — các chip chưa chọn, phân cách bằng / */}
+              <div className="drag-source-zone">
+                {dragSegments.map((token, i) => {
+                  const used = dragOrder.includes(i);
+                  return (
+                    <Fragment key={`src-${i}`}>
+                      {i > 0 && <span className={`drag-slash ${used ? 'drag-slash--faded' : ''}`}>/</span>}
+                      <button
+                        className={`drag-chip ${used ? 'drag-chip--used' : 'drag-chip--available'}`}
+                        onClick={() => !used && toggleDragToken(i)}
+                        disabled={used}
+                        aria-label={used ? `${token} (đã chọn)` : `Chọn ${token}`}
+                      >
+                        {token}
+                      </button>
+                    </Fragment>
+                  );
+                })}
+              </div>
+
+              <div className="drag-drop-actions">
+                {dragOrder.length > 0 && !feedback && (
                   <button
-                    key={i}
-                    className={`drag-chip ${dragOrder.includes(i) ? 'drag-chip--used' : ''}`}
-                    onClick={() => toggleDragToken(i)}
-                    disabled={dragOrder.includes(i)}
+                    type="button"
+                    className="btn-ghost drag-reset-btn"
+                    onClick={() => setDragOrder([])}
+                    disabled={submitting}
                   >
-                    {token}
+                    ↺ Đặt lại
                   </button>
-                ))}
+                )}
+                <button
+                  className="btn-primary"
+                  onClick={submitDragDrop}
+                  disabled={dragOrder.length !== dragCorrectOrder.length || submitting || Boolean(feedback)}
+                >
+                  Kiểm tra
+                </button>
               </div>
-              <button className="btn-primary" onClick={submitDragDrop} disabled={dragOrder.length !== dragCorrectOrder.length || submitting || Boolean(feedback)}>
-                Kiểm tra
-              </button>
             </div>
+
           ) : activeQuizType === 'voice' ? (
             <div className="voice-area">
               <div className="voice-word-hero">{question.word?.hanzi || ''}</div>
@@ -1276,7 +1333,13 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
                 <span className="hide-mobile">{nextReviewText(feedback.review.next_review_at)}</span>
               </div>
               <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
-              {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '—'}</small>}
+              {!feedback.review.correct && (
+                <small>Đáp án: {
+                  activeQuizType === 'drag_drop'
+                    ? (question.metadata_json?.correct_order || []).join('')
+                    : (question.options[feedback.review.correct_index] || '—')
+                }</small>
+              )}
               {!feedback.review.correct && errorTagLabel(feedback.review.error_tag) && (
                 <div className="feedback-error-tag">
                   <em>{errorTagLabel(feedback.review.error_tag)}</em>
@@ -1981,7 +2044,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
               <span>Ôn lại</span>
             </div>
           )}
-          <h2>{(question.quiz_type === 'reading' || question.quiz_type === 'translation') ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
+          <h2 className={isPassagePrompt(question.quiz_type) ? 'prompt--passage' : ''}>{isPassagePrompt(question.quiz_type) ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
           {showAudioPanel && (
             <QuizAudioPanel
               audioPlaying={audioPlaying}
@@ -2993,6 +3056,8 @@ export default function App() {
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
         {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
+        {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevel={level} />}
+        {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />}
         {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
         {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
         </ErrorBoundary>
