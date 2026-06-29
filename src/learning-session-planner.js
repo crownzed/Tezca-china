@@ -45,7 +45,9 @@ function getWeakWords(analytics) {
 }
 
 function getWeakestType(analytics) {
-  const practiced = (analytics?.type_breakdown || []).filter(item => item.answered > 0);
+  // drag_drop chỉ render đúng trong Quiz, không phải trong LearningSession (lưới
+  // trắc nghiệm). Loại nó khỏi targetSkill để phiên học không nhận dạng bài này.
+  const practiced = (analytics?.type_breakdown || []).filter(item => item.answered > 0 && item.quiz_type !== 'drag_drop');
   if (!practiced.length) return analytics?.recommendation?.quiz_type || 'vocab';
   return [...practiced].sort((a, b) => a.accuracy - b.accuracy || b.answered - a.answered)[0]?.quiz_type || 'vocab';
 }
