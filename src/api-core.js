@@ -716,6 +716,25 @@ export async function getUserProfile() {
   }
 }
 
+// --- Speech features: pronunciation scoring (Feature 1) ---
+
+// Lấy một từ ngắn để luyện phát âm, kèm pinyin chuẩn từ DB.
+export async function getPracticeSentence(level = 1) {
+  return request(`/api/speech/practice-sentence?level=${encodeURIComponent(level)}`);
+}
+
+// Chấm điểm phát âm: gửi audio (base64) + câu mục tiêu, nhận điểm + lỗi + tip.
+export async function scorePronunciation(payload) {
+  return request('/api/speech/pronunciation', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// --- Speech features: turn-based voice chat (Feature 2) ---
+
+// Gửi audio (base64) + lịch sử hội thoại, nhận lời người dùng + câu trả lời CN/VI.
+export async function voiceChat(payload) {
+  return request('/api/speech/chat', { method: 'POST', body: JSON.stringify(payload) });
+}
+
 export async function generateCustomVocabExercises(payload) {
   return request('/api/custom-vocab/generate', { method: 'POST', body: JSON.stringify(payload) });
 }
