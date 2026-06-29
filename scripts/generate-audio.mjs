@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pipeline } from 'node:stream/promises';
@@ -19,6 +19,13 @@ const MIN_AUDIO_BYTES = 3000;
 
 function md5(buf) {
   return createHash('md5').update(buf).digest('hex');
+}
+
+// Một file đã có trên đĩa vẫn có thể là clip rác (96ms / 1920B) từ lần tải
+// trước khi có guard. Nhận diện để KHÔNG đưa vào index — text đó sẽ rơi xuống
+// online TTS thay vì phát clip câm.
+function isJunkAudio(buf) {
+  return buf.length < MIN_AUDIO_BYTES || BAD_AUDIO_MD5.has(md5(buf));
 }
 
 function audioKey(text) {
@@ -77,8 +84,7 @@ async function downloadMp3(text) {
       if (type.includes('json') || type.includes('html') || type.includes('text')) continue;
       const buf = Buffer.from(await res.arrayBuffer());
       // Reject the known error blip and anything below a real clip's size.
-      if (buf.length < MIN_AUDIO_BYTES) continue;
-      if (BAD_AUDIO_MD5.has(md5(buf))) continue;
+      if (isJunkAudio(buf)) continue;
       // Sanity: real MP3 starts with an ID3 tag or an MPEG frame sync (0xFFEx).
       const isMp3 = (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33)
         || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0);
@@ -102,8 +108,22 @@ async function main() {
     const key = audioKey(text);
     const file = join(outDir, `${key}.mp3`);
     if (existsSync(file)) {
-      index[text] = key;
-      skipped += 1;
+      // File đã có nhưng có thể là clip rác cũ → kiểm lại trước khi index.
+      if (!isJunkAudio(readFileSync(file))) {
+        index[text] = key;
+        skipped += 1;
+        continue;
+      }
+      // Là clip rác: thử tải lại bản tốt; nếu vẫn hỏng thì bỏ khỏi index.
+      const fresh = await downloadMp3(text);
+      if (fresh) {
+        writeFileSync(file, fresh);
+        index[text] = key;
+        created += 1;
+        await new Promise(resolve => setTimeout(resolve, 120));
+      } else {
+        console.warn(`junk (online TTS fallback): ${text}`);
+      }
       continue;
     }
     const buf = await downloadMp3(text);

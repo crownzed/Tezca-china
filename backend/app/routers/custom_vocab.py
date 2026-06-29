@@ -156,6 +156,7 @@ def generate_custom_vocab(
                             options=options,
                             correct_index=correct_index,
                             explanation=explanation,
+                            audio_text=word.hanzi,
                             metadata_json={"source": f"custom_{user_id}_llm"}
                         )
                         db.add(q)
@@ -381,7 +382,7 @@ def save_quiz(request: SaveQuizRequest, db: Session = Depends(get_db)):
                 options=dq.options,
                 correct_index=dq.correct_index,
                 explanation=dq.explanation,
-                audio_text="",
+                audio_text=(dq.word.hanzi if dq.word and dq.word.hanzi else ""),
                 metadata_json={
                     "source": f"{request.source}_{user_id}_llm",
                     **({"question_subtype": dq.subtype} if dq.subtype else {}),

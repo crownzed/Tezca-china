@@ -23,6 +23,15 @@ QUESTION_SUBTYPE_KEYWORD = "keyword"
 QUESTION_SUBTYPE_DRAG_DROP = "drag_drop"
 QUESTION_SUBTYPE_VOICE = "voice"
 
+# Giới hạn độ dài đoạn đọc (số ký tự CJK) theo cấp HSK. Đoạn vượt mức bị
+# thay bằng câu ví dụ đơn (đúng cấp) để tránh sinh đoạn quá dài so với chuẩn
+# cấp độ — HSK1/2 chỉ đọc câu ngắn, cấp cao mới đọc đoạn dài.
+_PARAGRAPH_CJK_CAP_BY_LEVEL = {1: 16, 2: 30, 3: 60, 4: 100, 5: 150, 6: 200}
+
+
+def _count_cjk(text: str) -> int:
+    return len(re.findall(f"[{_CJK_RANGE}]", text or ""))
+
 
 def _pos_filtered_pool(word: Word, pool: list[Word], quiz_type: QuizType) -> list[Word]:
     """Với câu Cloze, ưu tiên distractor cùng POS để tránh đoán mò ngữ pháp."""
@@ -157,6 +166,7 @@ class QuestionGeneratorService:
                 return {
                     "segments": dd.get("segments", []),
                     "correct_order": dd.get("correct_order", []),
+                    "sentence_vi": dd.get("sentence_vi", ""),
                 }
         if quiz_type == QuizType.voice:
             vp = self._voice_prompt_for_word(word, seed)
@@ -364,15 +374,18 @@ class QuestionGeneratorService:
                 text = item_paragraph["vi"] if item_paragraph else item.meaning_vi or item.meaning_en
                 pairs.append((text, item.id))
         elif quiz_type == QuizType.drag_drop:
+            # Vấn đề 2: drag_drop không dùng multiple-choice options.
+            # UI sắp xếp token trực tiếp — chỉ cần dummy options để pass validation.
             dd = self._drag_drop_for_word(word, seed)
             if not dd:
                 return [], 0, []
-            pairs = [(dd['sentence_cn'], word.id)]
-            for item in distractors:
-                item_dd = self._drag_drop_for_word(item, seed)
-                text = item_dd['sentence_cn'] if item_dd else ''
-                if text:
-                    pairs.append((text, item.id))
+            # Trả về 4 dummy options, correct_index=0 (không dùng trên UI)
+            pairs = [
+                (dd['sentence_cn'], word.id),
+                ('__drag_drop_dummy_1__', None),
+                ('__drag_drop_dummy_2__', None),
+                ('__drag_drop_dummy_3__', None),
+            ]
         elif quiz_type == QuizType.voice:
             # Voice is self-assessment: no correct answer leaked in options
             pairs = [("Đã đọc xong", word.id), ("Chưa đọc được", word.id), ("Cần luyện thêm", word.id), ("Quá dễ", word.id)]
@@ -391,6 +404,14 @@ class QuestionGeneratorService:
                 clean.append((text, wid))
         if len(clean) < 4:
             return [], 0, []
+        # drag_drop và voice: UI coi index 0 là đáp án chuẩn (drag_drop chấm
+        # cục bộ rồi gửi selected_index=0 khi đúng; voice dùng options[0] làm
+        # "Đã đọc xong"). Shuffle sẽ làm correct_index lệch khỏi 0 → backend
+        # chấm sai. Giữ nguyên thứ tự, correct_index=0 cho 2 dạng này.
+        if quiz_type in (QuizType.drag_drop, QuizType.voice):
+            options = [text for text, _ in clean]
+            option_word_ids = [wid for _, wid in clean]
+            return options, 0, option_word_ids
         correct_value = clean[0][0]
         shuffle(clean)
         options = [text for text, _ in clean]
@@ -444,20 +465,18 @@ class QuestionGeneratorService:
             return ex.sentence_cn if ex and ex.sentence_cn else word.hanzi
         return ""
 
-
     def _drag_drop_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
         examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if not example or not example.sentence_cn or word.hanzi not in example.sentence_cn:
             return None
         import re as _re
-        cjk = r"一-鿿㐀-䶿豈-﫿"
         sentence = example.sentence_cn
         # Split sentence into segments around the target word
         escaped = _re.escape(word.hanzi)
         parts = _re.split(f'({escaped})', sentence)
         segments = [p for p in parts if p]
-        # Further split long segments (>2 CJK chars) into smaller chunks
+        # Further split long segments (>3 CJK chars) into smaller chunks
         result = []
         for seg in segments:
             if seg == word.hanzi:
@@ -465,12 +484,21 @@ class QuestionGeneratorService:
             elif len(seg) <= 3:
                 result.append(seg)
             else:
-                # Split long segments at punctuation
+                # Split long segments at punctuation first
                 sub = _re.split(r'([，。！？、：])', seg)
                 result.extend(p for p in sub if p)
+        # Cần ít nhất 2 token KHÁC NHAU mới thành bài sắp xếp: nếu chỉ 1 token
+        # hoặc mọi token giống hệt nhau thì không xáo trộn nào khác được thứ tự
+        # gốc → câu hỏi hiện ra đã đúng sẵn. Bỏ qua, không sinh câu này.
+        if len(set(result)) < 2:
+            return None
+        # Đảm bảo scrambled luôn khác correct_order (tránh shuffle trả về y hệt).
+        rng = random.Random(seed) if seed is not None else random.Random()
         scrambled = list(result)
-        rng = random.Random(seed) if seed is not None else random
-        rng.shuffle(scrambled)
+        for _ in range(10):
+            rng.shuffle(scrambled)
+            if scrambled != result:
+                break
         return {
             "sentence_cn": sentence,
             "sentence_vi": example.sentence_vi or "",
@@ -478,6 +506,7 @@ class QuestionGeneratorService:
             "segments": scrambled,
             "correct_order": result,
         }
+
 
     def _voice_prompt_for_word(self, word: Word, seed: int | None = None) -> str | None:
         examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
@@ -540,9 +569,20 @@ class QuestionGeneratorService:
         if not first or not first.sentence_cn or not first.sentence_vi:
             return None
         meaning = word.meaning_vi or word.meaning_en or "nghĩa chính"
+        # Đoạn vượt giới hạn độ dài của cấp HSK → dùng câu ví dụ đơn cho đúng cấp.
+        cap = _PARAGRAPH_CJK_CAP_BY_LEVEL.get(word.hsk_level, 200)
+
+        def _within_cap(para: dict[str, str] | None) -> dict[str, str] | None:
+            # Cap chỉ để chặn đoạn SINH RA nhiều câu quá dài so với cấp. Câu ví
+            # dụ đơn là nội dung chuẩn cấp độ → luôn là mức sàn, không loại bỏ
+            # (loại sẽ làm câu dịch của từ đó biến mất hẳn).
+            if para and _count_cjk(para.get("cn", "")) <= cap:
+                return para
+            return {"cn": first.sentence_cn, "vi": first.sentence_vi}
+
         try:
             engine = get_template_engine()
-            return engine.render_paragraph(
+            rendered = engine.render_paragraph(
                 target_hanzi=word.hanzi,
                 meaning=meaning,
                 pinyin=word.pinyin or "",
@@ -550,6 +590,7 @@ class QuestionGeneratorService:
                 example_vi=first.sentence_vi,
                 seed=seed,
             )
+            return _within_cap(rendered)
         except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError, TypeError):
             pass
         # Fallback: hardcoded variants (giữ nguyên tiếng Trung để dùng khi JSON lỗi)
@@ -571,7 +612,7 @@ class QuestionGeneratorService:
                 "vi": f"Neu chi nhin tu moi, toi thuong quen rat nhanh. Bay gio toi dat 「{word.hanzi}」 vao cau hoan chinh de hoc, vi du: 「{first.sentence_vi}」 Nhu vay toi khong chi biet nghia cua no, ma con biet no xuat hien trong ngu canh nao va di cung nhung tu nao.",
             },
         ]
-        return variants[word.id % len(variants)]
+        return _within_cap(variants[word.id % len(variants)])
 
     def _cloze_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
         examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
@@ -583,7 +624,6 @@ class QuestionGeneratorService:
             return None
         # Chỉ sinh cloze nếu còn ít nhất 2 ký tự ngữ cảnh ngoài ____
         non_blank = prompt.replace('____', '').strip()
-        cjk_chars = len(re.findall(f'[{_CJK_RANGE}]', non_blank))
-        if cjk_chars < 2:
+        if _count_cjk(non_blank) < 2:
             return None
         return {"prompt": prompt, "answer_cn": example.sentence_cn, "vi": example.sentence_vi or ""}
