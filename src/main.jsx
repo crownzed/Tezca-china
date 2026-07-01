@@ -4,6 +4,10 @@ import './index.css'
 import './overhaul.css'
 import App from './App.jsx'
 import { AuthProvider } from './auth-context.jsx'
+import { warmUpBackend } from './api-core.js'
+
+// Ping /health sớm để đánh thức backend Render free-tier trước khi user bấm AI.
+warmUpBackend()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

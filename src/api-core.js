@@ -6,6 +6,17 @@ export function setAuthToken(token) {
   authToken = token || null;
 }
 
+// Đánh thức backend Render free-tier ngay khi mở app, để lần bấm AI đầu tiên
+// không phải chờ cold start ~30s. Fire-and-forget: nuốt mọi lỗi vì đây chỉ là
+// tối ưu, không được chặn hay làm hỏng luồng khởi động UI.
+let warmUpPromise = null;
+export function warmUpBackend() {
+  if (warmUpPromise) return warmUpPromise;
+  warmUpPromise = fetch(`${API_BASE}/health`, { method: 'GET' })
+    .catch(() => { /* ignore: chỉ là ping đánh thức */ });
+  return warmUpPromise;
+}
+
 // Lỗi mạng (fetch ném TypeError) hoặc backend free-tier đang "ngủ" (Render) →
 // thông báo thân thiện thay vì "Failed to fetch" / "API 502/503" thô.
 const COLD_START_MESSAGE = 'Máy chủ đang khởi động lại, vui lòng thử lại sau vài giây.';
@@ -13,24 +24,31 @@ const NETWORK_MESSAGE = 'Không kết nối được máy chủ. Kiểm tra mạ
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function request(path, options = {}, retry = 1) {
+// Render free-tier "ngủ" sau ~15 phút; request đầu tiên phải chờ backend khởi
+// động lại (~30s). Thử lại nhiều lần với backoff tăng dần để cầm cự qua cold
+// start thay vì báo lỗi mạng ngay. Tổng thời gian chờ ~ 2+4+6+8 = 20s cộng
+// thời gian chờ phản hồi mỗi lần, đủ để server dậy.
+const RETRY_BACKOFFS_MS = [2000, 4000, 6000, 8000];
+
+async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  const backoff = () => RETRY_BACKOFFS_MS[RETRY_BACKOFFS_MS.length - retry] ?? 8000;
   let res;
   try {
     res = await fetch(`${API_BASE}${path}`, { headers, ...options });
   } catch {
     // fetch chỉ ném khi mất mạng / CORS / server không phản hồi.
     if (retry > 0) {
-      await delay(1200);
+      await delay(backoff());
       return request(path, options, retry - 1);
     }
     throw new Error(NETWORK_MESSAGE);
   }
   if (!res.ok) {
-    // 502/503/504: backend đang khởi động (cold start) → thử lại một lần.
+    // 502/503/504: backend đang khởi động (cold start) → thử lại với backoff.
     if ((res.status === 502 || res.status === 503 || res.status === 504) && retry > 0) {
-      await delay(1500);
+      await delay(backoff());
       return request(path, options, retry - 1);
     }
     let detail = res.status >= 502 ? COLD_START_MESSAGE : `API ${res.status}`;
