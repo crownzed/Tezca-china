@@ -6,15 +6,34 @@ export function setAuthToken(token) {
   authToken = token || null;
 }
 
-async function request(path, options = {}) {
+// Lỗi mạng (fetch ném TypeError) hoặc backend free-tier đang "ngủ" (Render) →
+// thông báo thân thiện thay vì "Failed to fetch" / "API 502/503" thô.
+const COLD_START_MESSAGE = 'Máy chủ đang khởi động lại, vui lòng thử lại sau vài giây.';
+const NETWORK_MESSAGE = 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.';
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function request(path, options = {}, retry = 1) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers,
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { headers, ...options });
+  } catch {
+    // fetch chỉ ném khi mất mạng / CORS / server không phản hồi.
+    if (retry > 0) {
+      await delay(1200);
+      return request(path, options, retry - 1);
+    }
+    throw new Error(NETWORK_MESSAGE);
+  }
   if (!res.ok) {
-    let detail = `API ${res.status}`;
+    // 502/503/504: backend đang khởi động (cold start) → thử lại một lần.
+    if ((res.status === 502 || res.status === 503 || res.status === 504) && retry > 0) {
+      await delay(1500);
+      return request(path, options, retry - 1);
+    }
+    let detail = res.status >= 502 ? COLD_START_MESSAGE : `API ${res.status}`;
     try {
       const body = await res.json();
       if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
@@ -50,6 +69,11 @@ function shuffle(items) {
   return shuffled;
 }
 
+function cleanText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
 // LƯU Ý ĐỒNG BỘ: các hàm dựng câu/đoạn dưới đây (richParagraph, dialogueLine,
 // listeningLine) là bản offline song song với backend question_generator.py.
 // Khi đổi template ở một bên, cập nhật bên còn lại để tránh lệch nội dung.
@@ -68,7 +92,7 @@ function richParagraph(card, index = 0) {
       vi: `Tối hôm qua, tôi luyện nói với bạn. Chúng tôi dùng “${card.character}” để đặt một câu: “${vi}” Vì từ này liên quan đến đời sống hằng ngày, nên tôi thấy nó dễ nhớ và cũng phù hợp để dùng khi trò chuyện.`,
     },
     {
-      cn: `这周我给自己定了一个小目标：每天记十个汉语词。今天的重点词是“${card.character}”，意思是“${meaning}”。我先读例句“${sentence}”，再听发音，最后用自己的话说一遍。`,
+      cn: `这周我给自己定了一个小目标：每天记十个汉语词。今天的重点词是“${card.character}”。我先读例句“${sentence}”，再听发音，最后用自己的话说一遍。`,
       vi: `Tuần này tôi đặt cho mình một mục tiêu nhỏ: mỗi ngày ghi nhớ mười từ tiếng Trung. Từ trọng tâm hôm nay là “${card.character}”, nghĩa là “${meaning}”. Tôi đọc câu ví dụ “${vi}” trước, sau đó nghe phát âm, cuối cùng nói lại bằng lời của mình.`,
     },
   ];
@@ -100,6 +124,49 @@ function dialogueLine(card, index = 0) {
   return variants[index % variants.length];
 }
 
+// Bài sắp xếp câu (drag_drop) offline — bản song song với backend
+// _drag_drop_for_word. Tách câu ví dụ NGẮN quanh từ mục tiêu thành các token
+// THẬT (không cắt 2 ký tự tuỳ tiện), đảm bảo ≥2 token khác nhau và thứ tự xáo
+// trộn khác thứ tự đúng. Trả null nếu câu không đủ điều kiện để bỏ qua từ đó.
+function localDragDrop(card) {
+  const sentence = cleanText(card.exampleSentence || card.example_cn);
+  const target = cleanText(card.character);
+  if (!sentence || !target || !sentence.includes(target)) return null;
+
+  // Tách quanh từ mục tiêu, giữ chính từ mục tiêu làm một token.
+  const parts = sentence.split(target);
+  const segments = [];
+  parts.forEach((part, i) => {
+    if (i > 0) segments.push(target);
+    part = part.trim();
+    if (!part) return;
+    // Tách tiếp theo dấu câu; phần còn lại dài thì chia khối ≤2 ký tự.
+    part.split(/([，。！？、：])/).filter(Boolean).forEach(sub => {
+      if (sub.length <= 2 || /[，。！？、：]/.test(sub)) {
+        segments.push(sub);
+      } else {
+        for (let i = 0; i < sub.length; i += 2) segments.push(sub.slice(i, i + 2));
+      }
+    });
+  });
+
+  const correctOrder = segments.filter(Boolean);
+  if (new Set(correctOrder).size < 2) return null;
+
+  let scrambled = [...correctOrder];
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    scrambled = shuffle(correctOrder);
+    if (scrambled.join('') !== correctOrder.join('')) break;
+  }
+
+  return {
+    sentence_cn: sentence,
+    sentence_vi: cleanText(card.exampleVi || card.example_vi || card.meaning),
+    segments: scrambled,
+    correct_order: correctOrder,
+  };
+}
+
 async function localQuestions({ level, quiz_type, limit }) {
   const { loadAllFlashcards } = await import('./vocab-loader');
   const allCards = await loadAllFlashcards();
@@ -109,6 +176,7 @@ async function localQuestions({ level, quiz_type, limit }) {
   return shuffle(pool).slice(0, limit).map((card, index) => {
     const distractors = shuffle(pool.filter(item => item.id !== card.id)).slice(0, 3);
     const paragraph = richParagraph(card, index);
+    const dragData = quiz_type === 'drag_drop' ? localDragDrop(card) : null;
     const byType = quiz_type === 'vocab'
       ? [card.meaning, ...distractors.map(item => item.meaning)]
       : quiz_type === 'listening'
@@ -141,7 +209,7 @@ async function localQuestions({ level, quiz_type, limit }) {
             : quiz_type === 'cloze'
               ? `Chọn từ còn thiếu để hoàn chỉnh câu: ${paragraph.cn.replace(card.character, '____')}`
             : quiz_type === 'drag_drop'
-              ? `Sắp xếp các từ sau thành câu đúng: ${paragraph.vi}`
+              ? 'Sắp xếp các từ sau thành câu đúng'
             : `Đọc nghĩa và chọn từ phù hợp: ${card.meaning}`,
       options,
       audio_text: quiz_type === 'listening' || quiz_type === 'dialogue'
@@ -165,19 +233,13 @@ async function localQuestions({ level, quiz_type, limit }) {
         component_hint: card.mnemonic || '',
         confusable_words: [],
       },
-      metadata_json: quiz_type === 'drag_drop' ? (() => {
-        const clean = paragraph.cn.replace(/[。？！，、]/g, '');
-        const tokens = [];
-        for (let i = 0; i < clean.length; i += 2) {
-          tokens.push(clean.slice(i, i + 2));
-        }
-        return {
-          segments: shuffle([...tokens]),
-          correct_order: tokens,
-        };
-      })() : {},
+      metadata_json: dragData ? {
+        segments: dragData.segments,
+        correct_order: dragData.correct_order,
+        sentence_vi: dragData.sentence_vi,
+      } : {},
     };
-  }).filter(q => q.options.length === 4 || q.quiz_type === 'drag_drop');
+  }).filter(q => q.quiz_type === 'drag_drop' ? Boolean(q.metadata_json?.correct_order?.length) : q.options.length === 4);
 }
 
 export async function startQuiz(payload) {

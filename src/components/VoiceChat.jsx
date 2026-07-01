@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Mic, Square, Volume2, Trash2 } from 'lucide-react';
+import { Mic, Square, Trash2, X } from 'lucide-react';
 import { voiceChat } from '../api-core';
 import { speak, stopSpeech } from '../speech.jsx';
 import { isRecordingSupported, startRecording } from '../speech-ai.js';
+import ChatBubble from './Conversation/ChatBubble.jsx';
+import TypingIndicator from './Conversation/TypingIndicator.jsx';
+import { ensureHanziIndex } from './Conversation/hanzi-lookup.js';
 
 // Feature 2 — turn-based voice chat.
 // Flow: user records an utterance -> Gemini hears it, understands, and replies
@@ -13,11 +16,19 @@ export default function VoiceChat() {
   const [recording, setRecording] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState('');
+  const [indexReady, setIndexReady] = useState(false);
   const recorderRef = useRef(null);
   const scrollRef = useRef(null);
   const supported = isRecordingSupported();
 
   useEffect(() => () => stopSpeech(), []);
+
+  // Dựng chỉ mục tra cứu pinyin/nghĩa theo từng chữ Hán cho tooltip (1 lần).
+  useEffect(() => {
+    let active = true;
+    ensureHanziIndex().then(() => { if (active) setIndexReady(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -76,7 +87,7 @@ export default function VoiceChat() {
     <div className="vchat">
       <div className="vchat-head">
         <h3>Trò chuyện bằng giọng nói</h3>
-        <p className="vchat-sub">Nói một câu tiếng Trung, AI nghe và trả lời. Bấm loa để nghe lại.</p>
+        <p className="vchat-sub">Nói một câu tiếng Trung, AI nghe và trả lời. Bấm loa để nghe lại, chạm vào chữ Hán để xem pinyin.</p>
       </div>
 
       <div className="vchat-log" ref={scrollRef}>
@@ -84,28 +95,28 @@ export default function VoiceChat() {
           <p className="vchat-empty">Bấm "Ghi âm" rồi nói một câu tiếng Trung để bắt đầu.</p>
         )}
         {turns.map((t, i) => (
-          <div key={i} className={`vchat-turn vchat-turn--${t.role}`}>
-            <div className="vchat-bubble">
-              <span className="vchat-cn">{t.cn}</span>
-              {t.vi && <span className="vchat-vi">{t.vi}</span>}
-            </div>
-            {t.role === 'model' && t.cn && (
-              <button type="button" className="vchat-replay" onClick={() => { stopSpeech(); speak(t.cn, 0.82); }} title="Nghe lại">
-                <Volume2 size={16} />
-              </button>
-            )}
-          </div>
+          <ChatBubble
+            key={i}
+            role={t.role}
+            cn={t.cn}
+            vi={t.vi}
+            enableTooltip={indexReady}
+            onReplay={t.role === 'model' && t.cn ? () => { stopSpeech(); speak(t.cn, 0.82); } : undefined}
+          />
         ))}
-        {thinking && <div className="vchat-turn vchat-turn--model"><div className="vchat-bubble"><Loader2 className="spin" size={18} /> AI đang nghe...</div></div>}
+        {thinking && (
+          <div className="chat-row chat-row--ai">
+            <div className="chat-bubble2 chat-bubble2--ai">
+              <TypingIndicator />
+            </div>
+          </div>
+        )}
       </div>
-
-      {!supported && <p className="vchat-warn">Trình duyệt không hỗ trợ ghi âm. Hãy dùng Chrome hoặc Edge.</p>}
-      {error && <p className="vchat-error">{error}</p>}
 
       <div className="vchat-actions">
         {!recording ? (
           <button type="button" className="btn-primary" onClick={beginRecording} disabled={!supported || thinking}>
-            <Mic size={18} /> Ghi âm
+            <Mic size={18} /> {thinking ? 'AI đang trả lời...' : 'Ghi âm'}
           </button>
         ) : (
           <>
@@ -121,6 +132,15 @@ export default function VoiceChat() {
           </button>
         )}
       </div>
+
+      {!supported && <p className="vchat-warn">Trình duyệt không hỗ trợ ghi âm. Hãy dùng Chrome hoặc Edge.</p>}
+
+      {error && (
+        <div className="speech-toast" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError('')} aria-label="Đóng"><X size={15} /></button>
+        </div>
+      )}
     </div>
   );
 }
