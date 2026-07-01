@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, Bell, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -12,6 +12,7 @@ import PronunciationPractice from './components/PronunciationPractice.jsx';
 import VoiceChat from './components/VoiceChat.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { loadAllFlashcards } from './vocab-loader.js';
+import { notificationPermission, requestNotificationPermission, scheduleDailyReminder, cancelReminder, showNotification } from './notifications.js';
 
 // Module-level clock helper. Kept out of component scope so React's purity
 // lint doesn't flag the (intentional) impure read inside event handlers.
@@ -115,32 +116,6 @@ function getInitialFocusLevel() {
 function getInitialGeneralCheckState() {
   if (typeof window === 'undefined') return '';
   return window.localStorage.getItem('hskGeneralCheckState') || '';
-}
-
-// Chủ đề thụ đắc tự nhiên (khớp TOPIC_HINTS backend enrichment_service).
-const LEARNING_TOPICS = [
-  { id: 'people', label: 'Con người & xưng hô' },
-  { id: 'school', label: 'Học tập & trường lớp' },
-  { id: 'time', label: 'Thời gian' },
-  { id: 'place', label: 'Nơi chốn & nhà cửa' },
-  { id: 'number', label: 'Số đếm' },
-];
-
-function getInitialLearningMode() {
-  if (typeof window === 'undefined') return 'natural';
-  const saved = window.localStorage.getItem('learningMode');
-  return saved === 'hsk' || saved === 'natural' ? saved : 'natural';
-}
-
-function getInitialTopics() {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem('learningTopics');
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter(id => LEARNING_TOPICS.some(t => t.id === id)) : [];
-  } catch {
-    return [];
-  }
 }
 
 function QuizAudioPanel({ audioPlaying, audioPlayed, audioError, isListeningMode, playAudio }) {
@@ -428,53 +403,27 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
     </section>
   );
 }
-function LearningFocusPanel({ focusLevel, showFirstRun, learningMode, topics, onSelectLevel, onSelectLearningMode, onToggleTopic, onOpenLessons, onStartGeneralCheck, onSkipFirstRun }) {
-  const isNatural = learningMode !== 'hsk';
-  const headingNatural = showFirstRun ? 'Bắt đầu học tự nhiên' : 'Học theo nhu cầu';
-  const headingHsk = showFirstRun ? 'Chọn cấp HSK' : `HSK ${focusLevel}`;
+function LearningFocusPanel({ focusLevel, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun }) {
   return (
     <section className={`core-card focus-panel ${showFirstRun ? 'focus-panel--first' : ''}`}>
       <div className="focus-copy">
-        <h1>{isNatural ? headingNatural : headingHsk}</h1>
-        <p className="hide-mobile">{isNatural
-          ? 'Học như tập nói: gặp từ phổ biến trước, leo dần theo mức bạn thực sự dùng được.'
-          : (showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Cấp độ trọng tâm hiện tại.')}</p>
+        <h1>{showFirstRun ? 'Chọn cấp HSK' : `HSK ${focusLevel}`}</h1>
+        <p className="hide-mobile">{showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Cấp độ trọng tâm hiện tại.'}</p>
       </div>
 
       <div className="focus-controls">
-        <div className="learning-mode-toggle" role="group" aria-label="Chế độ học">
-          <button type="button" className={isNatural ? 'active' : ''} onClick={() => onSelectLearningMode('natural')}>Học tự nhiên</button>
-          <button type="button" className={!isNatural ? 'active' : ''} onClick={() => onSelectLearningMode('hsk')}>Luyện thi HSK</button>
+        <div className="focus-level-grid" aria-label="Chọn cấp HSK trọng tâm">
+          {FOCUS_LEVELS.map(item => (
+            <button key={item} className={focusLevel === item ? 'active' : ''} onClick={() => onSelectLevel(item)}>
+              <span>HSK</span>
+              <strong>{item}</strong>
+            </button>
+          ))}
         </div>
-
-        {isNatural ? (
-          <div className="topic-grid" aria-label="Chọn chủ đề quan tâm">
-            {LEARNING_TOPICS.map(topic => (
-              <button
-                key={topic.id}
-                type="button"
-                className={topics.includes(topic.id) ? 'active' : ''}
-                aria-pressed={topics.includes(topic.id)}
-                onClick={() => onToggleTopic(topic.id)}
-              >
-                {topic.label}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="focus-level-grid" aria-label="Chọn cấp HSK trọng tâm">
-            {FOCUS_LEVELS.map(item => (
-              <button key={item} className={focusLevel === item ? 'active' : ''} onClick={() => onSelectLevel(item)}>
-                <span>HSK</span>
-                <strong>{item}</strong>
-              </button>
-            ))}
-          </div>
-        )}
 
         <div className="focus-actions">
           <button className="btn-primary" onClick={() => onStartGeneralCheck(focusLevel)}><Play size={16} /> Kiểm tra tổng quát</button>
-          <button className="btn-secondary" onClick={onOpenLessons}><Play size={16} /> {isNatural ? 'Vào học' : `Luyện tập HSK ${focusLevel}`}</button>
+          <button className="btn-secondary" onClick={onOpenLessons}><Play size={16} /> {`Luyện tập HSK ${focusLevel}`}</button>
           {showFirstRun && <button className="btn-secondary" onClick={onSkipFirstRun}>Bỏ qua</button>}
         </div>
       </div>
@@ -601,17 +550,13 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
   );
 }
 
-function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, showFirstRun, learningMode, topics, onSelectLevel, onSelectLearningMode, onToggleTopic, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday }) {
+function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday }) {
   return (
     <main className="core-dashboard page-enter">
       <LearningFocusPanel
         focusLevel={focusLevel}
         showFirstRun={showFirstRun}
-        learningMode={learningMode}
-        topics={topics}
         onSelectLevel={onSelectLevel}
-        onSelectLearningMode={onSelectLearningMode}
-        onToggleTopic={onToggleTopic}
         onOpenLessons={onOpenLessons}
         onStartGeneralCheck={onStartGeneralCheck}
         onSkipFirstRun={onSkipFirstRun}
@@ -724,6 +669,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
   const [voiceDone, setVoiceDone] = useState(false);
   const answersRef = useRef([]);
   const questionStartedAtRef = useRef(0);
+  const loadIdRef = useRef(0);
 
   const item = quizItems[index];
   const question = item?.question;
@@ -756,6 +702,8 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
   };
 
   const loadQuiz = useCallback(async () => {
+    const loadId = loadIdRef.current + 1;
+    loadIdRef.current = loadId;
     setLoading(true);
     resetQuizState();
     try {
@@ -777,6 +725,8 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
           questions: (data.questions || []).map(row => ({ ...row, quiz_type: row.quiz_type || type })),
         };
       }));
+      // Người dùng đã bấm "Quay lại" trong lúc chờ — bỏ kết quả đến muộn.
+      if (loadIdRef.current !== loadId) return;
       const selectedQuestions = strategyMode === 'interleaved'
         ? interleaveQuestionBatches(batches, limit)
         : (batches[0]?.questions || []).slice(0, limit);
@@ -788,9 +738,17 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
         question: row,
       })));
     } finally {
-      setLoading(false);
+      if (loadIdRef.current === loadId) setLoading(false);
     }
   }, [level, limit, quizType, strategy.detail, strategyMode]);
+
+  // Hủy chờ tải (khi API treo): tăng loadId để bỏ response đến muộn, đưa người
+  // dùng về màn chọn đề thay vì kẹt ở spinner.
+  const cancelLoad = useCallback(() => {
+    loadIdRef.current += 1;
+    setLoading(false);
+    resetQuizState();
+  }, []);
 
   useEffect(() => {
     if (autoStartKey <= 0) return undefined;
@@ -1137,6 +1095,8 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
         <section className="core-card empty-state">
           <Loader2 size={24} className="spin" />
           <h2>Đang tạo...</h2>
+          <p>Nếu chờ quá lâu, máy chủ có thể đang khởi động lại.</p>
+          <button className="btn-secondary" type="button" onClick={cancelLoad}>Quay lại</button>
         </section>
       )}
 
@@ -2044,7 +2004,22 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
               <span>Ôn lại</span>
             </div>
           )}
-          <h2 className={isPassagePrompt(question.quiz_type) ? 'prompt--passage' : ''}>{isPassagePrompt(question.quiz_type) ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
+          {activeQuizType === 'cloze' ? (
+            <h2 className="cloze-prompt">
+              {question.prompt.split(/_{2,}/).map((part, i, arr) => (
+                <Fragment key={i}>
+                  {part}
+                  {i < arr.length - 1 && (
+                    <span className={`cloze-blank ${selected !== null ? 'filled' : ''}`}>
+                      {selected !== null ? question.options[selected] : ''}
+                    </span>
+                  )}
+                </Fragment>
+              ))}
+            </h2>
+          ) : (
+            <h2 className={isPassagePrompt(activeQuizType) ? 'prompt--passage' : ''}>{isPassagePrompt(activeQuizType) ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
+          )}
           {showAudioPanel && (
             <QuizAudioPanel
               audioPlaying={audioPlaying}
@@ -2309,7 +2284,18 @@ function GeneralCheck({ level, onExit, onComplete }) {
             <strong>{index + 1}</strong>
           </div>
           <div className="quiz-progress"><span style={{ width: `${progress}%` }} /></div>
-          <h2>{question.prompt}</h2>
+          {question.quiz_type === 'cloze' ? (
+            <h2 className="cloze-prompt">
+              {question.prompt.split(/_{2,}/).map((part, i, arr) => (
+                <Fragment key={i}>
+                  {part}
+                  {i < arr.length - 1 && <span className="cloze-blank" />}
+                </Fragment>
+              ))}
+            </h2>
+          ) : (
+            <h2 className={isPassagePrompt(question.quiz_type) ? 'prompt--passage' : ''}>{question.prompt}</h2>
+          )}
           {showAudioPanel && (
             <QuizAudioPanel
               audioPlaying={audioPlaying}
@@ -2531,21 +2517,30 @@ function VocabLibrary({ focusLevel }) {
   const [levelFilter, setLevelFilter] = useState(focusLevel);
   const [selectedWord, setSelectedWord] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    import('./vocab-loader').then(async mod => {
-      const loaded = dedupeVocabCards((await mod.loadAllFlashcards()).map(normalizeCard).filter(isReliableVocabCard));
-      if (alive) {
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setLoadError(false);
+      import('./vocab-loader').then(async mod => {
+        const loaded = dedupeVocabCards((await mod.loadAllFlashcards()).map(normalizeCard).filter(isReliableVocabCard));
+        if (!alive) return;
+        if (!loaded.length) throw new Error('empty');
         setCards(loaded);
         setSelectedWord(loaded.find(item => item.level === focusLevel) || loaded[0] || null);
         setLoading(false);
-      }
-    }).catch(() => {
-      if (alive) setLoading(false);
-    });
-    return () => { alive = false; };
-  }, [focusLevel]);
+      }).catch(() => {
+        if (alive) {
+          setLoadError(true);
+          setLoading(false);
+        }
+      });
+    }, 0);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [focusLevel, reloadKey]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -2581,14 +2576,23 @@ function VocabLibrary({ focusLevel }) {
       <section className="vocab-workspace">
         <div className="core-card vocab-list-panel">
           {loading && <div className="empty-inline"><Loader2 size={18} className="spin" /> Đang tải từ vựng</div>}
-          {!loading && filtered.map(item => (
+          {!loading && loadError && (
+            <div className="empty-inline vocab-load-error">
+              <AlertCircle size={20} />
+              <p>Không tải được kho từ vựng. Kiểm tra kết nối rồi thử lại.</p>
+              <button type="button" className="btn-secondary" onClick={() => setReloadKey(k => k + 1)}>
+                <RotateCcw size={16} /> Thử lại
+              </button>
+            </div>
+          )}
+          {!loading && !loadError && filtered.map(item => (
             <button key={item.key} className={visibleSelectedWord?.key === item.key ? 'active' : ''} onClick={() => setSelectedWord(item)}>
               <strong>{item.hanzi}</strong>
               <span>{item.pinyin}</span>
               <small>{item.meaning_vi}</small>
             </button>
           ))}
-          {!loading && !filtered.length && <div className="empty-inline">Không có kết quả phù hợp.</div>}
+          {!loading && !loadError && !filtered.length && <div className="empty-inline">Không có kết quả phù hợp.</div>}
         </div>
 
         <div className="core-card vocab-detail-panel">
@@ -2728,20 +2732,33 @@ function HandwritingPad({ targetWord }) {
 
 function getInitialPlan() {
   try {
-    return JSON.parse(window.localStorage.getItem('ifThenPlan')) || { cue: 'Sau bữa tối', time: '20:00', minutes: 5, muted: false };
+    return JSON.parse(window.localStorage.getItem('ifThenPlan')) || { cue: 'Sau bữa tối', time: '20:00', minutes: 5, muted: false, notify: false };
   } catch {
-    return { cue: 'Sau bữa tối', time: '20:00', minutes: 5, muted: false };
+    return { cue: 'Sau bữa tối', time: '20:00', minutes: 5, muted: false, notify: false };
   }
 }
 
 function StudyPlan({ todayPlan }) {
   const [plan, setPlan] = useState(getInitialPlan);
   const [saved, setSaved] = useState(false);
+  const [permission, setPermission] = useState(() => notificationPermission());
   const reminderText = `${plan.time}: ${todayPlan?.dueCount || 3} mục đến hạn. ${plan.minutes} phút là đủ để giữ lịch ôn.`;
+  const reminderBody = `Đến giờ học rồi. ${todayPlan?.dueCount || 3} mục đến hạn — ${plan.minutes} phút là đủ để giữ lịch ôn.`;
 
   const updatePlan = (patch) => {
     setPlan(current => ({ ...current, ...patch }));
     setSaved(false);
+  };
+
+  // Bật nhắc: xin quyền trước. Bị từ chối thì giữ tắt và để UI báo lại.
+  const toggleNotify = async (next) => {
+    if (!next) {
+      updatePlan({ notify: false });
+      return;
+    }
+    const result = await requestNotificationPermission();
+    setPermission(result);
+    updatePlan({ notify: result === 'granted' });
   };
 
   const savePlan = () => {
@@ -2749,6 +2766,23 @@ function StudyPlan({ todayPlan }) {
     window.localStorage.setItem('behaviorNudgeMuted', plan.muted ? '1' : '0');
     setSaved(true);
   };
+
+  // Áp lịch nhắc mỗi khi plan đổi (chỉ khi đã bật & có quyền). Cleanup tự hủy
+  // timer cũ để không bắn trùng.
+  useEffect(() => {
+    if (!plan.notify || permission !== 'granted') {
+      cancelReminder();
+      return undefined;
+    }
+    return scheduleDailyReminder({
+      time: plan.time,
+      title: 'Tezca · Nhắc học',
+      body: reminderBody,
+    });
+  }, [plan.notify, plan.time, permission, reminderBody]);
+
+  const denied = permission === 'denied';
+  const unsupported = permission === 'unsupported';
 
   return (
     <main className="core-page page-enter">
@@ -2764,7 +2798,17 @@ function StudyPlan({ todayPlan }) {
           <label><span>Thì học lúc</span><input type="time" value={plan.time} onChange={event => updatePlan({ time: event.target.value })} /></label>
           <label><span>Số phút</span><input type="number" min="3" max="45" value={plan.minutes} onChange={event => updatePlan({ minutes: Number(event.target.value) })} /></label>
           <label className="toggle-row"><input type="checkbox" checked={plan.muted} onChange={event => updatePlan({ muted: event.target.checked })} /><span>Tắt nudge trên Today Queue</span></label>
-          <button className="btn-primary" type="button" onClick={savePlan}><CalendarCheck size={16} /> Lưu kế hoạch</button>
+          <label className="toggle-row">
+            <input type="checkbox" checked={plan.notify} disabled={denied || unsupported} onChange={event => toggleNotify(event.target.checked)} />
+            <span>Nhắc bằng thông báo trình duyệt lúc {plan.time}</span>
+          </label>
+          {denied && <p className="plan-notify-hint plan-notify-hint--warn">Trình duyệt đang chặn thông báo. Hãy bật lại quyền cho trang này trong cài đặt trình duyệt.</p>}
+          {unsupported && <p className="plan-notify-hint plan-notify-hint--warn">Trình duyệt này không hỗ trợ thông báo.</p>}
+          {plan.notify && !denied && <p className="plan-notify-hint">Thông báo chỉ hiện khi tab Tezca đang mở.</p>}
+          <div className="plan-form-actions">
+            <button className="btn-primary" type="button" onClick={savePlan}><CalendarCheck size={16} /> Lưu kế hoạch</button>
+            <button className="btn-secondary" type="button" disabled={permission !== 'granted'} onClick={() => showNotification('Tezca · Thử thông báo', reminderBody)}><Bell size={16} /> Thử thông báo</button>
+          </div>
         </div>
 
         <div className="core-card plan-preview">
@@ -2776,7 +2820,7 @@ function StudyPlan({ todayPlan }) {
             <span><strong>{todayPlan?.dueCount || 0}</strong><small>Đến hạn</small></span>
             <span><strong>{todayPlan?.newCount || 0}</strong><small>Từ mới</small></span>
           </div>
-          {saved && <div className="feedback-panel feedback-panel--correct"><p>Đã lưu kế hoạch local.</p></div>}
+          {saved && <div className="feedback-panel feedback-panel--correct"><p>Đã lưu kế hoạch local.{plan.notify ? ' Đã hẹn nhắc hằng ngày.' : ''}</p></div>}
         </div>
       </section>
     </main>
@@ -2797,8 +2841,6 @@ export default function App() {
   const [analytics, setAnalytics] = useState(null);
   const [generalCheckState, setGeneralCheckState] = useState(getInitialGeneralCheckState);
   const [generalCheckLevel, setGeneralCheckLevel] = useState(null);
-  const [learningMode, setLearningMode] = useState(getInitialLearningMode);
-  const [topics, setTopics] = useState(getInitialTopics);
   const [stats, setStats] = useState({ attempts: 0, answered: 0, accuracy: 0, mastery_label: 'Khởi động', weak_words: 0 });
 
   const refreshStats = useCallback(async () => {
@@ -2899,7 +2941,7 @@ export default function App() {
     let alive = true;
     const timer = window.setTimeout(async () => {
       try {
-        const plan = await getTodaySession({ userId, focusLevel: level, mode: selectedSessionMode, learningMode, topics });
+        const plan = await getTodaySession({ userId, focusLevel: level, mode: selectedSessionMode, learningMode: 'hsk', topics: [] });
         if (alive) setBackendTodayPlan(plan);
       } catch {
         if (alive) setBackendTodayPlan(null);
@@ -2909,23 +2951,7 @@ export default function App() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [userId, level, selectedSessionMode, learningMode, topics, analytics?.answered, analytics?.attempts]);
-
-  const selectLearningMode = (nextMode) => {
-    const mode = nextMode === 'hsk' ? 'hsk' : 'natural';
-    setLearningMode(mode);
-    window.localStorage.setItem('learningMode', mode);
-  };
-
-  const toggleTopic = (topicId) => {
-    setTopics(current => {
-      const next = current.includes(topicId)
-        ? current.filter(id => id !== topicId)
-        : [...current, topicId];
-      window.localStorage.setItem('learningTopics', JSON.stringify(next));
-      return next;
-    });
-  };
+  }, [userId, level, selectedSessionMode, analytics?.answered, analytics?.attempts]);
 
   const selectFocusLevel = (nextLevel) => {
     const numericLevel = Number(nextLevel);
@@ -3052,7 +3078,7 @@ export default function App() {
 
         <ErrorBoundary key={generalCheckLevel ? 'general' : activeTab}>
         {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
-        {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} learningMode={learningMode} topics={topics} onSelectLearningMode={selectLearningMode} onToggleTopic={toggleTopic} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
+        {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
         {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
         {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}

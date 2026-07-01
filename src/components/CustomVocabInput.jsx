@@ -33,11 +33,24 @@ const inputStyle = {
   minHeight: '180px',
   padding: '1rem',
   borderRadius: '8px',
-  border: '1px solid var(--border-color)',
-  background: 'var(--card-bg)',
-  color: 'var(--ink)',
+  border: '1px solid var(--line)',
+  background: 'var(--paper)',
+  color: 'var(--text)',
   fontFamily: 'inherit',
   resize: 'vertical',
+};
+
+// Dropdown dùng chung — biến theme thật (var cũ --border-color/--card-bg không
+// tồn tại nên trên mobile select hiện trong suốt, không bấm được).
+const selectStyle = {
+  padding: '0.6rem 0.85rem',
+  borderRadius: '8px',
+  border: '1px solid var(--line)',
+  background: 'var(--paper)',
+  color: 'var(--text)',
+  fontWeight: 600,
+  minHeight: '44px',
+  minWidth: '140px',
 };
 
 export default function CustomVocabInput({ onSessionCreated }) {
@@ -277,7 +290,7 @@ export default function CustomVocabInput({ onSessionCreated }) {
               value={hskLevel}
               onChange={(e) => setHskLevel(Number(e.target.value))}
               disabled={loading || source === 'vocab'}
-              style={{ padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--ink)' }}
+              style={selectStyle}
             >
               {HSK_LEVELS.map(l => <option key={l} value={l}>HSK {l}</option>)}
             </select>
@@ -288,7 +301,7 @@ export default function CustomVocabInput({ onSessionCreated }) {
               value={count}
               onChange={(e) => setCount(Number(e.target.value))}
               disabled={loading || source === 'vocab'}
-              style={{ padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--ink)' }}
+              style={selectStyle}
             >
               {COUNT_OPTIONS.map(c => <option key={c} value={c}>{c} câu</option>)}
             </select>
@@ -372,7 +385,7 @@ function QuizPreview({ draft, saving, saved, onSave, onStart }) {
                     style={{
                       padding: '0.5rem 0.75rem',
                       borderRadius: '8px',
-                      border: `1px solid ${isCorrect ? 'var(--modern-zen-primary, #2bb673)' : 'var(--border-color)'}`,
+                      border: `1px solid ${isCorrect ? 'var(--modern-zen-primary, #2bb673)' : 'var(--line)'}`,
                       background: isCorrect ? 'rgba(43, 182, 115, 0.12)' : 'transparent',
                       fontWeight: isCorrect ? 700 : 400,
                     }}

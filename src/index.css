@@ -2852,6 +2852,38 @@ blockquote small {
   min-height: 18px;
 }
 
+/* Plan: nút lưu + thử thông báo, và dòng gợi ý quyền thông báo. */
+.plan-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.plan-notify-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.plan-notify-hint--warn {
+  color: var(--cinnabar);
+  font-weight: 700;
+}
+
+/* Vocab: thẻ lỗi tải kèm nút thử lại. */
+.vocab-load-error {
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.vocab-load-error svg {
+  color: var(--cinnabar);
+}
+
 .result-review {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4393,6 +4425,559 @@ blockquote small {
   background: var(--cinnabar-soft);
 }
 
+/* ── Speech: Pronunciation + Voice chat redesign ──────────────────── */
+
+.pron-practice,
+.vchat {
+  display: grid;
+  gap: 16px;
+  animation: softRise 260ms ease both;
+}
+
+.pron-head h3,
+.vchat-head h3 {
+  margin: 0;
+  font-size: 1.7rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.pron-sub,
+.vchat-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+/* HSK level selector — nút active nền đậm, chữ trắng, đổ bóng. */
+.pron-levels {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.level-button {
+  min-height: 60px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: transform 170ms ease, border-color 170ms ease, background 170ms ease, color 170ms ease, box-shadow 170ms ease;
+}
+
+.level-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--gold) 32%, transparent);
+  background: var(--gold-soft);
+  color: var(--text);
+}
+
+.level-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.level-button-tag {
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.level-button-num {
+  font: 900 1.5rem var(--font-cn);
+  line-height: 1;
+}
+
+.level-button.active {
+  color: var(--primary-text);
+  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(31, 138, 112, 0.26);
+}
+
+.pron-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: clamp(20px, 3vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.pron-hanzi {
+  font: 700 clamp(3rem, 8vw, 4.6rem) var(--font-cn);
+  line-height: 1.05;
+  color: var(--text);
+  text-align: center;
+}
+
+.pron-pinyin {
+  font-size: 1.2rem;
+  font-weight: 850;
+  color: var(--jade);
+}
+
+.pron-meaning {
+  color: var(--muted);
+  font-weight: 750;
+  text-align: center;
+}
+
+.pron-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.pron-warn,
+.vchat-warn {
+  margin: 0;
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Waveform — sóng âm chạy liên tục khi đang ghi âm. */
+.pron-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 48px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.pron-wave-bar {
+  width: 4px;
+  height: 20%;
+  border-radius: 999px;
+  background: var(--cinnabar);
+  opacity: 0.5;
+}
+
+.pron-wave.is-active .pron-wave-bar {
+  animation: waveBar 1s ease-in-out infinite;
+  animation-delay: calc(var(--bar-index) * 60ms);
+  opacity: 1;
+}
+
+@keyframes waveBar {
+  0%, 100% { height: 18%; }
+  50% { height: 92%; }
+}
+
+/* 3 score rings (Tổng điểm / Độ chuẩn âm / Thanh điệu). */
+.pron-rings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.score-ring {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.score-ring-dial {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.score-ring-hole {
+  width: 72%;
+  height: 72%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.score-ring-hole strong {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.score-ring-hole small {
+  color: var(--dim);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.score-ring-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.pron-scoring-skeleton {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.pron-result {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.pron-result-body {
+  display: grid;
+  gap: 8px;
+}
+
+.pron-line {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.pron-line i {
+  color: var(--jade);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.pron-muted {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.pron-tip {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--gold-soft);
+  border: 1px solid color-mix(in srgb, var(--gold) 26%, transparent);
+  color: var(--text);
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.pron-tip--dsp {
+  background: var(--jade-soft);
+  border-color: color-mix(in srgb, var(--jade) 28%, transparent);
+}
+
+.pron-errs {
+  display: grid;
+  gap: 6px;
+}
+
+.pron-errs ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.pron-errs li {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.88rem;
+}
+
+.pron-syl--ok { color: var(--jade); }
+.pron-syl--bad { color: var(--cinnabar); }
+
+.pron-empty {
+  gap: 14px;
+}
+
+/* ── Voice chat ───────────────────────────────────────────────────── */
+.vchat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 280px;
+  max-height: 52vh;
+  overflow-y: auto;
+  padding: clamp(14px, 2vw, 20px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.vchat-empty {
+  margin: auto;
+  color: var(--dim);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Bong bóng chat: AI trái, User phải. */
+.chat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 86%;
+}
+
+.chat-row--ai {
+  align-self: flex-start;
+}
+
+.chat-row--user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.chat-bubble2 {
+  display: grid;
+  gap: 4px;
+  padding: 10px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  line-height: 1.5;
+  animation: bubbleIn 220ms ease both;
+}
+
+.chat-bubble2--ai {
+  border-bottom-left-radius: 5px;
+  color: var(--text);
+  background: var(--control-bg);
+}
+
+.chat-bubble2--user {
+  border-bottom-right-radius: 5px;
+  color: var(--selected-text);
+  background: var(--jade-soft);
+  border-color: color-mix(in srgb, var(--jade) 28%, transparent);
+}
+
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-cn {
+  font-family: var(--font-cn);
+  font-size: 1.15rem;
+}
+
+.chat-vi {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.chat-replay {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--jade);
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.chat-replay:hover {
+  transform: scale(1.08);
+  background: var(--jade-soft);
+}
+
+/* Tooltip pinyin + nghĩa cho từng chữ Hán. */
+.hanzi-tip {
+  position: relative;
+  cursor: help;
+  border-radius: 3px;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.hanzi-tip:hover,
+.hanzi-tip.is-open,
+.hanzi-tip:focus-visible {
+  background: var(--gold-soft);
+  color: var(--gold);
+  outline: none;
+}
+
+.hanzi-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  min-width: 96px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  text-align: center;
+  pointer-events: none;
+  animation: bubbleIn 160ms ease both;
+}
+
+.hanzi-pop::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--paper-strong);
+}
+
+.hanzi-pop strong {
+  color: var(--jade);
+  font-size: 0.92rem;
+  font-family: var(--font);
+}
+
+.hanzi-pop small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* Typing indicator — 3 chấm nhấp nháy tuần tự. */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+}
+
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dim);
+  animation: typingBlink 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBlink {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+.vchat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Toast lỗi thân thiện (góc dưới phải, tông cinnabar). */
+.speech-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(360px, calc(100vw - 36px));
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  border: 1px solid color-mix(in srgb, var(--cinnabar) 42%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  color: var(--text);
+  font-weight: 750;
+  animation: toastSlideIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.speech-toast button {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* ── Polish: live recording state ─────────────────────────────────
+   .pron-recording / .vchat-recording are applied to the primary button
+   while the mic is live. Without this they look identical to an idle
+   button — give them a pulsing cinnabar glow so "listening" reads clearly. */
+.pron-recording,
+.vchat-recording {
+  background: linear-gradient(135deg, var(--cinnabar), color-mix(in srgb, var(--cinnabar) 80%, #000)) !important;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--cinnabar) 55%, transparent) !important;
+  animation: recPulse 1.6s ease-in-out infinite;
+}
+
+.pron-recording:hover,
+.vchat-recording:hover {
+  transform: translateY(-2px) !important;
+}
+
+@keyframes recPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cinnabar) 50%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--cinnabar) 0%, transparent); }
+}
+
+/* Score rings sweep + count panel in, staggered, after scoring lands. */
+.pron-result .score-ring {
+  animation: ringPop 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.pron-result .score-ring:nth-child(1) { animation-delay: 40ms; }
+.pron-result .score-ring:nth-child(2) { animation-delay: 120ms; }
+.pron-result .score-ring:nth-child(3) { animation-delay: 200ms; }
+
+@keyframes ringPop {
+  from { opacity: 0; transform: scale(0.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.pron-result-body {
+  animation: softRise 320ms ease 220ms both;
+}
+
+@media (max-width: 720px) {
+  .pron-levels {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .chat-row {
+    max-width: 94%;
+  }
+
+  .pron-rings {
+    gap: 12px;
+  }
+}
+
 /* ── Motion: prefers-reduced-motion ───────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -4401,7 +4986,18 @@ blockquote small {
   .skeleton,
   .achievement-toast,
   .drag-chip,
-  .voice-record-btn--recording {
+  .voice-record-btn--recording,
+  .pron-recording,
+  .vchat-recording,
+  .pron-result .score-ring,
+  .pron-result-body,
+  .pron-practice,
+  .vchat,
+  .pron-wave.is-active .pron-wave-bar,
+  .chat-bubble2,
+  .hanzi-pop,
+  .typing-dot,
+  .speech-toast {
     animation: none !important;
   }
 

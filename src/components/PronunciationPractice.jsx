@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Loader2, Mic, Square, RotateCcw } from 'lucide-react';
+import { Headphones, Mic, Square, RotateCcw, X } from 'lucide-react';
 import { getPracticeSentence, scorePronunciation } from '../api-core';
 import { speak, stopSpeech } from '../speech.jsx';
 import { isRecordingSupported, startRecording } from '../speech-ai.js';
+import LevelButton from './Pronunciation/LevelButton.jsx';
+import Waveform from './Pronunciation/Waveform.jsx';
+import ScoreRing from './Pronunciation/ScoreRing.jsx';
 
 const LEVELS = [1, 2, 3, 4, 5, 6];
 
 // Feature 1 — Pronunciation practice (shadowing + scoring).
 // Flow: AI plays a model reading via the existing speak() TTS, the user records
 // a repeat, and Gemini transcribes it while pinyin_scorer scores deterministically.
-export default function PronunciationPractice() {
-  const [level, setLevel] = useState(1);
+export default function PronunciationPractice({ focusLevel = 1 }) {
+  const [level, setLevel] = useState(() => {
+    const n = Number(focusLevel);
+    return n >= 1 && n <= 6 ? n : 1;
+  });
   const [target, setTarget] = useState(null);
   const [loading, setLoading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -93,8 +99,6 @@ export default function PronunciationPractice() {
     setRecording(false);
   }, []);
 
-  const scoreClass = (score) => (score >= 85 ? 'pron-score--good' : score >= 60 ? 'pron-score--ok' : 'pron-score--low');
-
   return (
     <div className="pron-practice">
       <div className="pron-head">
@@ -102,26 +106,38 @@ export default function PronunciationPractice() {
         <p className="pron-sub">Nghe câu mẫu, lặp lại, AI chấm điểm âm và thanh điệu.</p>
         <div className="pron-levels">
           {LEVELS.map((lvl) => (
-            <button
+            <LevelButton
               key={lvl}
-              type="button"
-              className={lvl === level ? 'active' : ''}
-              onClick={() => setLevel(lvl)}
+              level={lvl}
+              active={lvl === level}
               disabled={recording || scoring}
-            >
-              HSK {lvl}
-            </button>
+              onClick={() => setLevel(lvl)}
+            />
           ))}
         </div>
       </div>
 
       {loading ? (
-        <div className="pron-loading"><Loader2 className="spin" size={22} /> Đang tải...</div>
+        <div className="pron-card skeleton-card" aria-hidden="true">
+          <div className="skeleton skeleton-line skeleton-line--lg" style={{ margin: '0 auto 16px', width: '40%' }} />
+          <div className="skeleton skeleton-line skeleton-line--sm" style={{ margin: '0 auto 24px', width: '24%' }} />
+          <div className="pron-actions">
+            <div className="skeleton skeleton-line" style={{ width: 120, height: 42 }} />
+            <div className="skeleton skeleton-line" style={{ width: 120, height: 42 }} />
+            <div className="skeleton skeleton-line" style={{ width: 120, height: 42 }} />
+          </div>
+        </div>
       ) : target ? (
         <div className="pron-card">
           <div className="pron-hanzi">{target.hanzi}</div>
           {target.pinyin && <div className="pron-pinyin">{target.pinyin}</div>}
           {target.meaning_vi && <div className="pron-meaning">{target.meaning_vi}</div>}
+
+          {recording ? (
+            <Waveform active />
+          ) : (
+            !supported && <p className="pron-warn">Trình duyệt không hỗ trợ ghi âm. Hãy dùng Chrome hoặc Edge.</p>
+          )}
 
           <div className="pron-actions">
             <button type="button" className="btn-secondary" onClick={playModel} disabled={recording || scoring}>
@@ -130,7 +146,7 @@ export default function PronunciationPractice() {
 
             {!recording ? (
               <button type="button" className="btn-primary" onClick={beginRecording} disabled={!supported || scoring}>
-                <Mic size={18} /> Ghi âm
+                <Mic size={18} /> {scoring ? 'Đang chấm...' : 'Ghi âm'}
               </button>
             ) : (
               <>
@@ -146,21 +162,28 @@ export default function PronunciationPractice() {
             </button>
           </div>
 
-          {!supported && <p className="pron-warn">Trình duyệt không hỗ trợ ghi âm. Hãy dùng Chrome hoặc Edge.</p>}
-          {scoring && <div className="pron-loading"><Loader2 className="spin" size={20} /> AI đang nghe và chấm...</div>}
-          {error && <p className="pron-error">{error}</p>}
-
-          {result && (
-            <div className="pron-result">
-              <div className={`pron-score ${scoreClass(result.score)}`}>
-                <strong>{result.score}</strong><span>/100</span>
+          {scoring && (
+            <div className="pron-scoring-skeleton" aria-label="Đang chấm điểm">
+              <div className="pron-rings">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="skeleton" style={{ width: 92, height: 92, borderRadius: '50%' }} />
+                ))}
               </div>
-              <div className="pron-result-body">
+              <p className="pron-muted">AI đang nghe và chấm phát âm của bạn...</p>
+            </div>
+          )}
+
+          {result && !scoring && (
+            <div className="pron-result">
+              <div className="pron-rings">
+                <ScoreRing value={result.score} label="Tổng điểm" suffix="/100" />
+                <ScoreRing value={result.identity_score} label="Độ chuẩn âm" />
                 {result.tone_accuracy != null && (
-                  <p className="pron-line"><b>Độ chuẩn thanh điệu:</b> {Math.round(result.tone_accuracy * 100)}%
-                    <small className="pron-muted"> (phân tích cao độ F0)</small>
-                  </p>
+                  <ScoreRing value={Math.round(result.tone_accuracy * 100)} label="Thanh điệu" />
                 )}
+              </div>
+
+              <div className="pron-result-body">
                 <p className="pron-line"><b>Bạn đọc:</b> {result.actual_hanzi || '—'} <i>{result.actual_pinyin}</i></p>
                 <p className="pron-line"><b>Mục tiêu:</b> {result.target_hanzi} <i>{result.target_pinyin}</i></p>
                 {result.detailed_feedback && <p className="pron-tip pron-tip--dsp">{result.detailed_feedback}</p>}
@@ -205,7 +228,19 @@ export default function PronunciationPractice() {
           )}
         </div>
       ) : (
-        <p className="pron-error">{error || 'Chưa có dữ liệu.'}</p>
+        <div className="pron-card pron-empty">
+          <p className="pron-muted">{error ? 'Không tải được câu luyện tập.' : 'Chưa có dữ liệu.'}</p>
+          <button type="button" className="btn-secondary" onClick={reload}>
+            <RotateCcw size={18} /> Thử lại
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="speech-toast" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError('')} aria-label="Đóng"><X size={15} /></button>
+        </div>
       )}
     </div>
   );
