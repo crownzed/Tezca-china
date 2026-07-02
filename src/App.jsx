@@ -96,7 +96,7 @@ const NAV = [
   { id: 'vocab', label: 'Từ vựng', icon: Search },
   { id: 'custom', label: 'Tự tạo', icon: PenTool },
   { id: 'speak', label: 'Phát âm', icon: Mic },
-  { id: 'voicechat', label: 'Hội thoại', icon: MessageCircle },
+  // { id: 'voicechat', label: 'Hội thoại', icon: MessageCircle }, // tạm ẩn
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
 ];
 
@@ -3083,7 +3083,7 @@ export default function App() {
         {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
         {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
         {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevel={level} />}
-        {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />}
+        {/* {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />} */}
         {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
         {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
         </ErrorBoundary>
