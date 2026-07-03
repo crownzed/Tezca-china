@@ -49,6 +49,28 @@ def init_db() -> None:
     if settings.database_url.startswith("sqlite"):
         _ensure_sqlite_word_columns()
         _ensure_sqlite_user_progress_columns()
+    _ensure_indexes()
+
+
+def _ensure_indexes() -> None:
+    """Tạo index bổ sung trên DB đã tồn tại.
+
+    ``create_all`` chỉ thêm index cho bảng MỚI, không ALTER bảng cũ. Các index
+    dưới đây được thêm sau khi model đã deploy nên phải tạo bằng DDL riêng.
+    ``CREATE INDEX IF NOT EXISTS`` được cả SQLite lẫn PostgreSQL hỗ trợ.
+    """
+    statements = [
+        "CREATE INDEX IF NOT EXISTS ix_examples_source ON examples (source)",
+        "CREATE INDEX IF NOT EXISTS ix_quiz_attempts_user_level_type_created "
+        "ON quiz_attempts (user_id, level, quiz_type, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_questions_level_type_created "
+        "ON questions (level, quiz_type, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_quiz_attempts_user_created "
+        "ON quiz_attempts (user_id, created_at)",
+    ]
+    with engine.begin() as conn:
+        for stmt in statements:
+            conn.execute(text(stmt))
 
 
 def _ensure_sqlite_word_columns() -> None:

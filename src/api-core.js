@@ -69,6 +69,14 @@ async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
   return res.json();
 }
 
+// Danh sách từ vựng HSK từ DB backend (nguồn sự thật). Chỉ trả từ đã có
+// meaning_vi. Ném lỗi khi backend không tới được để tầng gọi (vocab-loader)
+// degrade sạch về file JS local.
+export async function getWords(level) {
+  const query = level ? `?level=${encodeURIComponent(level)}` : '';
+  return request(`/api/words${query}`);
+}
+
 const QUIZ_TYPE_LABELS = {
   vocab: 'Từ vựng',
   listening: 'Nghe',

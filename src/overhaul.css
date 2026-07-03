@@ -105,14 +105,14 @@
 /* 2. Shell & Sidebar */
 .core-sidebar {
   background: var(--modern-zen-card) !important;
-  border-right: 1px solid rgba(0,0,0,0.03) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.03) !important;
   box-shadow: 1px 0 24px rgba(var(--shadow-color), 0.02) !important;
   padding: 24px 16px !important;
   gap: 8px !important;
 }
 
 [data-theme='dark'] .core-sidebar {
-  border-right: 1px solid rgba(255,255,255,0.02) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.02) !important;
 }
 
 .core-logo {
@@ -177,7 +177,10 @@
 }
 
 /* 3. Cards & Surfaces */
-.core-card, .analytics-panel, .today-queue-panel, .result-card {
+.core-card,
+.analytics-panel,
+.today-queue-panel,
+.result-card {
   background-color: var(--modern-zen-card) !important;
   background-image: var(--bg-pattern) !important;
   border: 1px solid rgba(var(--shadow-color), 0.04) !important;
@@ -186,22 +189,27 @@
   transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), border-color var(--transition-smooth) !important;
 }
 
-[data-theme='dark'] .core-card, [data-theme='dark'] .analytics-panel, [data-theme='dark'] .today-queue-panel {
-  border: 1px solid rgba(255,255,255,0.03) !important;
+[data-theme='dark'] .core-card,
+[data-theme='dark'] .analytics-panel,
+[data-theme='dark'] .today-queue-panel {
+  border: 1px solid rgba(255, 255, 255, 0.03) !important;
 }
 
-.core-card:hover, .analytics-panel:hover {
+.core-card:hover,
+.analytics-panel:hover {
   transform: translateY(-4px) !important;
   box-shadow: var(--shadow-lg) !important;
   border-color: rgba(var(--shadow-color), 0.08) !important;
 }
 
 [data-theme='dark'] .core-card:hover {
-  border-color: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
 }
 
 /* Remove the pseudo element border from old CSS */
-.core-card::after, .level-card::after, .quiz-type-card::after {
+.core-card::after,
+.level-card::after,
+.quiz-type-card::after {
   display: none !important;
 }
 
@@ -210,7 +218,8 @@
   background: var(--jade-gradient) !important;
   color: #fff !important;
   border: none !important;
-  border-radius: 999px !important; /* Pill shape for primary actions */
+  border-radius: 999px !important;
+  /* Pill shape for primary actions */
   padding: 0 24px !important;
   font-weight: 600 !important;
   letter-spacing: 0.02em !important;
@@ -247,7 +256,7 @@
 }
 
 [data-theme='dark'] .core-topbar {
-  border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
 }
 
 .core-topbar h2 {
@@ -271,24 +280,39 @@
 }
 
 /* Typography Enhancements */
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   letter-spacing: -0.01em !important;
 }
 
 /* Add stagger to grid items */
-.core-stats-grid > * {
+.core-stats-grid>* {
   animation: fadeUp var(--transition-smooth) backwards !important;
 }
-.core-stats-grid > *:nth-child(1) { animation-delay: 50ms !important; }
-.core-stats-grid > *:nth-child(2) { animation-delay: 100ms !important; }
-.core-stats-grid > *:nth-child(3) { animation-delay: 150ms !important; }
-.core-stats-grid > *:nth-child(4) { animation-delay: 200ms !important; }
+
+.core-stats-grid>*:nth-child(1) {
+  animation-delay: 50ms !important;
+}
+
+.core-stats-grid>*:nth-child(2) {
+  animation-delay: 100ms !important;
+}
+
+.core-stats-grid>*:nth-child(3) {
+  animation-delay: 150ms !important;
+}
+
+.core-stats-grid>*:nth-child(4) {
+  animation-delay: 200ms !important;
+}
 
 @keyframes fadeUp {
   0% {
     opacity: 0;
     transform: translateY(16px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -296,7 +320,8 @@ h1, h2, h3 {
 }
 
 /* Focus and Quiz Panels */
-.focus-panel, .today-queue-panel {
+.focus-panel,
+.today-queue-panel {
   padding: 32px !important;
 }
 
@@ -421,9 +446,17 @@ h1, h2, h3 {
   opacity: 1 !important;
 }
 
-.core-stat--gold::before { background: var(--gold-gradient) !important; }
-.core-stat--blue::before { background: linear-gradient(135deg, #73A7BE, #3f7d9a) !important; }
-.core-stat--cinnabar::before { background: linear-gradient(135deg, #E07A5F, #C2402F) !important; }
+.core-stat--gold::before {
+  background: var(--gold-gradient) !important;
+}
+
+.core-stat--blue::before {
+  background: linear-gradient(135deg, #73A7BE, #3f7d9a) !important;
+}
+
+.core-stat--cinnabar::before {
+  background: linear-gradient(135deg, #E07A5F, #C2402F) !important;
+}
 
 /* Micro animations for icons */
 .core-stat:hover svg {
@@ -537,7 +570,10 @@ h1, h2, h3 {
 .premium-card::before {
   content: '' !important;
   position: absolute !important;
-  top: 0 !important; left: 0 !important; right: 0 !important; height: 4px !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 4px !important;
   background: var(--jade-gradient) !important;
   transform: scaleX(0) !important;
   transform-origin: left !important;
@@ -562,13 +598,15 @@ h1, h2, h3 {
   margin-bottom: 8px !important;
 }
 
-.topic-grid, .focus-level-grid {
+.topic-grid,
+.focus-level-grid {
   display: flex !important;
   flex-wrap: wrap !important;
   gap: 12px !important;
 }
 
-.topic-grid button, .focus-level-grid button {
+.topic-grid button,
+.focus-level-grid button {
   background: transparent !important;
   border: 2px solid rgba(var(--shadow-color), 0.08) !important;
   padding: 12px 24px !important;
@@ -579,13 +617,15 @@ h1, h2, h3 {
   cursor: pointer !important;
 }
 
-.topic-grid button:hover, .focus-level-grid button:hover {
+.topic-grid button:hover,
+.focus-level-grid button:hover {
   border-color: var(--modern-zen-primary) !important;
   transform: translateY(-2px) !important;
   background: rgba(18, 122, 93, 0.02) !important;
 }
 
-.topic-grid button.active, .focus-level-grid button.active {
+.topic-grid button.active,
+.focus-level-grid button.active {
   background: var(--jade-gradient) !important;
   color: white !important;
   border-color: transparent !important;
@@ -786,6 +826,7 @@ h1, h2, h3 {
   flex-direction: column;
   gap: 6px;
 }
+
 .drag-drop-label {
   margin: 0;
   font-size: 0.92rem;
@@ -794,6 +835,7 @@ h1, h2, h3 {
   letter-spacing: 0.06em;
   color: var(--muted);
 }
+
 .drag-drop-hint-vi {
   margin: 0;
   font-size: 1rem;
@@ -815,10 +857,12 @@ h1, h2, h3 {
   background: rgba(var(--shadow-color, 0 0 0), 0.02);
   transition: border-color 200ms ease, background 200ms ease;
 }
+
 .drag-answer-zone:has(.drag-chip--selected) {
   border-color: color-mix(in srgb, var(--modern-zen-primary, #127a5d) 40%, transparent);
   background: rgba(18, 122, 93, 0.04);
 }
+
 .drag-hint {
   color: var(--muted);
   font-size: 0.92rem;
@@ -843,6 +887,7 @@ h1, h2, h3 {
   user-select: none;
   transition: opacity 200ms ease;
 }
+
 .drag-slash--faded {
   opacity: 0.3;
 }
@@ -871,17 +916,19 @@ h1, h2, h3 {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(18, 122, 93, 0.15);
 }
+
 .drag-chip--available:active {
   transform: translateY(0);
 }
 
 /* Chip đã chọn (trong answer zone) */
 .drag-chip--selected {
-  background: var(--jade-soft, rgba(18,122,93,0.1));
+  background: var(--jade-soft, rgba(18, 122, 93, 0.1));
   border-color: var(--modern-zen-primary, #127a5d);
   color: var(--modern-zen-primary, #127a5d);
   font-weight: 600;
 }
+
 .drag-chip--selected:hover {
   background: rgba(194, 64, 47, 0.08);
   border-color: var(--cinnabar, #c2402f);
@@ -918,15 +965,18 @@ h1, h2, h3 {
   cursor: pointer;
   transition: all 160ms ease;
 }
+
 .btn-ghost:hover:not(:disabled) {
   background: rgba(var(--shadow-color, 0 0 0), 0.05);
   color: var(--text);
   border-color: rgba(var(--shadow-color, 0 0 0), 0.3);
 }
+
 .btn-ghost:disabled {
   opacity: 0.4;
   pointer-events: none;
 }
+
 .drag-reset-btn {
   font-size: 0.88rem;
   padding: 6px 14px;
@@ -940,6 +990,7 @@ h1, h2, h3 {
   gap: 16px;
   padding: 16px 0;
 }
+
 .voice-word-hero {
   font-family: var(--font-cn);
   font-size: 3.5rem;
@@ -947,9 +998,11 @@ h1, h2, h3 {
   color: var(--text);
   line-height: 1.2;
 }
+
 .voice-pinyin {
   font-size: 1.2rem;
 }
+
 .voice-meaning {
   color: var(--muted);
   font-size: 1rem;
@@ -964,6 +1017,7 @@ h1, h2, h3 {
   width: 100%;
   max-width: 360px;
 }
+
 .voice-rating-btn {
   padding: 12px 16px;
   border-radius: var(--radius-sm);
@@ -975,10 +1029,12 @@ h1, h2, h3 {
   cursor: pointer;
   transition: all var(--transition-snappy);
 }
+
 .voice-rating-btn:hover {
   border-color: var(--modern-zen-primary);
   background: rgba(18, 122, 93, 0.05);
 }
+
 .voice-rating-btn--done {
   background: var(--jade-soft);
   border-color: var(--modern-zen-primary);
@@ -1119,11 +1175,32 @@ h1, h2, h3 {
   flex-wrap: wrap;
   gap: 4px;
 }
-.pinyin-syllable.tone-1 { color: #E74C3C !important; } /* Flat (Red) */
-.pinyin-syllable.tone-2 { color: #E67E22 !important; } /* Rising (Orange) */
-.pinyin-syllable.tone-3 { color: #27AE60 !important; } /* Falling-Rising (Green) */
-.pinyin-syllable.tone-4 { color: #2980B9 !important; } /* Falling (Blue) */
-.pinyin-syllable.tone-0 { color: var(--muted) !important; } /* Neutral (Gray) */
+
+.pinyin-syllable.tone-1 {
+  color: #E74C3C !important;
+}
+
+/* Flat (Red) */
+.pinyin-syllable.tone-2 {
+  color: #E67E22 !important;
+}
+
+/* Rising (Orange) */
+.pinyin-syllable.tone-3 {
+  color: #27AE60 !important;
+}
+
+/* Falling-Rising (Green) */
+.pinyin-syllable.tone-4 {
+  color: #2980B9 !important;
+}
+
+/* Falling (Blue) */
+.pinyin-syllable.tone-0 {
+  color: var(--muted) !important;
+}
+
+/* Neutral (Gray) */
 
 .feedback-panel button.btn-primary {
   width: 100% !important;
@@ -1209,34 +1286,36 @@ h1, h2, h3 {
 }
 
 [data-theme='dark'] {
-  /* Re-skin dark mode to deep-blue / teal / celadon per the brief */
-  --modern-zen-bg: #0a1626 !important;
-  --modern-zen-card: #0f2138 !important;
-  --modern-zen-primary: #5fd6b4 !important;
-  --modern-zen-success: #4fd6a8 !important;
-  --modern-zen-text: #eaf4f2 !important;
-  --modern-zen-chip: #16304d !important;
+  /* Re-skin dark mode to elegant blue-grey tone #93B4CC */
+  --modern-zen-bg: #091320 !important;
+  --modern-zen-card: #0f1c2d !important;
+  --modern-zen-primary: #93B4CC !important;
+  /* Đổi tone chính dark mode thành màu #93B4CC */
+  --modern-zen-success: #7da5bf !important;
+  --modern-zen-text: #e1edf8 !important;
+  --modern-zen-chip: #15273d !important;
   --jade: var(--modern-zen-primary) !important;
-  --jade-gradient: linear-gradient(135deg, #6fe6c4, #2fae9e) !important;
-  --jade-soft: rgba(95, 214, 180, 0.16) !important;
-  --primary-start: #6fe6c4 !important;
-  --primary-end: #2fae9e !important;
-  --primary-text: #04201a !important;
-  --logo-text: #04201a !important;
-  --focus-ring: rgba(95, 214, 180, 0.45) !important;
-  --porcelain: #6aa8d8 !important;
-  --muted: #aebfce !important;
-  --dim: #7f93a8 !important;
-  --line: rgba(160, 200, 230, 0.10) !important;
-  --line-soft: rgba(160, 200, 230, 0.07) !important;
+  --jade-gradient: linear-gradient(135deg, #b2c9db, #93B4CC) !important;
+  --jade-soft: rgba(147, 180, 204, 0.16) !important;
+  --primary-start: #b2c9db !important;
+  --primary-end: #93B4CC !important;
+  --primary-text: #0b1c2b !important;
+  --logo-text: #0b1c2b !important;
+  --focus-ring: rgba(147, 180, 204, 0.45) !important;
+  --porcelain: #73a4cc !important;
+  --muted: #a4b7c8 !important;
+  --dim: #798d9f !important;
+  --line: rgba(147, 180, 204, 0.10) !important;
+  --line-soft: rgba(147, 180, 204, 0.07) !important;
 
-  --glass-bg: rgba(18, 40, 66, 0.55) !important;
-  --glass-border: rgba(120, 190, 220, 0.18) !important;
+  --glass-bg: rgba(15, 28, 45, 0.55) !important;
+  --glass-border: rgba(147, 180, 204, 0.16) !important;
   --glass-blur: 20px !important;
-  --aurora-1: rgba(95, 214, 180, 0.22) !important;
-  --aurora-2: rgba(36, 130, 170, 0.26) !important;
-  --aurora-3: rgba(40, 90, 160, 0.24) !important;
-  --stream-color: rgba(120, 230, 200, 0.5) !important;
+  --aurora-1: rgba(147, 180, 204, 0.22) !important;
+  /* Đổi màu orb sang tone #93B4CC */
+  --aurora-2: rgba(36, 110, 150, 0.24) !important;
+  --aurora-3: rgba(40, 80, 140, 0.22) !important;
+  --stream-color: rgba(147, 180, 204, 0.45) !important;
 }
 
 /* Fixed immersive backdrop behind the whole app */
@@ -1253,8 +1332,9 @@ h1, h2, h3 {
 
 [data-theme='dark'] .immersive-bg {
   background:
-    radial-gradient(130% 130% at 80% -10%, rgba(15, 125, 140, 0.18), transparent 55%),
-    radial-gradient(130% 130% at -10% 110%, rgba(14, 42, 74, 0.55), transparent 55%);
+    radial-gradient(130% 130% at 80% -10%, rgba(147, 180, 204, 0.15), transparent 55%),
+    /* Nhuộm màu nền #93B4CC */
+    radial-gradient(130% 130% at -10% 110%, rgba(15, 28, 45, 0.65), transparent 55%);
 }
 
 /* Soft drifting aurora orbs — also receive cursor parallax */
@@ -1266,28 +1346,54 @@ h1, h2, h3 {
   will-change: transform !important;
   transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
+
 .immersive-bg .orb-1 {
-  width: 46vw; height: 46vw; top: -8vw; left: -6vw;
+  width: 46vw;
+  height: 46vw;
+  top: -8vw;
+  left: -6vw;
   background: var(--aurora-1) !important;
   transform: translate3d(calc(var(--px) * 1.4), calc(var(--py) * 1.4), 0);
   animation: orbDrift1 26s ease-in-out infinite alternate !important;
 }
+
 .immersive-bg .orb-2 {
-  width: 40vw; height: 40vw; bottom: -10vw; right: -6vw;
+  width: 40vw;
+  height: 40vw;
+  bottom: -10vw;
+  right: -6vw;
   background: var(--aurora-2) !important;
   transform: translate3d(calc(var(--px) * -1.1), calc(var(--py) * -1.1), 0);
   animation: orbDrift2 32s ease-in-out infinite alternate !important;
 }
+
 .immersive-bg .orb-3 {
-  width: 34vw; height: 34vw; top: 28%; left: 38%;
+  width: 34vw;
+  height: 34vw;
+  top: 28%;
+  left: 38%;
   background: var(--aurora-3) !important;
   transform: translate3d(calc(var(--px) * 0.7), calc(var(--py) * 0.7), 0);
   animation: orbDrift3 38s ease-in-out infinite alternate !important;
 }
 
-@keyframes orbDrift1 { to { translate: 6vw 4vw; } }
-@keyframes orbDrift2 { to { translate: -5vw -3vw; } }
-@keyframes orbDrift3 { to { translate: 3vw -5vw; } }
+@keyframes orbDrift1 {
+  to {
+    translate: 6vw 4vw;
+  }
+}
+
+@keyframes orbDrift2 {
+  to {
+    translate: -5vw -3vw;
+  }
+}
+
+@keyframes orbDrift3 {
+  to {
+    translate: 3vw -5vw;
+  }
+}
 
 /* Horizontal glowing data streams */
 .immersive-bg .stream {
@@ -1299,16 +1405,47 @@ h1, h2, h3 {
   box-shadow: 0 0 8px var(--stream-color) !important;
   opacity: 0.6 !important;
 }
-.immersive-bg .stream-1 { top: 22%; animation: streamFlow 9s linear infinite !important; }
-.immersive-bg .stream-2 { top: 48%; width: 24% !important; animation: streamFlow 13s linear infinite 2s !important; }
-.immersive-bg .stream-3 { top: 71%; width: 14% !important; animation: streamFlow 11s linear infinite 4s !important; }
-.immersive-bg .stream-4 { top: 86%; animation: streamFlow 15s linear infinite 1s !important; }
+
+.immersive-bg .stream-1 {
+  top: 22%;
+  animation: streamFlow 9s linear infinite !important;
+}
+
+.immersive-bg .stream-2 {
+  top: 48%;
+  width: 24% !important;
+  animation: streamFlow 13s linear infinite 2s !important;
+}
+
+.immersive-bg .stream-3 {
+  top: 71%;
+  width: 14% !important;
+  animation: streamFlow 11s linear infinite 4s !important;
+}
+
+.immersive-bg .stream-4 {
+  top: 86%;
+  animation: streamFlow 15s linear infinite 1s !important;
+}
 
 @keyframes streamFlow {
-  0%   { transform: translateX(0); opacity: 0; }
-  10%  { opacity: 0.7; }
-  90%  { opacity: 0.7; }
-  100% { transform: translateX(700%); opacity: 0; }
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.7;
+  }
+
+  90% {
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: translateX(700%);
+    opacity: 0;
+  }
 }
 
 /* Lift the real app above the backdrop */
@@ -1317,10 +1454,16 @@ h1, h2, h3 {
   z-index: 1 !important;
   background: transparent !important;
 }
-.core-shell { background: transparent !important; }
+
+.core-shell {
+  background: transparent !important;
+}
 
 /* Glassmorphism on floating surfaces */
-.core-card, .analytics-panel, .today-queue-panel, .result-card {
+.core-card,
+.analytics-panel,
+.today-queue-panel,
+.result-card {
   background-color: var(--glass-bg) !important;
   background-image: var(--bg-pattern) !important;
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%) !important;
@@ -1350,6 +1493,7 @@ h1, h2, h3 {
     0 4px 14px rgba(47, 174, 158, 0.28),
     inset 0 0 0 rgba(255, 255, 255, 0) !important;
 }
+
 .btn-primary:hover {
   box-shadow:
     0 10px 28px rgba(47, 174, 158, 0.42),
@@ -1360,9 +1504,11 @@ h1, h2, h3 {
 .core-sidebar button {
   transition: transform var(--transition-snappy), background var(--transition-smooth), color var(--transition-smooth) !important;
 }
+
 .core-sidebar button:hover {
   transform: scale(1.06) !important;
 }
+
 .core-sidebar button.active {
   box-shadow: inset 0 0 0 1px var(--jade-soft), 0 0 18px var(--jade-soft) !important;
 }
@@ -1370,20 +1516,40 @@ h1, h2, h3 {
 /* Slow-ease entrance: questions/cards merge in rather than jump.
    No filter:blur here — a lingering filter (even blur(0) via fill mode) on a
    glass card would disable its own backdrop-filter. */
-.page-enter, .question-card.learning-question-card {
+.page-enter,
+.question-card.learning-question-card {
   animation: glassMergeIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
 }
+
 @keyframes glassMergeIn {
-  0%   { opacity: 0; transform: translateY(14px) scale(0.985); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Respect reduced motion: kill parallax, drift, streams, blur-in */
 @media (prefers-reduced-motion: reduce) {
+
   .immersive-bg .orb,
-  .immersive-bg .stream { animation: none !important; transform: none !important; }
-  .core-page { transform: none !important; }
-  .page-enter, .question-card.learning-question-card { animation: none !important; }
+  .immersive-bg .stream {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .core-page {
+    transform: none !important;
+  }
+
+  .page-enter,
+  .question-card.learning-question-card {
+    animation: none !important;
+  }
 }
 
 /* =========================================
@@ -1394,17 +1560,21 @@ h1, h2, h3 {
   display: inline-block;
   line-height: 1.8;
 }
+
 .tap-char {
   position: relative;
   cursor: default;
   transition: all 0.2s;
   padding: 0 1px;
 }
+
 .tap-char.has-dict {
   cursor: pointer;
   border-bottom: 1px dashed var(--line);
 }
-.tap-char.has-dict:hover, .tap-char.has-dict.active {
+
+.tap-char.has-dict:hover,
+.tap-char.has-dict.active {
   background: var(--porcelain-soft);
   border-bottom-color: var(--porcelain);
   color: var(--porcelain);
@@ -1447,6 +1617,7 @@ h1, h2, h3 {
   line-height: 1;
   margin-bottom: 4px;
 }
+
 .tap-tooltip em {
   font-size: 0.9rem;
   color: var(--porcelain);
@@ -1454,9 +1625,103 @@ h1, h2, h3 {
   font-weight: 500;
   margin-bottom: 2px;
 }
+
 .tap-tooltip small {
   font-size: 0.85rem;
   color: var(--muted);
   text-align: center;
 }
 
+/* ==========================================================================
+   Auspicious Clouds & Watermark elements
+   ========================================================================== */
+
+.mythical-art-bg {
+  position: absolute !important;
+  top: -2vh !important;
+  left: -2vw !important;
+  width: 104vw !important; /* Tràn viền rộng */
+  height: 104vh !important; /* Tràn viền cao */
+  pointer-events: none !important;
+  mix-blend-mode: overlay; /* Hòa trộn trực tiếp với màu sắc dải màu phía sau nền */
+  opacity: 0.12; /* Độ mờ rất dịu cho Light Mode */
+  transition: opacity 0.5s ease, filter 0.5s ease;
+  will-change: transform;
+  z-index: 1; /* Nằm trên các orb nền nhưng dưới lớp card làm mờ */
+  animation: artFloat 55s ease-in-out infinite alternate !important; /* Trôi nổi siêu chậm */
+}
+
+/* Tối ưu hóa cho Theme Tối */
+[data-theme='dark'] .mythical-art-bg {
+  mix-blend-mode: soft-light;
+  opacity: 0.28; /* Độ mờ trên nền tối rất dịu */
+}
+
+.creature-svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* ================= 1. Các nét vẽ mây xoắn ốc cuộn dài và sóng nước phụ trợ ================= */
+.cloud-spiral, .wave-line {
+  fill: none;
+  stroke: rgba(15, 125, 140, 0.16); /* Màu xám xanh mòng két nhạt ở Light Mode */
+  stroke-width: 1.6px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: blur(1.2px); /* Làm mờ nhòe nhẹ để nét vẽ mịn màng như sương khói, không bị sắc/đơ */
+  transition: stroke 0.5s ease;
+}
+
+[data-theme='dark'] .cloud-spiral, 
+[data-theme='dark'] .wave-line {
+  stroke: rgba(147, 180, 204, 0.18) !important; /* Nhuộm màu xanh xám #93B4CC dịu nhẹ ở Dark Mode */
+  stroke-width: 1.4px;
+}
+
+/* ================= 2. Bức ảnh mẫu Rồng Phượng ở chính giữa ================= */
+.center-watermark-img {
+  /* Bỏ mask-image để bức ảnh cũ hiển thị trọn vẹn đầy đủ chi tiết */
+  
+  /* Light Mode Filter */
+  filter: 
+    grayscale(100%) 
+    brightness(1.18) 
+    contrast(0.75)
+    drop-shadow(1px 1px 1px rgba(255, 255, 255, 0.70));
+}
+
+[data-theme='dark'] .center-watermark-img {
+  /* Dark Mode Filter: Nhuộm màu nét sáng thành màu xanh xám #93B4CC mượt mà */
+  filter: 
+    grayscale(100%) 
+    invert(100%) 
+    sepia(100%) 
+    hue-rotate(175deg) 
+    saturate(160%) 
+    brightness(0.82) 
+    contrast(0.70)
+    drop-shadow(0 0 15px rgba(147, 180, 204, 0.35)) !important; /* Hào quang xanh xám dịu nhẹ */
+}
+
+/* Quỹ đạo chuyển động bồng bềnh và xoay nhẹ siêu chậm của bức tranh */
+@keyframes artFloat {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(-10px, 10px, 0) rotate(1deg) scale(1.01);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-0.8deg) scale(0.99);
+  }
+}
+
+/* Tôn trọng cài đặt tắt chuyển động của hệ điều hành */
+@media (prefers-reduced-motion: reduce) {
+  .mythical-art-bg {
+    animation: none !important;
+    transform: none !important;
+  }
+}

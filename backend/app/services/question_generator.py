@@ -95,6 +95,40 @@ def _primary_subtype(quiz_type: QuizType) -> str:
 class QuestionGeneratorService:
     def __init__(self, db: Session):
         self.db = db
+        # Cache Example theo word_id trong vòng đời service. Một lượt sinh tạo
+        # tới 6 biến thể/từ và nhiều method (_prompt_for, _options, _audio,
+        # _explanation...) đều truy vấn cùng Example của một từ — memoize để
+        # cắt các round-trip DB trùng lặp mà không đổi kết quả.
+        self._example_cache: dict[int, list[Example]] = {}
+        # Cache pool Word theo (hsk_level, pos) trong vòng đời service. Mỗi
+        # variant gọi ``_options_with_words`` lại truy vấn tối đa 80 Word cùng
+        # cấp (và cùng POS) làm nguồn distractor — memoize để không tải lại
+        # cùng một pool cho mọi từ/variant ở cùng cấp. Loại ``word.id`` được
+        # làm ở Python lúc dùng nên pool dùng chung được giữa các từ.
+        self._pool_cache: dict[tuple[int, str | None], list[Word]] = {}
+
+    def _examples_for(self, word: Word) -> list[Example]:
+        cached = self._example_cache.get(word.id)
+        if cached is None:
+            cached = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+            self._example_cache[word.id] = cached
+        return cached
+
+    def _word_pool(self, hsk_level: int, pos: str | None) -> list[Word]:
+        """Pool Word cùng cấp (tuỳ chọn cùng POS) làm nguồn distractor.
+
+        Không lọc ``id != word.id`` trong SQL để pool dùng chung được cho mọi
+        từ ở cùng cấp — người gọi tự loại từ đích ở Python.
+        """
+        key = (hsk_level, pos)
+        cached = self._pool_cache.get(key)
+        if cached is None:
+            query = select(Word).where(Word.hsk_level == hsk_level)
+            if pos:
+                query = query.where(Word.pos == pos)
+            cached = self.db.scalars(query.limit(80)).all()
+            self._pool_cache[key] = cached
+        return cached
 
     def ensure_questions(self, level: int, quiz_type: QuizType, limit: int) -> list[Question]:
         existing = self._existing_questions(level, quiz_type, limit)
@@ -230,7 +264,7 @@ class QuestionGeneratorService:
         if quiz_type == QuizType.listening:
             return "Nghe câu và chọn nghĩa tiếng Việt đúng"
 
-        examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+        examples = self._examples_for(word)
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         
         if quiz_type == QuizType.dialogue:
@@ -327,16 +361,17 @@ class QuestionGeneratorService:
         Mapping option->word_id cho phép suy ra ``selected_word`` khi người học
         chọn sai (đáp án đã shuffle), làm đầu vào cho bộ phân loại lỗi.
         """
-        base_query = select(Word).where(Word.hsk_level == word.hsk_level, Word.id != word.id)
+        # Pool distractor lấy từ cache theo (hsk_level, pos); loại từ đích ở
+        # Python vì pool được chia sẻ giữa các từ cùng cấp.
         if word.pos:
             # Ưu tiên lấy từ có cùng từ loại (POS) để tạo distractors chuẩn ngữ pháp
-            pos_pool = self.db.scalars(base_query.where(Word.pos == word.pos).limit(80)).all()
+            pos_pool = [w for w in self._word_pool(word.hsk_level, word.pos) if w.id != word.id]
             if len(pos_pool) >= 3:
                 pool = pos_pool
             else:
-                pool = self.db.scalars(base_query.limit(80)).all()
+                pool = [w for w in self._word_pool(word.hsk_level, None) if w.id != word.id]
         else:
-            pool = self.db.scalars(base_query.limit(80)).all()
+            pool = [w for w in self._word_pool(word.hsk_level, None) if w.id != word.id]
 
         if len(pool) < 3:
             return [], 0, []
@@ -460,13 +495,13 @@ class QuestionGeneratorService:
             vp = self._voice_prompt_for_word(word, seed)
             if vp and vp.startswith('Đọc to câu sau: '):
                 return vp.replace('Đọc to câu sau: ', '').strip()
-            examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+            examples = self._examples_for(word)
             ex = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
             return ex.sentence_cn if ex and ex.sentence_cn else word.hanzi
         return ""
 
     def _drag_drop_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
-        examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+        examples = self._examples_for(word)
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if not example or not example.sentence_cn or word.hanzi not in example.sentence_cn:
             return None
@@ -509,14 +544,14 @@ class QuestionGeneratorService:
 
 
     def _voice_prompt_for_word(self, word: Word, seed: int | None = None) -> str | None:
-        examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+        examples = self._examples_for(word)
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if example and example.sentence_cn:
             return f"Đọc to câu sau: {example.sentence_cn}"
         return f"Đọc to từ: {word.hanzi} ({word.pinyin or ''})"
 
     def _listening_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
-        examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+        examples = self._examples_for(word)
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if example and example.sentence_cn and example.sentence_vi:
             return {"cn": example.sentence_cn, "vi": example.sentence_vi}
@@ -526,7 +561,7 @@ class QuestionGeneratorService:
         return {"cn": word.hanzi, "vi": meaning}
 
     def _dialogue_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
-        examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+        examples = self._examples_for(word)
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if not example or not example.sentence_cn or not example.sentence_vi:
             return None
@@ -564,7 +599,7 @@ class QuestionGeneratorService:
         return variants[word.id % len(variants)]
 
     def _paragraph_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
-        examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+        examples = self._examples_for(word)
         first = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if not first or not first.sentence_cn or not first.sentence_vi:
             return None
@@ -615,7 +650,7 @@ class QuestionGeneratorService:
         return _within_cap(variants[word.id % len(variants)])
 
     def _cloze_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
-        examples = self.db.scalars(select(Example).where(Example.word_id == word.id)).all()
+        examples = self._examples_for(word)
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if not example or not example.sentence_cn or word.hanzi not in example.sentence_cn:
             return None

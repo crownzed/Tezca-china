@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
     gemini_model: str = "google/gemini-3.5-flash"
 
-    # Google Gemini TTS (native API key from aistudio, NOT vilao relay)
-    gemini_tts_api_key: str = ""
+    # Google Gemini TTS. Dùng chung GEMINI_NATIVE_API_KEYS với speech (xem dưới);
+    # chỉ giữ model + voice ở đây.
     gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
     gemini_tts_voice: str = "Kore"
 

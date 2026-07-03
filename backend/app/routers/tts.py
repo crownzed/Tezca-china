@@ -4,7 +4,8 @@ Frontend gọi /tts?text=你好 -> backend gọi Google Gemini TTS (native API),
 nhận PCM L16 24kHz mono base64, bọc WAV header rồi trả audio/wav.
 
 Tách khỏi vilao relay: relay chỉ phục vụ chat text, không có model TTS.
-Key dùng ở đây là key Google AI Studio gốc (GEMINI_TTS_API_KEY).
+Key dùng ở đây là key Google AI Studio gốc, dùng chung GEMINI_NATIVE_API_KEYS
+với các tính năng speech (pronunciation scoring + voice chat).
 """
 import base64
 import io
@@ -55,9 +56,10 @@ def _pcm_to_wav(pcm: bytes, sample_rate: int = _SAMPLE_RATE) -> bytes:
 
 @router.get("")
 def synthesize(text: str = Query(..., min_length=1, max_length=MAX_TEXT_LEN)):
-    api_key = settings.gemini_tts_api_key.strip()
-    if not api_key:
-        raise HTTPException(status_code=503, detail="GEMINI_TTS_API_KEY chưa cấu hình")
+    keys = settings.gemini_native_keys_list
+    if not keys:
+        raise HTTPException(status_code=503, detail="GEMINI_NATIVE_API_KEYS chưa cấu hình")
+    api_key = keys[0]
 
     clean = text.strip()
     if not clean:

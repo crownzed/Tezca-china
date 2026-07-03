@@ -18,8 +18,54 @@ function isReliableCard(card) {
   );
 }
 
+// Map một dòng /api/words (WordOut) sang shape thẻ mà frontend đang dùng
+// (character/hskLevel/meaning + examples[{cn,pinyin,vi}]).
+function mapBackendWord(w) {
+  const examples = Array.isArray(w.examples)
+    ? w.examples
+        .filter(e => e && e.cn)
+        .map(e => ({ cn: e.cn, pinyin: '', vi: e.vi || '' }))
+    : [];
+  return {
+    id: `db-${w.id}`,
+    character: w.hanzi,
+    pinyin: w.pinyin || '',
+    meaning: w.meaning_vi || '',
+    hskLevel: Number(w.hsk_level),
+    category: w.pos || 'core',
+    strokeCount: 0,
+    examples,
+    exampleSentence: examples[0]?.cn || '',
+    examplePinyin: '',
+    exampleVi: examples[0]?.vi || '',
+    breakdown: w.radical ? [{ radical: w.radical, meaning: '' }] : [],
+    mnemonic: '',
+  };
+}
+
+// Nguồn sự thật là DB backend (/api/words). Trả thẳng khi lấy được đủ từ; nếu
+// backend lỗi/ngủ (Render cold start) hoặc trả rỗng thì degrade sạch về file JS
+// local để app vẫn dùng offline được.
+async function loadFromBackend() {
+  const { getWords } = await import('./api-core');
+  const data = await getWords();
+  const words = data?.words || [];
+  const cards = words.map(mapBackendWord).filter(isReliableCard);
+  return cards;
+}
+
 export async function loadAllFlashcards() {
   if (cachedAllCards) return cachedAllCards;
+
+  try {
+    const backendCards = await loadFromBackend();
+    if (backendCards.length) {
+      cachedAllCards = backendCards.sort((a, b) => Number(a.hskLevel) - Number(b.hskLevel));
+      return cachedAllCards;
+    }
+  } catch (err) {
+    console.warn('Backend vocab unavailable, falling back to local files:', err.message);
+  }
 
   try {
     const [dataModule, bankModule, megaModule] = await Promise.all([

@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -64,7 +64,7 @@ class Example(Base):
     word_id: Mapped[int] = mapped_column(ForeignKey("words.id"), index=True)
     sentence_cn: Mapped[str] = mapped_column(Text)
     sentence_vi: Mapped[str] = mapped_column(Text, default="")
-    source: Mapped[str] = mapped_column(String(64), default="tatoeba")
+    source: Mapped[str] = mapped_column(String(64), default="tatoeba", index=True)
 
     word: Mapped[Word] = relationship(back_populates="examples")
 
@@ -86,7 +86,10 @@ class Question(Base):
 
     word: Mapped[Word | None] = relationship()
 
-    __table_args__ = (UniqueConstraint("word_id", "quiz_type", "prompt", name="uq_question_word_type_prompt"),)
+    __table_args__ = (
+        UniqueConstraint("word_id", "quiz_type", "prompt", name="uq_question_word_type_prompt"),
+        Index("ix_questions_level_type_created", "level", "quiz_type", "created_at"),
+    )
 
 
 class QuizAttempt(Base):
@@ -100,6 +103,11 @@ class QuizAttempt(Base):
     total: Mapped[int] = mapped_column(Integer)
     answers: Mapped[list[dict]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_quiz_attempts_user_level_type_created", "user_id", "level", "quiz_type", "created_at"),
+        Index("ix_quiz_attempts_user_created", "user_id", "created_at"),
+    )
 
 
 class LearningSession(Base):

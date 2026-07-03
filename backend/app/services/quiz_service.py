@@ -1,15 +1,198 @@
+import logging
+import threading
 from datetime import datetime, timezone
 from random import shuffle
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+import random
+
+from ..db import SessionLocal
 from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress, Word
 from ..schemas import AnswerResult, QuizSubmitRequest, QuizSubmitResponse
+from ..settings import settings
 from .event_service import LearningEventService
 from .item_difficulty import difficulty_fit, is_low_quality
-from .question_generator import QUESTION_SUBTYPE_DIALOGUE, QUESTION_SUBTYPE_PARAGRAPH, QUESTION_SUBTYPE_SENTENCE, QuestionGeneratorService
+from .question_generator import (
+    QUESTION_SUBTYPE_DIALOGUE,
+    QUESTION_SUBTYPE_KEYWORD,
+    QUESTION_SUBTYPE_MEANING,
+    QUESTION_SUBTYPE_PARAGRAPH,
+    QUESTION_SUBTYPE_SENTENCE,
+    QuestionGeneratorService,
+)
 from .srs_service import SRSService
+
+logger = logging.getLogger(__name__)
+
+# Chống nhiều request cùng kích hoạt sinh nền cho một (level, quiz_type). Khóa
+# chỉ sống trong tiến trình — đủ để gộp các request đồng thời của cùng backend.
+_bankfill_lock = threading.Lock()
+_bankfill_inflight: set[tuple[int, str]] = set()
+
+# Các dạng câu mà AI (generate_exercises_for_vocab) sinh ra khớp trực tiếp với
+# schema Question và render được qua option-grid sẵn có. Các dạng khác
+# (listening/dialogue/translation/drag_drop/voice) cần audio_text CN hoặc
+# segments mà output AI không cung cấp → giữ nguyên template-only.
+_AI_MAPPABLE_TYPES = {QuizType.vocab, QuizType.cloze, QuizType.reading}
+# Nguồn đánh dấu câu hỏi AI sinh nền cho luồng luyện tập.
+_AI_PRACTICE_SOURCE = "ai_practice_llm"
+# Trần số câu AI mỗi (level, quiz_type) — chặn chi phí gọi LLM. Blend chỉ cần
+# ~limit/2 câu/lượt nên giữ mức khiêm tốn, bank đầy dần qua nhiều lượt chơi.
+_AI_BANK_TARGET = 24
+
+# Khóa in-flight cho AI fill, keyed theo level (một lượt gọi LLM enrich nhiều
+# dạng cùng lúc nên không keyed theo quiz_type như template fill).
+_ai_bankfill_lock = threading.Lock()
+_ai_bankfill_inflight: set[int] = set()
+
+
+def _ai_available() -> bool:
+    """AI khả dụng khi có ít nhất một API key (DeepSeek hoặc Gemini fallback)."""
+    return bool(settings.deepseek_api_key or settings.gemini_keys_list)
+
+
+def _is_ai_question(question: Question) -> bool:
+    """Câu hỏi do LLM sinh (custom-vocab, passage, hoặc AI practice fill)."""
+    return str((question.metadata_json or {}).get("source", "")).endswith("_llm")
+
+
+def _ai_subtype_for(quiz_type: QuizType) -> str:
+    """question_subtype để câu AI lọt qua bộ lọc subtype trong get_quiz.
+
+    cloze phải là SENTENCE (get_quiz lọc cloze theo subtype này); vocab/reading
+    không bị lọc theo subtype nên chỉ cần giá trị hợp lệ để phân loại.
+    """
+    if quiz_type == QuizType.cloze:
+        return QUESTION_SUBTYPE_SENTENCE
+    if quiz_type == QuizType.reading:
+        return QUESTION_SUBTYPE_KEYWORD
+    return QUESTION_SUBTYPE_MEANING
+
+
+def _fill_bank_ai_background(level: int, target: int = _AI_BANK_TARGET) -> None:
+    """Sinh câu hỏi AI cho ``level`` ở thread nền, dùng session riêng.
+
+    Một lượt gọi LLM (generate_exercises_for_vocab) enrich nhiều dạng cùng lúc;
+    câu AI được lưu để BLEND vào các lượt SAU (không phục vụ ngay lượt hiện tại).
+    Khóa in-flight keyed theo level tránh nhiều thread cùng gọi LLM cho một cấp.
+    Mọi lỗi (timeout ~90s, thiếu key, JSON hỏng) chỉ log — luồng luyện tập vẫn
+    chạy trên template, đúng chủ trương fallback về template.
+    """
+    if not _ai_available():
+        return
+    with _ai_bankfill_lock:
+        if level in _ai_bankfill_inflight:
+            return
+        _ai_bankfill_inflight.add(level)
+    try:
+        with SessionLocal() as db:
+            _generate_ai_questions(db, level, target)
+    except Exception:
+        logger.exception("fill_bank_ai_background failed for level=%s", level)
+    finally:
+        with _ai_bankfill_lock:
+            _ai_bankfill_inflight.discard(level)
+
+
+def _generate_ai_questions(db: Session, level: int, target: int) -> int:
+    """Gọi LLM sinh câu hỏi AI cho các từ ở ``level``, lưu các dạng mappable.
+
+    Dừng sớm nếu bank AI của cấp này đã đủ ``target`` câu (theo dạng ít nhất).
+    Trả về số câu mới thêm. Dedup theo (word_id, quiz_type, prompt) để tôn trọng
+    unique constraint của Question.
+    """
+    from .llm_generator_service import generate_exercises_for_vocab
+
+    existing = db.scalars(
+        select(Question).where(
+            Question.level == level,
+            Question.quiz_type.in_(_AI_MAPPABLE_TYPES),
+        )
+    ).all()
+    ai_per_type: dict[QuizType, int] = {qt: 0 for qt in _AI_MAPPABLE_TYPES}
+    existing_keys: set[tuple[int | None, QuizType, str]] = set()
+    for q in existing:
+        existing_keys.add((q.word_id, q.quiz_type, q.prompt))
+        if _is_ai_question(q):
+            ai_per_type[q.quiz_type] = ai_per_type.get(q.quiz_type, 0) + 1
+    if min(ai_per_type.values()) >= target:
+        return 0
+
+    words = db.scalars(select(Word).where(Word.hsk_level == level).limit(60)).all()
+    if not words:
+        return 0
+    word_by_hanzi = {w.hanzi: w for w in words}
+    sample = random.sample(words, min(8, len(words)))
+
+    data = generate_exercises_for_vocab([w.hanzi for w in sample])
+
+    added = 0
+    for item in data.get("words", []):
+        word = word_by_hanzi.get(item.get("hanzi"))
+        if not word:
+            continue
+        for q_data in item.get("questions", []):
+            try:
+                q_type = QuizType(q_data.get("quiz_type", ""))
+            except ValueError:
+                continue
+            if q_type not in _AI_MAPPABLE_TYPES:
+                continue
+            options = q_data.get("options", [])
+            if not isinstance(options, list) or len(options) != 4:
+                continue
+            prompt = q_data.get("prompt", "")
+            key = (word.id, q_type, prompt)
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
+            correct_index = q_data.get("correct_index", 0)
+            option_word_ids: list[int | None] = [None, None, None, None]
+            if isinstance(correct_index, int) and 0 <= correct_index < 4:
+                option_word_ids[correct_index] = word.id
+            db.add(Question(
+                word_id=word.id,
+                level=level,
+                quiz_type=q_type,
+                prompt=prompt,
+                options=options,
+                correct_index=correct_index if isinstance(correct_index, int) else 0,
+                explanation=q_data.get("explanation", ""),
+                audio_text="",
+                metadata_json={
+                    "source": _AI_PRACTICE_SOURCE,
+                    "question_subtype": _ai_subtype_for(q_type),
+                    "option_word_ids": option_word_ids,
+                },
+            ))
+            added += 1
+    if added:
+        db.commit()
+    return added
+
+
+def _fill_bank_background(level: int, quiz_type: QuizType, target: int) -> None:
+    """Nạp bank câu hỏi lên ``target`` ở thread nền, dùng session riêng.
+
+    Request chỉ sinh đủ câu để phục vụ ngay; phần còn lại (đa dạng hóa bank)
+    được đẩy sang đây để không chặn response. Khóa in-flight tránh nhiều
+    thread cùng sinh một (level, quiz_type).
+    """
+    key = (level, quiz_type.value)
+    with _bankfill_lock:
+        if key in _bankfill_inflight:
+            return
+        _bankfill_inflight.add(key)
+    try:
+        with SessionLocal() as db:
+            QuestionGeneratorService(db).ensure_questions(level, quiz_type, target)
+    except Exception:
+        logger.exception("fill_bank_background failed for level=%s type=%s", level, quiz_type)
+    finally:
+        with _bankfill_lock:
+            _bankfill_inflight.discard(key)
 
 
 def _build_user_confusion_map(db: Session, user_id: str) -> dict[int, list[int]]:
@@ -67,7 +250,7 @@ def _build_user_confusion_map(db: Session, user_id: str) -> dict[int, list[int]]
 def _inject_user_distractors(
     question: Question,
     confusion_map: dict[int, list[int]],
-    db: Session,
+    word_by_id: dict[int, Word],
 ) -> None:
     """Thay thế tối đa 1 distractor bằng từ người dùng từng nhầm với từ đích."""
     if not question.word_id or question.word_id not in confusion_map:
@@ -88,7 +271,7 @@ def _inject_user_distractors(
     confused_word = None
     for cid in confused_ids:
         if cid not in existing_wids:
-            confused_word = db.scalar(select(Word).where(Word.id == cid))
+            confused_word = word_by_id.get(cid)
             if confused_word:
                 break
 
@@ -129,13 +312,44 @@ class QuizService:
 
     def get_quiz(self, user_id: str, level: int, quiz_type: QuizType, limit: int) -> list[Question]:
         bank_size = max(limit * 8, 80)
-        self.generator.ensure_questions(level, quiz_type, bank_size)
-        candidates = self.db.scalars(
+        # Chỉ sinh ĐỒNG BỘ đủ câu để phục vụ + buffer cho rank/đa dạng, để
+        # response nhanh. Phần còn lại (nạp bank lên bank_size) đẩy sang thread
+        # nền — bank vẫn đầy dần qua các lượt chơi, không đổi độ đa dạng.
+        serve_size = min(bank_size, max(limit * 3, 24))
+        self.generator.ensure_questions(level, quiz_type, serve_size)
+        if serve_size < bank_size:
+            threading.Thread(
+                target=_fill_bank_background,
+                args=(level, quiz_type, bank_size),
+                name=f"bankfill-{level}-{quiz_type.value}",
+                daemon=True,
+            ).start()
+        # Sinh câu AI ở nền cho các dạng mappable — không phục vụ lượt hiện tại
+        # mà lấp bank để BLEND vào các lượt sau. Lỗi/timeout/thiếu key chỉ log,
+        # luồng luyện tập vẫn chạy trên template (fallback về template).
+        if quiz_type in _AI_MAPPABLE_TYPES and _ai_available():
+            threading.Thread(
+                target=_fill_bank_ai_background,
+                args=(level,),
+                name=f"ai-bankfill-{level}",
+                daemon=True,
+            ).start()
+        # Tải tối đa bank_size*2 ORM Question rồi lọc/rank trong RAM. Trước đây
+        # dùng *3 (240 obj khi limit=10); *2 vẫn để buffer ~16× limit cho
+        # rank/đa dạng và phòng lọc subtype Python, đồng thời thu nhỏ IN của
+        # _difficulty_stats. Composite index (level, quiz_type, created_at) lo
+        # phần filter+sort ở tầng DB.
+        candidates_query = (
             select(Question)
             .where(Question.level == level, Question.quiz_type == quiz_type)
             .order_by(Question.created_at.desc())
-            .limit(bank_size * 3)
-        ).all()
+            .limit(bank_size * 2)
+        )
+        # dialogue nhánh dưới truy cập question.word cho từng candidate
+        # (_refresh_dialogue_options) → eager-load để tránh N+1 lazy-load.
+        if quiz_type == QuizType.dialogue:
+            candidates_query = candidates_query.options(selectinload(Question.word))
+        candidates = self.db.scalars(candidates_query).all()
         if quiz_type == QuizType.listening:
             candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_SENTENCE]
         if quiz_type == QuizType.dialogue:
@@ -148,27 +362,64 @@ class QuizService:
         if not candidates:
             return []
 
-        confusion_map = _build_user_confusion_map(self.db, user_id)
-        if confusion_map:
-            for q in candidates:
-                _inject_user_distractors(q, confusion_map, self.db)
-
-        last_question_ids = self._recent_question_ids(user_id, level, quiz_type, attempt_count=1)
-        recent_question_ids = self._recent_question_ids(user_id, level, quiz_type, attempt_count=3)
+        last_question_ids, recent_question_ids = self._recent_question_id_sets(user_id, level, quiz_type)
         progress_by_word = self._progress_by_word(user_id)
         difficulty_stats = self._difficulty_stats([q.id for q in candidates])
 
         fresh = self._rank_questions(
             candidates, progress_by_word, last_question_ids, recent_question_ids, difficulty_stats
         )
-        selected = fresh[:limit]
-        if len(selected) >= limit:
-            return selected
+        selected = self._blend_ai_template(fresh, limit)
+        if len(selected) < limit:
+            selected_ids = {q.id for q in selected}
+            fallback = [q for q in candidates if q.id not in selected_ids]
+            shuffle(fallback)
+            selected = [*selected, *fallback[: limit - len(selected)]]
 
-        selected_ids = {q.id for q in selected}
-        fallback = [q for q in candidates if q.id not in selected_ids]
-        shuffle(fallback)
-        return [*selected, *fallback[: limit - len(selected)]]
+        self._personalize_distractors(user_id, selected)
+        return selected
+
+    def _blend_ai_template(self, ranked: list[Question], limit: int) -> list[Question]:
+        """Chọn ``limit`` câu, blend tối đa ~50% câu AI khi bank có sẵn.
+
+        Câu AI sinh nền chỉ xuất hiện từ lượt sau; khi chưa có câu AI nào thì
+        hàm trả về đúng ``ranked[:limit]`` (hành vi template-only như cũ). Khi
+        đã có, dành tối đa nửa số slot cho câu AI, phần còn lại là template —
+        cả hai nhóm đều giữ nguyên thứ tự rank. Thiếu nhóm nào thì nhóm kia bù.
+        """
+        ai = [q for q in ranked if _is_ai_question(q)]
+        template = [q for q in ranked if not _is_ai_question(q)]
+        if not ai:
+            return template[:limit]
+        ai_slots = min(len(ai), limit // 2)
+        selected = [*ai[:ai_slots], *template[: limit - ai_slots]]
+        if len(selected) < limit:
+            chosen_ids = {q.id for q in selected}
+            leftovers = [q for q in ranked if q.id not in chosen_ids]
+            selected.extend(leftovers[: limit - len(selected)])
+        shuffle(selected)
+        return selected[:limit]
+
+    def _personalize_distractors(self, user_id: str, questions: list[Question]) -> None:
+        """Chèn distractor cá nhân hóa cho các câu ĐÃ chọn (không quét toàn bank).
+
+        Chỉ chạy trên ``limit`` câu cuối cùng thay vì mọi candidate, và nạp tất
+        cả confused word bằng một truy vấn ``IN`` duy nhất thay vì mỗi câu một
+        lần ``db.scalar`` — giữ nguyên kết quả nhưng cắt số round-trip DB.
+        """
+        confusion_map = _build_user_confusion_map(self.db, user_id)
+        if not confusion_map:
+            return
+        needed_ids: set[int] = set()
+        for q in questions:
+            for cid in confusion_map.get(q.word_id or -1, []):
+                needed_ids.add(cid)
+        if not needed_ids:
+            return
+        words = self.db.scalars(select(Word).where(Word.id.in_(needed_ids))).all()
+        word_by_id = {w.id: w for w in words}
+        for q in questions:
+            _inject_user_distractors(q, confusion_map, word_by_id)
 
     def _refresh_dialogue_options(self, questions: list[Question]) -> None:
         changed = False
@@ -247,20 +498,35 @@ class QuizService:
         self.db.commit()
         return QuizSubmitResponse(score=score, total=len(results), results=results)
 
-    def _recent_question_ids(self, user_id: str, level: int, quiz_type: QuizType, attempt_count: int) -> set[int]:
+    def _recent_question_id_sets(
+        self, user_id: str, level: int, quiz_type: QuizType, recent_count: int = 3
+    ) -> tuple[set[int], set[int]]:
+        """Lấy id câu của lần gần nhất và của ``recent_count`` lần gần nhất.
+
+        Gộp hai truy vấn cũ (attempt_count=1 và =3) thành một: tải một lần
+        ``recent_count`` attempt theo thứ tự mới nhất, rồi bóc set "last" (chỉ
+        attempt đầu) và set "recent" (toàn bộ) từ cùng kết quả.
+        """
         attempts = self.db.scalars(
             select(QuizAttempt)
             .where(QuizAttempt.user_id == user_id, QuizAttempt.level == level, QuizAttempt.quiz_type == quiz_type)
             .order_by(QuizAttempt.created_at.desc())
-            .limit(attempt_count)
+            .limit(recent_count)
         ).all()
-        ids: set[int] = set()
-        for attempt in attempts:
+
+        def _ids(attempt: QuizAttempt) -> set[int]:
+            out: set[int] = set()
             for answer in attempt.answers or []:
                 question_id = answer.get("question_id")
                 if question_id is not None:
-                    ids.add(int(question_id))
-        return ids
+                    out.add(int(question_id))
+            return out
+
+        last_ids = _ids(attempts[0]) if attempts else set()
+        recent_ids: set[int] = set()
+        for attempt in attempts:
+            recent_ids |= _ids(attempt)
+        return last_ids, recent_ids
 
     def _progress_by_word(self, user_id: str) -> dict[int, UserProgress]:
         rows = self.db.scalars(select(UserProgress).where(UserProgress.user_id == user_id)).all()

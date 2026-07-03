@@ -547,3 +547,30 @@ class VoiceChatOut(BaseModel):
     reply_cn: str = ""
     reply_vi: str = ""
 
+
+class WordExampleOut(BaseModel):
+    cn: str = ""
+    vi: str = ""
+
+
+class WordOut(BaseModel):
+    """Thẻ từ vựng phục vụ thư viện frontend (VocabLibrary + flashcards).
+
+    Chỉ trả từ đã có ``meaning_vi`` (đã dịch) — từ đang chờ dịch bị lọc ở tầng
+    query, nên client không bao giờ thấy thẻ thiếu nghĩa.
+    """
+
+    id: int
+    hanzi: str
+    pinyin: str = ""
+    meaning_vi: str = ""
+    hsk_level: int
+    pos: str = ""
+    radical: str = ""
+    examples: list[WordExampleOut] = Field(default_factory=list)
+
+
+class WordsOut(BaseModel):
+    words: list[WordOut] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+
