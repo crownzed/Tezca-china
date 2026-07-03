@@ -54,15 +54,21 @@ def _seed_if_empty() -> None:
 
 
 def _ensure_vocab() -> None:
-    """Import HSK 3-5 vocabulary from frontend vocab-bank if not already present."""
+    """Nạp bộ từ vựng HSK 1-6 đầy đủ (words_export.json) nếu DB còn thiếu.
+
+    Nguồn sự thật là ``backend/app/data/words_export.json`` (5.7k từ HSK 3.0 đã
+    dịch tiếng Việt), commit trong repo. ``load_words`` idempotent theo
+    (hanzi, hsk_level) nên chạy mỗi lần khởi động cũng an toàn; chỉ bỏ qua khi DB
+    đã đủ từ để tránh quét thừa. dev.db bị gitignore nên đây là kênh đưa dữ liệu
+    lên Postgres prod."""
     with SessionLocal() as db:
         from sqlalchemy import func, select
         from .models import Word
-        hsk3_count = db.scalar(select(func.count()).select_from(Word).where(Word.hsk_level >= 3)) or 0
-        if hsk3_count > 0:
-            return
-        from .scripts.import_vocab_bank import main as import_vocab
-        import_vocab()
+        word_count = db.scalar(select(func.count()).select_from(Word)) or 0
+    if word_count >= 5000:
+        return
+    from .scripts.load_words import load
+    load(overwrite=False)
 
 
 @app.on_event("startup")
