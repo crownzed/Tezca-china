@@ -17,6 +17,7 @@ from .routers.quiz import router as quiz_router
 from .routers.custom_vocab import router as custom_vocab_router
 from .routers.tts import router as tts_router
 from .routers.speech import router as speech_router
+from .routers.words import router as words_router
 from .settings import settings
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ app.include_router(quiz_router)
 app.include_router(custom_vocab_router)
 app.include_router(tts_router)
 app.include_router(speech_router)
+app.include_router(words_router)
 
 
 def _seed_if_empty() -> None:

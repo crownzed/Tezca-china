@@ -55,22 +55,69 @@ class LeaderboardService:
 
     def get_leaderboard(self, period: str = "all_time", limit: int = 50) -> list[dict]:
         since = self._since(period)
-        users = self.db.scalars(
-            select(User).where(User.leaderboard_opt_in.is_(True)).order_by(User.created_at.asc())
+
+        quiz_where = [QuizAttempt.created_at >= since] if since else []
+        quiz_sub = (
+            select(
+                QuizAttempt.user_id.label("user_id"),
+                func.coalesce(func.sum(QuizAttempt.score), 0).label("quiz_score"),
+                func.count(QuizAttempt.id).label("quiz_count"),
+            )
+            .where(*quiz_where)
+            .group_by(QuizAttempt.user_id)
+            .subquery()
+        )
+
+        session_where = [LearningSession.completed_at.isnot(None)]
+        if since:
+            session_where.append(LearningSession.completed_at >= since)
+        session_sub = (
+            select(
+                LearningSession.user_id.label("user_id"),
+                func.count(LearningSession.id).label("session_count"),
+            )
+            .where(*session_where)
+            .group_by(LearningSession.user_id)
+            .subquery()
+        )
+
+        mastery_sub = (
+            select(
+                UserProgress.user_id.label("user_id"),
+                func.count(UserProgress.id).label("mastery_count"),
+            )
+            .where(UserProgress.mastery >= 80)
+            .group_by(UserProgress.user_id)
+            .subquery()
+        )
+
+        result = self.db.execute(
+            select(
+                User.id,
+                User.display_name,
+                func.coalesce(quiz_sub.c.quiz_score, 0),
+                func.coalesce(quiz_sub.c.quiz_count, 0),
+                func.coalesce(session_sub.c.session_count, 0),
+                func.coalesce(mastery_sub.c.mastery_count, 0),
+            )
+            .where(User.leaderboard_opt_in.is_(True))
+            .outerjoin(quiz_sub, quiz_sub.c.user_id == User.id)
+            .outerjoin(session_sub, session_sub.c.user_id == User.id)
+            .outerjoin(mastery_sub, mastery_sub.c.user_id == User.id)
         ).all()
 
         rows = []
-        for user in users:
-            stats = self.compute_points(user.id, since)
-            if stats["points"] <= 0:
+        for user_id, display_name, quiz_score, quiz_count, session_count, mastery_count in result:
+            points = int(quiz_score) * 10 + int(session_count) * 50 + int(mastery_count) * 25
+            if points <= 0:
                 continue
             rows.append({
-                "user_id": user.id,
-                "display_name": user.display_name,
-                "points": stats["points"],
-                "quiz_count": stats["quiz_count"],
-                "session_count": stats["session_count"],
-                "mastery_count": stats["mastery_count"],
+                "user_id": user_id,
+                "display_name": display_name,
+                "points": points,
+                "quiz_count": int(quiz_count),
+                "session_count": int(session_count),
+                "mastery_count": int(mastery_count),
             })
 
         rows.sort(key=lambda item: (-item["points"], item["display_name"].lower()))
