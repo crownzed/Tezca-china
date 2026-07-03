@@ -84,15 +84,33 @@ def _warm_up_data() -> None:
     """Tạo bảng (nhẹ) ở thread nền. Phần seed/import/pregenerate NẶNG chỉ chạy
     khi bật RUN_SEED=1 — trên free tier 512MB, seed 1825 từ + 720 câu hỏi làm
     OOM -> bị kill -> restart liên tục -> request luôn 000 dù dashboard báo Live.
-    Các endpoint hub mới (/draft/*, /save) gọi thẳng LLM, không cần seed."""
+    Các endpoint hub mới (/draft/*, /save) gọi thẳng LLM, không cần seed.
+
+    RUN_VOCAB_LOAD=1 (không bật RUN_SEED): chỉ nạp bộ từ HSK 1-6 từ
+    words_export.json (nhẹ), bỏ qua pregenerate — dùng để đưa từ vựng lên prod
+    an toàn. Bật xong nên TẮT lại để lần khởi động sau không quét thừa."""
     try:
         init_db()
     except Exception:
         logger.exception("init_db failed")
         return  # không có bảng thì các bước sau vô nghĩa
 
-    if os.getenv("RUN_SEED", "").strip() not in ("1", "true", "True"):
-        logger.info("RUN_SEED không bật -> bỏ qua seed nặng (tránh OOM free tier).")
+    def _flag(name: str) -> bool:
+        return os.getenv(name, "").strip() in ("1", "true", "True")
+
+    # Nạp từ vựng (nhẹ: ~5.7k INSERT từ words_export.json, KHÔNG sinh câu hỏi)
+    # tách riêng khỏi RUN_SEED. Trên free tier 512MB, chỉ cần RUN_VOCAB_LOAD=1 để
+    # đưa bộ từ HSK 1-6 lên prod mà KHÔNG kích hoạt pregenerate_questions (nặng,
+    # dễ OOM với 5.7k từ). RUN_SEED vẫn kéo theo cả pregenerate như cũ.
+    if _flag("RUN_VOCAB_LOAD") and not _flag("RUN_SEED"):
+        try:
+            _ensure_vocab()
+        except Exception:
+            logger.exception("ensure_vocab failed")
+        return
+
+    if not _flag("RUN_SEED"):
+        logger.info("RUN_SEED/RUN_VOCAB_LOAD không bật -> bỏ qua seed nặng (tránh OOM free tier).")
         return
 
     try:
