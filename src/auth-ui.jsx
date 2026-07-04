@@ -3,9 +3,8 @@ import { Award, Flame, Loader2, LogIn, LogOut, Medal, Trophy, User, UserPlus, X 
 import { getLeaderboard, getUserProfile, updateProfile } from './api-core';
 import { useAuth } from './auth-core';
 
-function AuthModal() {
-  const { authModal, closeAuthModal, login, register } = useAuth();
-  const [mode, setMode] = useState(authModal);
+function AuthForm({ mode, setMode }) {
+  const { login, register } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -37,6 +36,59 @@ function AuthModal() {
   };
 
   return (
+    <>
+      <form className="auth-form" onSubmit={handleSubmit}>
+        {mode === 'register' && (
+          <>
+            <label>
+              Tên đăng nhập
+              <input value={username} onChange={e => setUsername(e.target.value)} required minLength={3} autoComplete="username" />
+            </label>
+            <label>
+              Email
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" />
+            </label>
+            <label>
+              Tên hiển thị (tuỳ chọn)
+              <input value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={64} />
+            </label>
+          </>
+        )}
+        {mode === 'login' && (
+          <label>
+            Tên đăng nhập hoặc email
+            <input value={loginValue} onChange={e => setLoginValue(e.target.value)} required autoComplete="username" />
+          </label>
+        )}
+        <label>
+          Mật khẩu
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+        </label>
+
+        {error && <p className="auth-form__error">{error}</p>}
+
+        <button className="btn-primary auth-form__submit" type="submit" disabled={submitting}>
+          {submitting ? <Loader2 size={16} className="spin" /> : mode === 'login' ? <LogIn size={16} /> : <UserPlus size={16} />}
+          {mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
+        </button>
+      </form>
+
+      <p className="auth-modal__switch">
+        {mode === 'login' ? 'Chưa có tài khoản?' : 'Đã có tài khoản?'}
+        {' '}
+        <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+          {mode === 'login' ? 'Đăng ký ngay' : 'Đăng nhập'}
+        </button>
+      </p>
+    </>
+  );
+}
+
+function AuthModal() {
+  const { authModal, closeAuthModal } = useAuth();
+  const [mode, setMode] = useState(authModal);
+
+  return (
     <div className="auth-overlay" onClick={closeAuthModal}>
       <div className="auth-modal core-card" onClick={event => event.stopPropagation()}>
         <div className="auth-modal__header">
@@ -45,50 +97,35 @@ function AuthModal() {
             <X size={18} />
           </button>
         </div>
+        <AuthForm mode={mode} setMode={setMode} />
+      </div>
+    </div>
+  );
+}
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {mode === 'register' && (
-            <>
-              <label>
-                Tên đăng nhập
-                <input value={username} onChange={e => setUsername(e.target.value)} required minLength={3} autoComplete="username" />
-              </label>
-              <label>
-                Email
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" />
-              </label>
-              <label>
-                Tên hiển thị (tuỳ chọn)
-                <input value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={64} />
-              </label>
-            </>
-          )}
-          {mode === 'login' && (
-            <label>
-              Tên đăng nhập hoặc email
-              <input value={loginValue} onChange={e => setLoginValue(e.target.value)} required autoComplete="username" />
-            </label>
-          )}
-          <label>
-            Mật khẩu
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
-          </label>
+export function AuthGate({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+  const [mode, setMode] = useState('login');
 
-          {error && <p className="auth-form__error">{error}</p>}
+  if (loading) {
+    return (
+      <div className="auth-gate">
+        <div className="auth-gate__loading"><Loader2 size={32} className="spin" /></div>
+      </div>
+    );
+  }
 
-          <button className="btn-primary auth-form__submit" type="submit" disabled={submitting}>
-            {submitting ? <Loader2 size={16} className="spin" /> : mode === 'login' ? <LogIn size={16} /> : <UserPlus size={16} />}
-            {mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
-          </button>
-        </form>
+  if (isAuthenticated) return children;
 
-        <p className="auth-modal__switch">
-          {mode === 'login' ? 'Chưa có tài khoản?' : 'Đã có tài khoản?'}
-          {' '}
-          <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-            {mode === 'login' ? 'Đăng ký ngay' : 'Đăng nhập'}
-          </button>
-        </p>
+  return (
+    <div className="auth-gate">
+      <div className="auth-gate__card core-card">
+        <div className="auth-gate__brand">
+          <img src="/logo.jpg" alt="Logo" />
+          <h1>Học tiếng Trung HSK</h1>
+          <p>{mode === 'login' ? 'Đăng nhập để bắt đầu học và lưu tiến độ.' : 'Tạo tài khoản để bắt đầu hành trình HSK của bạn.'}</p>
+        </div>
+        <AuthForm mode={mode} setMode={setMode} />
       </div>
     </div>
   );

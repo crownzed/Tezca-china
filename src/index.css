@@ -347,7 +347,7 @@ select:focus-visible {
 }
 
 .page-enter {
-  animation: pageEnter 260ms ease both;
+  animation: none !important;
 }
 
 @keyframes pageEnter {
@@ -3719,6 +3719,52 @@ blockquote small {
 }
 
 /* Auth */
+.auth-gate {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.auth-gate__loading {
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+}
+
+.auth-gate__card {
+  width: min(420px, 100%);
+  padding: 28px 24px;
+  display: grid;
+  gap: 20px;
+}
+
+.auth-gate__brand {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.auth-gate__brand img {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius);
+  object-fit: cover;
+}
+
+.auth-gate__brand h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.auth-gate__brand p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .auth-overlay {
   position: fixed;
   inset: 0;

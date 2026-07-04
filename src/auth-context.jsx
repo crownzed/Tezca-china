@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getMe, loginUser, registerUser, setAuthToken } from './api-core';
 import { AUTH_STORAGE_KEY, AuthContext, readStoredAuth } from './auth-core';
+import { setCurrentUserId } from './user-scope';
 
 export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState(() => readStoredAuth());
+  // Đặt scope user ngay lúc khởi tạo (đồng bộ, trước lần render đầu) để mọi lần
+  // đọc localStorage cục bộ dùng đúng namespace của người đang đăng nhập.
+  const [auth, setAuth] = useState(() => {
+    const stored = readStoredAuth();
+    setCurrentUserId(stored?.user?.id ?? null);
+    return stored;
+  });
   const [authModal, setAuthModal] = useState(null);
   // Lazy init: only "loading" when there's a stored session to validate.
   // Avoids a synchronous setState(false) inside the effect below.
@@ -13,9 +20,11 @@ export function AuthProvider({ children }) {
     if (next) {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
       setAuthToken(next.token);
+      setCurrentUserId(next.user?.id ?? null);
     } else {
       localStorage.removeItem(AUTH_STORAGE_KEY);
       setAuthToken(null);
+      setCurrentUserId(null);
     }
     setAuth(next);
   }, []);

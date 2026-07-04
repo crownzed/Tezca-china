@@ -7,6 +7,7 @@ import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from
 import { strategyFlags } from './strategy-flags';
 import { bindSpeechUnlock, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
 import { AuthControls, AuthModalHost } from './auth-ui.jsx';
+import { useAuth } from './auth-core';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 const CustomVocabInput = lazy(() => import('./components/CustomVocabInput.jsx'));
 const PronunciationPractice = lazy(() => import('./components/PronunciationPractice.jsx'));
@@ -681,7 +682,7 @@ function buildQuizStrategySummary(answerRows) {
 }
 
 function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartKey, limit = 10, strategyHint = 'targeted' }) {
-  const userId = 'local-user';
+  const { userId } = useAuth();
   const [session, setSession] = useState(null);
   const [quizItems, setQuizItems] = useState([]);
   const [primaryQuestions, setPrimaryQuestions] = useState([]);
@@ -1559,7 +1560,7 @@ function isPracticeItem(item) {
 }
 
 function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
-  const userId = 'local-user';
+  const { userId } = useAuth();
   const [session, setSession] = useState(null);
   const [items, setItems] = useState([]);
   const [index, setIndex] = useState(0);
@@ -2126,7 +2127,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
 }
 
 function GeneralCheck({ level, onExit, onComplete }) {
-  const userId = 'local-user';
+  const { userId } = useAuth();
   const [questions, setQuestions] = useState([]);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -2974,7 +2975,7 @@ function StudyPlan({ todayPlan }) {
   );
 }
 export default function App() {
-  const userId = 'local-user';
+  const { userId } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [level, setLevel] = useState(getInitialFocusLevel);
   const [quizType, setQuizType] = useState('vocab');
