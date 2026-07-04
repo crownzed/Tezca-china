@@ -3,9 +3,8 @@ import {
   draftQuizFromVocab,
   draftQuizFromPassage,
   draftQuizFromTopic,
-  saveQuizToLibrary,
 } from '../api-core';
-import { Loader2, Sparkles, CheckCircle2, ListChecks, FileText, Tags, BookmarkPlus, Play } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle2, ListChecks, FileText, Tags, Play } from 'lucide-react';
 
 // Ba nguồn dữ liệu của hub tạo bài tập.
 const SOURCES = [
@@ -63,10 +62,8 @@ export default function CustomVocabInput({ onSessionCreated }) {
   const [selectedTypes, setSelectedTypes] = useState(QUESTION_TYPES.map(t => t.id));
 
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState(null); // { quiz_title, passage, source, questions[] }
-  const [savedSession, setSavedSession] = useState(null); // { session_id, questions }
 
   const usesQuestionTypes = source === 'passage' || source === 'topic';
 
@@ -78,7 +75,6 @@ export default function CustomVocabInput({ onSessionCreated }) {
 
   const resetResult = () => {
     setDraft(null);
-    setSavedSession(null);
   };
 
   // --- Bước 3: Tạo Quiz (gọi LLM, trả bản nháp để xem trước, chưa lưu) ---
@@ -151,32 +147,20 @@ export default function CustomVocabInput({ onSessionCreated }) {
     }
   };
 
-  // --- Lưu bản nháp vào thư viện (DB) ---
-  const handleSave = async () => {
-    if (!draft) return;
-    setError('');
-    setSaving(true);
-    try {
-      const response = await saveQuizToLibrary({
-        quiz_title: draft.quiz_title || '',
-        source: draft.source || source,
-        session_type: 'custom_quiz',
-        questions: draft.questions,
-      });
-      setSavedSession({ session_id: response.session_id, questions: response.questions });
-    } catch (err) {
-      console.error(err);
-      setError(err.message || 'Không lưu được quiz vào thư viện.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // --- Bắt đầu làm bài ngay (ưu tiên câu hỏi đã lưu, fallback bản nháp) ---
-  const handleStart = () => {
-    if (savedSession?.session_id) {
-      onSessionCreated(savedSession.session_id, savedSession.questions);
-    }
+  // --- Làm ngay từ bản nháp, KHÔNG lưu DB ---
+  // Câu hỏi nháp chưa có id trong DB nên được đánh dấu `local` để phiên học
+  // chấm điểm phía client và bỏ qua các lệnh ghi lên server.
+  const handleStartLive = () => {
+    if (!draft?.questions?.length) return;
+    const liveQuestions = draft.questions.map((q, i) => ({
+      ...q,
+      id: `draft-${i}`,
+      local: true,
+    }));
+    onSessionCreated(liveQuestions, {
+      title: draft.quiz_title || 'Bài quiz tùy chỉnh',
+      passage: draft.passage,
+    });
   };
 
   return (
@@ -184,7 +168,7 @@ export default function CustomVocabInput({ onSessionCreated }) {
       <section className="core-card core-section-head">
         <span className="core-eyebrow">Trung tâm tạo bài tập</span>
         <h1>Tự tạo Quiz</h1>
-        <p>Chọn nguồn dữ liệu, tùy chỉnh tham số rồi để AI sinh bài trắc nghiệm. Xem trước trước khi lưu vào thư viện để học lại bất cứ lúc nào.</p>
+        <p>Chọn nguồn dữ liệu, tùy chỉnh tham số rồi để AI sinh bài trắc nghiệm. Xem trước rồi làm ngay — phiên chạy trực tiếp, không lưu.</p>
       </section>
 
       {/* Bước 1: Chọn nguồn dữ liệu */}
@@ -342,27 +326,21 @@ export default function CustomVocabInput({ onSessionCreated }) {
         </button>
       </section>
 
-      {/* Xem trước + Lưu */}
+      {/* Xem trước + Làm ngay */}
       {draft && (
-        <QuizPreview
-          draft={draft}
-          saving={saving}
-          saved={Boolean(savedSession)}
-          onSave={handleSave}
-          onStart={handleStart}
-        />
+        <QuizPreview draft={draft} onStartLive={handleStartLive} />
       )}
     </main>
   );
 }
 
-function QuizPreview({ draft, saving, saved, onSave, onStart }) {
+function QuizPreview({ draft, onStartLive }) {
   return (
     <section className="core-card">
       <div className="core-section-head" style={{ marginBottom: '1rem' }}>
         <span className="core-eyebrow">Xem trước</span>
         <h2 style={{ margin: '0.25rem 0' }}>{draft.quiz_title || 'Bài quiz mới'}</h2>
-        <p>{draft.questions.length} câu hỏi. Xem qua trước khi lưu vào thư viện.</p>
+        <p>{draft.questions.length} câu hỏi. Xem qua rồi bắt đầu làm ngay.</p>
       </div>
 
       {draft.passage && (
@@ -404,35 +382,14 @@ function QuizPreview({ draft, saving, saved, onSave, onStart }) {
       </ol>
 
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
-        {!saved ? (
-          <button
-            className="btn-primary"
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            style={{ flex: '1 1 220px', justifyContent: 'center' }}
-          >
-            {saving ? (
-              <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Đang lưu...</>
-            ) : (
-              <><BookmarkPlus size={18} /> Lưu vào thư viện</>
-            )}
-          </button>
-        ) : (
-          <>
-            <div className="feedback-panel feedback-panel--correct" style={{ flex: '1 1 220px', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <CheckCircle2 size={18} /> <span>Đã lưu vào thư viện.</span>
-            </div>
-            <button
-              className="btn-primary"
-              type="button"
-              onClick={onStart}
-              style={{ flex: '1 1 220px', justifyContent: 'center' }}
-            >
-              <Play size={18} /> Bắt đầu làm bài
-            </button>
-          </>
-        )}
+        <button
+          className="btn-primary"
+          type="button"
+          onClick={onStartLive}
+          style={{ flex: '1 1 220px', justifyContent: 'center' }}
+        >
+          <Play size={18} /> Bắt đầu làm bài
+        </button>
       </div>
     </section>
   );
