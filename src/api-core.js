@@ -280,6 +280,13 @@ export async function startQuiz(payload) {
   }
 }
 
+// Dựng đề quiz thuần local (không gọi mạng). Dùng cho luồng quiz để khâu "chuẩn
+// bị" tức thì, không phải chờ backend cold-start rồi mới rơi về local.
+export async function localQuiz(payload) {
+  const questions = await localQuestions(payload);
+  return { questions, offline: true };
+}
+
 export async function getTodaySession({ userId = 'local-user', focusLevel = 1, mode = 'standard', learningMode = 'hsk', topics = [] } = {}) {
   const params = new URLSearchParams({
     user_id: userId,
@@ -291,19 +298,23 @@ export async function getTodaySession({ userId = 'local-user', focusLevel = 1, m
   return request(`/api/session/today?${params.toString()}`);
 }
 
+export function localLearningSession(payload = {}) {
+  return {
+    id: Number(`9${Date.now().toString().slice(-8)}`),
+    user_id: payload.user_id || 'local-user',
+    session_type: payload.session_type || 'standard',
+    behavior_state: payload.behavior_state || 'maintenance',
+    estimated_minutes: payload.estimated_minutes || 20,
+    reason: payload.reason || '',
+    offline: true,
+  };
+}
+
 export async function startLearningSession(payload) {
   try {
     return await request('/api/session/start', { method: 'POST', body: JSON.stringify(payload) });
   } catch {
-    return {
-      id: Number(`9${Date.now().toString().slice(-8)}`),
-      user_id: payload.user_id || 'local-user',
-      session_type: payload.session_type || 'standard',
-      behavior_state: payload.behavior_state || 'maintenance',
-      estimated_minutes: payload.estimated_minutes || 20,
-      reason: payload.reason || '',
-      offline: true,
-    };
+    return localLearningSession(payload);
   }
 }
 

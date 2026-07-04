@@ -1,6 +1,6 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, BarChart3, Bell, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
-import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
+import { completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
@@ -742,26 +742,22 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     try {
       const quizTypes = buildStrategyQuizTypes(quizType, strategyMode);
       const perTypeLimit = strategyMode === 'interleaved' ? Math.max(2, Math.ceil(limit / quizTypes.length)) : limit;
-      // startQuiz không phụ thuộc kết quả startLearningSession → chạy song song
-      // để cắt một vòng round-trip mạng (đáng kể khi backend Render vừa wake).
-      const [started, batches] = await Promise.all([
-        startLearningSession({
-          user_id: userId,
-          session_type: `quiz_${strategyMode}`,
-          behavior_state: strategyMode === 'repair' ? 'fragile' : 'maintenance',
-          estimated_minutes: strategyMode === 'interleaved' ? 20 : 10,
-          target_words_json: [],
-          target_skills_json: quizTypes,
-          reason: strategy.detail,
-        }),
-        Promise.all(quizTypes.map(async type => {
-          const data = await startQuiz({ user_id: userId, level, quiz_type: type, limit: perTypeLimit });
-          return {
-            quizType: type,
-            questions: (data.questions || []).map(row => ({ ...row, quiz_type: row.quiz_type || type })),
-          };
-        })),
-      ]);
+      // Dựng đề + session hoàn toàn ở local để khâu "chuẩn bị" tức thì, không phải
+      // chờ backend cold-start (~20-30s) rồi mới rơi về local như trước.
+      const started = localLearningSession({
+        user_id: userId,
+        session_type: `quiz_${strategyMode}`,
+        behavior_state: strategyMode === 'repair' ? 'fragile' : 'maintenance',
+        estimated_minutes: strategyMode === 'interleaved' ? 20 : 10,
+        reason: strategy.detail,
+      });
+      const batches = await Promise.all(quizTypes.map(async type => {
+        const data = await localQuiz({ user_id: userId, level, quiz_type: type, limit: perTypeLimit });
+        return {
+          quizType: type,
+          questions: (data.questions || []).map(row => ({ ...row, quiz_type: row.quiz_type || type })),
+        };
+      }));
       // Người dùng đã bấm "Quay lại" trong lúc chờ — bỏ kết quả đến muộn.
       if (loadIdRef.current !== loadId) return;
       const selectedQuestions = strategyMode === 'interleaved'
@@ -894,13 +890,15 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
             answers: rows,
           }, questionsByType.get(type) || [])
         )));
-        if (session?.id) {
+        if (session?.id && !session?.offline) {
           await completeLearningSession({ user_id: userId, session_id: session.id, summary });
         }
-        await refreshStats?.();
       } catch {
         /* lưu tiến độ thất bại — vẫn hiển thị kết quả local phía dưới */
       }
+      // Không await: màn kết quả hiện ngay, số liệu cập nhật nền (refreshStats tự
+      // bắt lỗi và degrade về local).
+      refreshStats?.();
       setCompletedQuestions(primaryQuestions);
       setResult({ ...summary, answers: primaryAnswers, repairs: finalAnswers.filter(row => row.is_repair) });
       setQuizItems([]);
@@ -1610,11 +1608,13 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     stopSpeech();
     const summary = buildSessionSummary(plan, answersRef.current);
     try {
-      if (session?.id) {
+      if (session?.id && !session?.offline) {
         await completeLearningSession({ user_id: userId, session_id: session.id, summary });
       }
       markLearningSessionCompleted({ ...summary, answers: answersRef.current });
-      await onComplete?.();
+      // Không await: refreshStats tự degrade về local, để màn hoàn thành hiện ngay
+      // thay vì chờ backend cold-start.
+      onComplete?.();
     } finally {
       setCompleted(summary);
       setLoading(false);
@@ -1640,16 +1640,14 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     finishedRef.current = false;
     stopSpeech();
     try {
-      const started = plan?.source === 'custom' ? { id: plan.id, session_type: modeId, behavior_state: 'learning', estimated_minutes: 20 } : await startLearningSession({
+      const started = plan?.source === 'custom' ? { id: plan.id, session_type: modeId, behavior_state: 'learning', estimated_minutes: 20 } : localLearningSession({
         user_id: userId,
         session_type: modeId,
         behavior_state: plan?.behaviorState || 'maintenance',
         estimated_minutes: sessionModeMinutes(plan?.mode),
-        target_words_json: plan?.focusWords || [],
-        target_skills_json: [quizType],
         reason: plan?.reason || '',
       });
-      const data = plan?.preloadedQuestions ? { questions: plan.preloadedQuestions } : await startQuiz({ user_id: userId, level, quiz_type: quizType, limit });
+      const data = plan?.preloadedQuestions ? { questions: plan.preloadedQuestions } : await localQuiz({ user_id: userId, level, quiz_type: quizType, limit });
       const quizItems = (data.questions || []).map((row, rowIndex) => ({
         id: `quiz-${row.id}-${rowIndex}`,
         type: 'quiz_item',
@@ -2162,7 +2160,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
     stopSpeech();
     try {
       const batches = await Promise.all(GENERAL_CHECK_TYPES.map(async quizType => {
-        const data = await startQuiz({ user_id: userId, level, quiz_type: quizType, limit: GENERAL_CHECK_LIMIT });
+        const data = await localQuiz({ user_id: userId, level, quiz_type: quizType, limit: GENERAL_CHECK_LIMIT });
         return (data.questions || []).map(item => ({ ...item, quiz_type: item.quiz_type || quizType }));
       }));
       const mixedQuestions = shuffleItems(batches.flat());
@@ -2991,8 +2989,6 @@ export default function App() {
   const [generalCheckState, setGeneralCheckState] = useState(getInitialGeneralCheckState);
   const [generalCheckLevel, setGeneralCheckLevel] = useState(null);
   const [stats, setStats] = useState({ attempts: 0, answered: 0, accuracy: 0, mastery_label: 'Khởi động', weak_words: 0 });
-  // Nhớ (level, quiz_type) đã prefetch để không warm bank trùng nhiều lần.
-  const prefetchedQuizKeyRef = useRef('');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -3021,27 +3017,6 @@ export default function App() {
     const timer = window.setTimeout(() => refreshStats(), 0);
     return () => window.clearTimeout(timer);
   }, [refreshStats]);
-
-  // Warm bank câu hỏi cho đề gợi ý ngay khi có recommendation, để lúc người
-  // dùng bấm "Luyện đề phù hợp" thì backend đã sinh/nạp bank xong (get_quiz chỉ
-  // đọc, không ghi attempt → không ảnh hưởng ranking). Chỉ prefetch khi đang ở
-  // dashboard và bỏ qua nếu (level, quiz_type) đã warm.
-  useEffect(() => {
-    const rec = analytics?.recommendation;
-    if (!rec || activeTab !== 'dashboard') return undefined;
-    const prefetchLevel = rec.level || level;
-    const prefetchType = rec.quiz_type || 'vocab';
-    const key = `${prefetchLevel}-${prefetchType}`;
-    if (prefetchedQuizKeyRef.current === key) return undefined;
-    prefetchedQuizKeyRef.current = key;
-    const timer = window.setTimeout(() => {
-      startQuiz({ user_id: userId, level: prefetchLevel, quiz_type: prefetchType, limit: quizLimit }).catch(() => {
-        // Prefetch chỉ để warm bank — lỗi không ảnh hưởng luồng chính, bỏ qua.
-        prefetchedQuizKeyRef.current = '';
-      });
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [analytics?.recommendation, activeTab, level, quizLimit, userId]);
 
   useEffect(() => {
     const cleanup = bindSpeechUnlock();
@@ -3113,7 +3088,6 @@ export default function App() {
     if (activeTab === 'session') return 'Học hôm nay';
     return NAV.find(item => item.id === activeTab)?.label || 'Trang chính';
   }, [activeTab, generalCheckLevel]);
-  const statusLabel = stats.offline ? 'Chế độ local' : 'Đồng bộ';
   const isDark = theme === 'dark';
   const localTodayPlan = useMemo(() => buildTodaySessionPlan({ analytics, stats, focusLevel: level, modeId: selectedSessionMode }), [analytics, stats, level, selectedSessionMode]);
   const todayPlan = useMemo(() => normalizeBackendTodayPlan(backendTodayPlan, localTodayPlan), [backendTodayPlan, localTodayPlan]);
@@ -3177,13 +3151,20 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
-  const handleCustomSessionCreated = (sessionId, questions) => {
-    // Để frontend có thể vào session mới, ta cần load thông tin session đó
-    // Tuy nhiên api-core.js chỉ có getTodaySession.
-    // Nếu thiết kế hiện tại dùng startLearningSession để chạy, thì ta có thể
-    // trực tiếp set activeTab='session' và cho phép nó nạp sessionId nếu App có hỗ trợ.
-    // Tạm thời truyền 1 plan tối thiểu:
-    setActiveSessionPlan({ id: sessionId, source: 'custom', title: 'Từ vựng tùy chỉnh', mode: { id: 'standard' }, action: { quizType: 'vocab' }, preloadedQuestions: questions });
+  const handleCustomSessionCreated = (questions, meta = {}) => {
+    // Phiên "làm ngay" chạy trực tiếp từ bản nháp, không lưu DB. LearningSession
+    // với source='custom' + id=null sẽ chấm điểm cục bộ (câu hỏi được đánh dấu
+    // local) và bỏ qua bước complete phía server.
+    markLearningSessionStarted();
+    setActiveSessionPlan({
+      id: null,
+      source: 'custom',
+      title: meta.title || 'Bài quiz tùy chỉnh',
+      reason: 'Phiên tự tạo — chấm điểm ngay, không lưu.',
+      mode: { id: 'standard' },
+      action: { quizType: 'vocab' },
+      preloadedQuestions: questions,
+    });
     setActiveTab('session');
   };
 
@@ -3247,7 +3228,6 @@ export default function App() {
           </div>
           <div className="topbar-actions">
             <AuthControls />
-            <span className="core-status hide-mobile">{statusLabel}</span>
             <button
               className="theme-toggle"
               type="button"
