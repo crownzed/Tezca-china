@@ -17,7 +17,7 @@ const STATE_COPY = {
   },
   returning: {
     label: 'Khởi động lại',
-    nudge: 'Khởi động lại bằng 5 phút. Hôm nay chỉ cần giữ những từ đến hạn.',
+    nudge: 'Mẹo hôm nay: Chỉ cần dành 5 phút để giữ mạch ghi nhớ, không áp lực từ mới!',
   },
   habit_building: {
     label: 'Xây thói quen',
@@ -85,7 +85,7 @@ function daysSince(date) {
 }
 
 function reasonFor(state, metrics, weakCount, dueCount) {
-  if (state === 'returning') return 'Bạn quay lại sau vài ngày, nên phiên này chỉ gom phần cần giữ.';
+  if (state === 'returning') return 'Đã vài ngày bạn chưa ôn tập, hãy "hâm nóng" lại bộ não với nhóm từ đến hạn nào.';
   if (state === 'fragile') return `Có ${weakCount} nhóm yếu hoặc ${metrics.wrongStreak} câu sai liên tiếp, nên giảm độ khó.`;
   if (state === 'overloaded') return `Tốc độ trả lời đang chậm (${Math.round(metrics.ewmaLatencyMs / 1000)}s) và độ chính xác chưa ổn.`;
   if (state === 'ready_short') return 'Bạn chọn phiên ngắn, hệ thống ưu tiên giữ lịch ôn.';

@@ -39,7 +39,7 @@ function mapBackendWord(w) {
     examplePinyin: '',
     exampleVi: examples[0]?.vi || '',
     breakdown: w.radical ? [{ radical: w.radical, meaning: '' }] : [],
-    mnemonic: '',
+    mnemonic: w.component_hint || '',
   };
 }
 

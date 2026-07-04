@@ -565,7 +565,7 @@ function buildLocalAnalytics() {
   const latencyAvgMs = latencyValues.length ? Math.round(latencyValues.reduce((sum, value) => sum + value, 0) / latencyValues.length) : 0;
   const focusWords = weakWordList.slice(0, 4).map(item => item.hanzi);
   const reason = focusWords.length
-    ? `Nhóm từ ${focusWords.join(', ')} đang sai nhiều, nên luyện lại bằng câu hỏi mới.`
+    ? `Gợi ý: Bạn đang gặp rắc rối với bộ tứ (${focusWords.join(', ')}). Làm một bài quiz ngắn để dứt điểm nhé!`
     : weakestType
       ? `Dạng ${weakestType.label} đang thấp hơn các phần còn lại.`
       : 'Chưa đủ dữ liệu, nên bắt đầu bằng từ vựng HSK 1 để tạo đường chuẩn.';

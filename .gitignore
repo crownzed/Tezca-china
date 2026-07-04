@@ -38,3 +38,5 @@ firebase-debug.*.log
 # Secrets / local env
 backend/.env
 .env.production.local
+
+backend/fly.secrets

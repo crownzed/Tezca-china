@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, BarChart3, Bell, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, recordLearningEvent, startLearningSession, startQuiz, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
@@ -7,12 +7,13 @@ import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from
 import { strategyFlags } from './strategy-flags';
 import { bindSpeechUnlock, isSpeechUnlocked, preloadAudioIndex, resolveQuestionAudioText, speak, stopSpeech, unlockSpeech } from './speech.jsx';
 import { AuthControls, AuthModalHost } from './auth-ui.jsx';
-import CustomVocabInput from './components/CustomVocabInput.jsx';
-import PronunciationPractice from './components/PronunciationPractice.jsx';
-import VoiceChat from './components/VoiceChat.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+const CustomVocabInput = lazy(() => import('./components/CustomVocabInput.jsx'));
+const PronunciationPractice = lazy(() => import('./components/PronunciationPractice.jsx'));
+const VoiceChat = lazy(() => import('./components/VoiceChat.jsx'));
 import { loadAllFlashcards } from './vocab-loader.js';
 import { notificationPermission, requestNotificationPermission, scheduleDailyReminder, cancelReminder, showNotification } from './notifications.js';
+import { resolveDecompositions } from './radicals-db.js';
 
 // Module-level clock helper. Kept out of component scope so React's purity
 // lint doesn't flag the (intentional) impure read inside event handlers.
@@ -29,18 +30,18 @@ loadAllFlashcards().then(cards => {
 
 function ClickableChineseText({ text, className = '' }) {
   const [activeIdx, setActiveIdx] = useState(null);
-  
+
   if (!text) return null;
-  
+
   return (
     <span className={`clickable-text ${className}`}>
       {text.split('').map((char, index) => {
         const card = globalDictionary.get(char);
         const hasDict = Boolean(card);
         return (
-          <span 
-            key={index} 
-            className={`tap-char ${hasDict ? 'has-dict' : ''} ${activeIdx === index ? 'active' : ''}`} 
+          <span
+            key={index}
+            className={`tap-char ${hasDict ? 'has-dict' : ''} ${activeIdx === index ? 'active' : ''}`}
             onClick={() => hasDict && setActiveIdx(prev => prev === index ? null : index)}
           >
             {char}
@@ -131,7 +132,7 @@ function QuizAudioPanel({ audioPlaying, audioPlayed, audioError, isListeningMode
 }
 
 function planTitleForState(state, mode) {
-  if (state === 'returning') return 'Khởi động lại';
+  if (state === 'returning') return 'Kích hoạt lại phản xạ';
   if (state === 'fragile') return 'Củng cố nhẹ';
   if (state === 'overloaded') return 'Giảm tải hôm nay';
   if (mode?.id === 'micro') return 'Giữ nhịp hôm nay';
@@ -194,7 +195,9 @@ function normalizeBackendTodayPlan(serverPlan, fallbackPlan) {
     missions: serverPlan.missions || fallbackPlan.missions,
     repairPlan: serverPlan.repair_plan || null,
     title: planTitleForState(serverPlan.behavior_state, mode),
-    subtitle: `${serverPlan.behavior_label || fallbackPlan.behaviorLabel || 'Duy trì'}: ưu tiên ${quizTypeDescription(quizType)} HSK ${level}.`,
+    subtitle: serverPlan.behavior_state === 'returning'
+      ? `Hệ thống đã gom sẵn các từ vựng HSK ${level} bạn dễ quên nhất để khởi động.`
+      : `${serverPlan.behavior_label || fallbackPlan.behaviorLabel || 'Duy trì'}: ưu tiên ${quizTypeDescription(quizType)} HSK ${level}.`,
     reason: serverPlan.reason || fallbackPlan.reason,
     source: 'backend',
     action: {
@@ -276,8 +279,8 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
           </svg>
         </div>
         <div>
-          <h2>Phân tích & Tiến độ</h2>
-          <p className="hide-mobile">Mục tiêu: {eventCount}/50 câu hôm nay.</p>
+          <h2>Nhìn lại phong độ của bạn</h2>
+          <p className="hide-mobile">Hôm nay: Đã hoàn thành {eventCount}/50 thử thách.</p>
         </div>
         <div className="analytics-kpis">
           <span><strong>{analytics?.accuracy || 0}%</strong>Đúng</span>
@@ -304,7 +307,7 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
               <span className="core-eyebrow">Skill Map</span>
               <h3>Hiệu suất theo dạng bài</h3>
             </div>
-            <span className="metric-badge metric-badge--strong">{bestType ? `Mạnh: ${bestType.label}` : 'Đang đo'}</span>
+            <span className="metric-badge metric-badge--strong">{bestType ? `Điểm mạnh: Phản xạ ${bestType.label}` : 'Đang đo'}</span>
           </div>
           <div className="skill-bars">
             {typeRows.map(item => {
@@ -332,7 +335,7 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
                 <span className="core-eyebrow">Trend</span>
                 <h3>8 phiên gần nhất</h3>
               </div>
-              <span className="metric-badge metric-badge--weak">{weakType ? `Yếu: ${weakType.label}` : 'Chưa có'}</span>
+              <span className="metric-badge metric-badge--weak">{weakType ? `Cần chú ý: ${weakType.label} (chưa vững ngữ cảnh)` : 'Chưa có'}</span>
             </div>
             <svg className="trend-chart" viewBox="0 0 200 100" role="img" aria-label="Xu hướng độ chính xác">
               <defs>
@@ -385,7 +388,7 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
               <span>{latencyLabel}</span>
             </div>
           </div>
-          <button className="btn-primary" onClick={() => onStartRecommended({ ...recommendation, recommended_strategy: recommendedStrategy })}><Play size={16} /> Luyện đề phù hợp</button>
+          <button className="btn-primary" onClick={() => onStartRecommended({ ...recommendation, recommended_strategy: recommendedStrategy })}><Play size={16} /> Thực chiến ngay</button>
         </div>
         <div className="recent-words-grid">
           <span className="core-eyebrow">Từ vựng vừa ôn</span>
@@ -407,8 +410,8 @@ function LearningFocusPanel({ focusLevel, showFirstRun, onSelectLevel, onOpenLes
   return (
     <section className={`core-card focus-panel ${showFirstRun ? 'focus-panel--first' : ''}`}>
       <div className="focus-copy">
-        <h1>{showFirstRun ? 'Chọn cấp HSK' : `HSK ${focusLevel}`}</h1>
-        <p className="hide-mobile">{showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Cấp độ trọng tâm hiện tại.'}</p>
+        <h1>{showFirstRun ? 'Chọn cấp HSK' : `Mục tiêu hiện tại: Chinh phục HSK ${focusLevel}`}</h1>
+        <p className="hide-mobile">{showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Hệ thống đang tối ưu lộ trình dựa trên tiến độ thực tế của bạn.'}</p>
       </div>
 
       <div className="focus-controls">
@@ -479,8 +482,8 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
               type="button"
               onClick={() => onSelectMode(item.id)}
             >
-              <strong>{item.label}</strong>
-              <span>{item.title}</span>
+              <strong>{item.pillTitle || item.label}</strong>
+              <span>{item.pillSub || item.title}</span>
             </button>
           ))}
         </div>
@@ -540,9 +543,9 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
             <p>{mode.description}</p>
           </div>
           <div className="today-action-buttons">
-            <button className="btn-secondary" type="button" onClick={startDueOnly}><ShieldCheck size={16} /> Ôn đến hạn</button>
-            <button className="btn-secondary" type="button" onClick={startRepairOnly}><Wrench size={16} /> Sửa lỗi</button>
-            <button className="btn-primary" type="button" onClick={() => onStartToday(plan)}><Play size={16} /> Học hôm nay</button>
+            <button className="btn-secondary" type="button" onClick={startDueOnly}><ShieldCheck size={16} /> Xử lý từ đến hạn</button>
+            <button className="btn-secondary" type="button" onClick={startRepairOnly}><Wrench size={16} /> Sửa lỗi ngay</button>
+            <button className="btn-primary" type="button" onClick={() => onStartToday(plan)}><Play size={16} /> Bắt đầu phiên</button>
           </div>
         </div>
       </div>
@@ -708,23 +711,27 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     resetQuizState();
     try {
       const quizTypes = buildStrategyQuizTypes(quizType, strategyMode);
-      const started = await startLearningSession({
-        user_id: userId,
-        session_type: `quiz_${strategyMode}`,
-        behavior_state: strategyMode === 'repair' ? 'fragile' : 'maintenance',
-        estimated_minutes: strategyMode === 'interleaved' ? 20 : 10,
-        target_words_json: [],
-        target_skills_json: quizTypes,
-        reason: strategy.detail,
-      });
       const perTypeLimit = strategyMode === 'interleaved' ? Math.max(2, Math.ceil(limit / quizTypes.length)) : limit;
-      const batches = await Promise.all(quizTypes.map(async type => {
-        const data = await startQuiz({ user_id: userId, level, quiz_type: type, limit: perTypeLimit });
-        return {
-          quizType: type,
-          questions: (data.questions || []).map(row => ({ ...row, quiz_type: row.quiz_type || type })),
-        };
-      }));
+      // startQuiz không phụ thuộc kết quả startLearningSession → chạy song song
+      // để cắt một vòng round-trip mạng (đáng kể khi backend Render vừa wake).
+      const [started, batches] = await Promise.all([
+        startLearningSession({
+          user_id: userId,
+          session_type: `quiz_${strategyMode}`,
+          behavior_state: strategyMode === 'repair' ? 'fragile' : 'maintenance',
+          estimated_minutes: strategyMode === 'interleaved' ? 20 : 10,
+          target_words_json: [],
+          target_skills_json: quizTypes,
+          reason: strategy.detail,
+        }),
+        Promise.all(quizTypes.map(async type => {
+          const data = await startQuiz({ user_id: userId, level, quiz_type: type, limit: perTypeLimit });
+          return {
+            quizType: type,
+            questions: (data.questions || []).map(row => ({ ...row, quiz_type: row.quiz_type || type })),
+          };
+        })),
+      ]);
       // Người dùng đã bấm "Quay lại" trong lúc chờ — bỏ kết quả đến muộn.
       if (loadIdRef.current !== loadId) return;
       const selectedQuestions = strategyMode === 'interleaved'
@@ -2360,12 +2367,31 @@ function normalizeExamples(card) {
 }
 
 function normalizeRadicals(card) {
+  const hanzi = cleanText(card.character || card.hanzi);
+  const fallbackRadical = cleanText(card.radical || card.character_family);
+  const resolved = resolveDecompositions(hanzi, fallbackRadical);
+  
   const rows = Array.isArray(card.breakdown) ? card.breakdown : [];
-  return rows
-    .map(item => ({
-      radical: cleanText(item.radical || item.component || item.char),
-      meaning: cleanText(item.meaning || item.hint || item.name),
-    }))
+  const mergedMap = new Map();
+  
+  resolved.forEach(item => {
+    mergedMap.set(item.radical, item.meaning);
+  });
+  
+  rows.forEach(item => {
+    const rad = cleanText(item.radical || item.component || item.char);
+    const mean = cleanText(item.meaning || item.hint || item.name);
+    if (rad) {
+      if (mean) {
+        mergedMap.set(rad, mean);
+      } else if (!mergedMap.has(rad)) {
+        mergedMap.set(rad, '');
+      }
+    }
+  });
+
+  return Array.from(mergedMap.entries())
+    .map(([radical, meaning]) => ({ radical, meaning }))
     .filter(item => item.radical || item.meaning);
 }
 
@@ -2511,11 +2537,58 @@ function mergeProductionResult(remoteResult, localResult) {
   };
 }
 
-function VocabLibrary({ focusLevel }) {
+function HanziWriterElement({ character, theme }) {
+  const containerRef = useRef(null);
+  const writerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !character) return;
+    let cancelled = false;
+    containerRef.current.innerHTML = '';
+
+    // Zen theme colors matching current active theme (light or dark)
+    const isDark = theme === 'dark';
+    const strokeColor = isDark ? '#2DBA91' : '#127a5d'; // zen primary
+    const radicalColor = isDark ? '#E8C17A' : '#d4a359'; // zen gold
+    const outlineColor = isDark ? '#2E2B27' : '#EAE5DA'; // zen grid outline
+
+    import('hanzi-writer').then(({ default: HanziWriter }) => {
+      if (cancelled || !containerRef.current) return;
+      const writer = HanziWriter.create(containerRef.current, character, {
+        width: 120,
+        height: 120,
+        padding: 5,
+        strokeAnimationSpeed: 1.2,
+        delayBetweenStrokes: 220,
+        strokeColor,
+        radicalColor,
+        outlineColor,
+        showOutline: true
+      });
+
+      writer.animateCharacter();
+      writerRef.current = writer;
+    });
+
+    return () => { cancelled = true; };
+  }, [character, theme]);
+
+  return (
+    <div 
+      ref={containerRef} 
+      className="hanzi-writer-char" 
+      onClick={() => writerRef.current?.animateCharacter()}
+      title="Click để xem nét vẽ chuẩn"
+    />
+  );
+}
+
+function VocabLibrary({ focusLevel, theme }) {
   const [cards, setCards] = useState([]);
   const [query, setQuery] = useState('');
   const [levelFilter, setLevelFilter] = useState(focusLevel);
   const [selectedWord, setSelectedWord] = useState(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -2530,7 +2603,6 @@ function VocabLibrary({ focusLevel }) {
         if (!alive) return;
         if (!loaded.length) throw new Error('empty');
         setCards(loaded);
-        setSelectedWord(loaded.find(item => item.level === focusLevel) || loaded[0] || null);
         setLoading(false);
       }).catch(() => {
         if (alive) {
@@ -2550,10 +2622,14 @@ function VocabLibrary({ focusLevel }) {
       .slice(0, 80);
   }, [cards, levelFilter, query]);
 
-  const visibleSelectedWord = useMemo(() => {
-    if (!filtered.length) return selectedWord;
-    return filtered.find(item => item.key === selectedWord?.key) || filtered[0];
-  }, [filtered, selectedWord]);
+  const selectWord = (word) => {
+    setSelectedWord(word);
+    setIsDrawerOpen(true);
+  };
+
+  const closeDrawer = () => {
+    setIsDrawerOpen(false);
+  };
 
   return (
     <main className="core-page page-enter">
@@ -2565,28 +2641,32 @@ function VocabLibrary({ focusLevel }) {
         </div>
         <div className="vocab-controls">
           <span className="vocab-count">{filtered.length}/{cards.length} từ</span>
-          <div className="search-box"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm chữ, pinyin, nghĩa" /></div>
-          <select value={levelFilter} onChange={event => setLevelFilter(event.target.value)}>
-            <option value="all">Tất cả HSK</option>
-            {LEVELS.map(item => <option key={item} value={item}>HSK {item}</option>)}
-          </select>
+          <div className="search-box">
+            <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm chữ, pinyin, nghĩa..." />
+          </div>
+          <div className="vocab-hsk-tabs">
+            <button type="button" className={levelFilter === 'all' ? 'active' : ''} onClick={() => setLevelFilter('all')}>Tất cả</button>
+            {LEVELS.map(item => (
+              <button key={item} type="button" className={Number(levelFilter) === item ? 'active' : ''} onClick={() => setLevelFilter(item)}>HSK {item}</button>
+            ))}
+          </div>
         </div>
       </section>
 
       <section className="vocab-workspace">
-        <div className="core-card vocab-list-panel">
+        <div className="vocab-grid">
           {loading && <div className="empty-inline"><Loader2 size={18} className="spin" /> Đang tải từ vựng</div>}
           {!loading && loadError && (
             <div className="empty-inline vocab-load-error">
               <AlertCircle size={20} />
               <p>Không tải được kho từ vựng. Kiểm tra kết nối rồi thử lại.</p>
               <button type="button" className="btn-secondary" onClick={() => setReloadKey(k => k + 1)}>
-                <RotateCcw size={16} /> Thử lại
+                Thử lại
               </button>
             </div>
           )}
           {!loading && !loadError && filtered.map(item => (
-            <button key={item.key} className={visibleSelectedWord?.key === item.key ? 'active' : ''} onClick={() => setSelectedWord(item)}>
+            <button key={item.key} className={`vocab-card ${selectedWord?.key === item.key ? 'active' : ''}`} onClick={() => selectWord(item)}>
               <strong>{item.hanzi}</strong>
               <span>{item.pinyin}</span>
               <small>{item.meaning_vi}</small>
@@ -2594,48 +2674,80 @@ function VocabLibrary({ focusLevel }) {
           ))}
           {!loading && !loadError && !filtered.length && <div className="empty-inline">Không có kết quả phù hợp.</div>}
         </div>
+      </section>
 
-        <div className="core-card vocab-detail-panel">
-          {visibleSelectedWord ? (
-            <>
-              <div className="vocab-detail-main">
-                <div className="hanzi-hero">{visibleSelectedWord.hanzi}</div>
-                <div>
-                  <span className="core-eyebrow">HSK {visibleSelectedWord.level}</span>
-                  <h2><TonedPinyin pinyin={visibleSelectedWord.pinyin} /></h2>
-                  <p>{visibleSelectedWord.meaning_vi}</p>
-                  <div className="metadata-strip vocab-metadata-strip">
-                    <span><strong>{visibleSelectedWord.category}</strong><small>Loại từ</small></span>
-                    <span><strong>{visibleSelectedWord.stroke_count || '-'}</strong><small>Nét</small></span>
-                    <span><strong>{visibleSelectedWord.radicals.length || '-'}</strong><small>Bộ thủ</small></span>
-                    <span><strong>{visibleSelectedWord.examples.length}</strong><small>Ví dụ</small></span>
-                  </div>
-                  <div className="radical-strip" aria-label="Bộ thủ và thành phần chữ">
-                    {visibleSelectedWord.radicals.length ? visibleSelectedWord.radicals.map((item, index) => (
-                      <span key={`${visibleSelectedWord.key}-radical-${index}`}>
-                        <strong>{item.radical}</strong>
-                        <small>{item.meaning}</small>
-                      </span>
-                    )) : <span><strong>--</strong><small>Chưa có dữ liệu bộ thủ cho từ này.</small></span>}
-                  </div>
-                  {visibleSelectedWord.mnemonic && <p className="radical-note">{visibleSelectedWord.mnemonic}</p>}
-                  {visibleSelectedWord.examples.length ? (
-                    <div className="vocab-example-list">
-                      {visibleSelectedWord.examples.slice(0, 3).map((example, index) => (
-                        <blockquote key={`${visibleSelectedWord.key}-${index}`}>{example.cn}<small>{example.pinyin}{example.pinyin && example.vi ? ' · ' : ''}{example.vi}</small></blockquote>
-                      ))}
-                    </div>
-                  ) : <blockquote>Chưa có ví dụ chuẩn cho mục này.<small>Ưu tiên luyện bằng câu tự đặt có ngữ cảnh.</small></blockquote>}
-                  <div className="result-actions">
-                    <button className="btn-secondary" type="button" onClick={() => speak(visibleSelectedWord.example_cn || visibleSelectedWord.hanzi, 0.82)}><Headphones size={16} /> Nghe</button>
-                  </div>
+      {/* Slide-over Drawer & Backdrop */}
+      {selectedWord && isDrawerOpen && (
+        <>
+          <div className="vocab-drawer-backdrop" onClick={closeDrawer} />
+          <div className="vocab-drawer">
+            <div className="vocab-drawer-header">
+              <div>
+                <span className="core-eyebrow">HSK {selectedWord.level}</span>
+                <h2><TonedPinyin pinyin={selectedWord.pinyin} /></h2>
+                <p>{selectedWord.meaning_vi}</p>
+              </div>
+              <button className="vocab-drawer-close" type="button" onClick={closeDrawer} aria-label="Đóng Drawer">
+                &times;
+              </button>
+            </div>
+            
+            <div className="vocab-drawer-body">
+              <div className="vocab-drawer-section">
+                <div className="hanzi-hero">
+                  {selectedWord.hanzi.split('').map((char, index) => (
+                    <HanziWriterElement key={`${char}-${index}`} character={char} theme={theme} />
+                  ))}
                 </div>
               </div>
-              <HandwritingPad targetWord={visibleSelectedWord} />
-            </>
-          ) : <div className="empty-inline">Chọn một từ để xem chi tiết.</div>}
-        </div>
-      </section>
+
+              <div className="vocab-drawer-section">
+                <div className="metadata-strip vocab-metadata-strip">
+                  <span><strong>{selectedWord.category}</strong><small>Loại từ</small></span>
+                  <span><strong>{selectedWord.stroke_count || '-'}</strong><small>Nét</small></span>
+                  <span><strong>{selectedWord.radicals.length || '-'}</strong><small>Bộ thủ</small></span>
+                  <span><strong>{selectedWord.examples.length}</strong><small>Ví dụ</small></span>
+                </div>
+              </div>
+
+              <div className="vocab-drawer-section">
+                <span className="vocab-section-title">Bộ thủ & Thành phần</span>
+                <div className="radical-strip" aria-label="Bộ thủ và thành phần chữ">
+                  {selectedWord.radicals.length ? selectedWord.radicals.map((item, index) => (
+                    <span key={`${selectedWord.key}-radical-${index}`}>
+                      <strong>{item.radical}</strong>
+                      <small>{item.meaning}</small>
+                    </span>
+                  )) : <span><strong>--</strong><small>Chưa có dữ liệu bộ thủ cho từ này.</small></span>}
+                </div>
+                {selectedWord.mnemonic && <p className="radical-note">{selectedWord.mnemonic}</p>}
+              </div>
+
+              <div className="vocab-drawer-section">
+                <span className="vocab-section-title">Ví dụ mẫu</span>
+                {selectedWord.examples.length ? (
+                  <div className="vocab-example-list">
+                    {selectedWord.examples.slice(0, 3).map((example, index) => (
+                      <blockquote key={`${selectedWord.key}-${index}`}>
+                        {example.cn}
+                        <small>{example.pinyin}{example.pinyin && example.vi ? ' · ' : ''}{example.vi}</small>
+                      </blockquote>
+                    ))}
+                  </div>
+                ) : <blockquote>Chưa có ví dụ chuẩn cho mục này.<small>Ưu tiên luyện bằng câu tự đặt có ngữ cảnh.</small></blockquote>}
+              </div>
+
+              <div className="vocab-drawer-section">
+                <div className="result-actions" style={{ marginTop: '14px', marginBottom: '24px' }}>
+                  <button className="btn-secondary" type="button" onClick={() => speak(selectedWord.example_cn || selectedWord.hanzi, 0.82)}>Phát âm</button>
+                </div>
+              </div>
+
+              <HandwritingPad targetWord={selectedWord} />
+            </div>
+          </div>
+        </>
+      )}
     </main>
   );
 }
@@ -2722,10 +2834,10 @@ function HandwritingPad({ targetWord }) {
     <div className="handwriting-panel">
       <div>
         <span className="core-eyebrow">Handwriting</span>
-        <h3><PenTool size={18} /> {targetWord.hanzi}</h3>
+        <h3>Tập viết: {targetWord.hanzi}</h3>
       </div>
       <canvas ref={canvasRef} width="420" height="220" onPointerDown={startDraw} onPointerMove={draw} onPointerUp={endDraw} onPointerLeave={endDraw} />
-      <button className="btn-secondary" type="button" onClick={clear}><Eraser size={16} /> Xóa</button>
+      <button className="btn-secondary" type="button" onClick={clear}>Xóa nét</button>
     </div>
   );
 }
@@ -2842,6 +2954,17 @@ export default function App() {
   const [generalCheckState, setGeneralCheckState] = useState(getInitialGeneralCheckState);
   const [generalCheckLevel, setGeneralCheckLevel] = useState(null);
   const [stats, setStats] = useState({ attempts: 0, answered: 0, accuracy: 0, mastery_label: 'Khởi động', weak_words: 0 });
+  // Nhớ (level, quiz_type) đã prefetch để không warm bank trùng nhiều lần.
+  const prefetchedQuizKeyRef = useRef('');
+
+  useEffect(() => {
+    const handleScroll = () => {
+      document.documentElement.style.setProperty('--scroll-y', `${window.scrollY}px`);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const refreshStats = useCallback(async () => {
     try {
@@ -2861,6 +2984,27 @@ export default function App() {
     const timer = window.setTimeout(() => refreshStats(), 0);
     return () => window.clearTimeout(timer);
   }, [refreshStats]);
+
+  // Warm bank câu hỏi cho đề gợi ý ngay khi có recommendation, để lúc người
+  // dùng bấm "Luyện đề phù hợp" thì backend đã sinh/nạp bank xong (get_quiz chỉ
+  // đọc, không ghi attempt → không ảnh hưởng ranking). Chỉ prefetch khi đang ở
+  // dashboard và bỏ qua nếu (level, quiz_type) đã warm.
+  useEffect(() => {
+    const rec = analytics?.recommendation;
+    if (!rec || activeTab !== 'dashboard') return undefined;
+    const prefetchLevel = rec.level || level;
+    const prefetchType = rec.quiz_type || 'vocab';
+    const key = `${prefetchLevel}-${prefetchType}`;
+    if (prefetchedQuizKeyRef.current === key) return undefined;
+    prefetchedQuizKeyRef.current = key;
+    const timer = window.setTimeout(() => {
+      startQuiz({ user_id: userId, level: prefetchLevel, quiz_type: prefetchType, limit: quizLimit }).catch(() => {
+        // Prefetch chỉ để warm bank — lỗi không ảnh hưởng luồng chính, bỏ qua.
+        prefetchedQuizKeyRef.current = '';
+      });
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [analytics?.recommendation, activeTab, level, quizLimit, userId]);
 
   useEffect(() => {
     const cleanup = bindSpeechUnlock();
@@ -3042,9 +3186,12 @@ export default function App() {
         <span className="stream stream-2" />
         <span className="stream stream-3" />
         <span className="stream stream-4" />
+
+        {/* Dragon & Phoenix Watermark Backdrop - Scroll Parallax */}
+        <div className="mythical-art-bg" />
       </div>
       <aside className="core-sidebar">
-        <div className="core-logo">T</div>
+        <div className="core-logo"><img src="/logo.jpg" alt="Logo" /></div>
         {NAV.map(item => {
           const Icon = item.icon;
           return (
@@ -3059,8 +3206,8 @@ export default function App() {
       <section className="core-shell">
         <header className="core-topbar">
           <div>
-          <h2>{currentTitle}</h2>
-        </div>
+            <h2>{currentTitle}</h2>
+          </div>
           <div className="topbar-actions">
             <AuthControls />
             <span className="core-status hide-mobile">{statusLabel}</span>
@@ -3077,15 +3224,17 @@ export default function App() {
         </header>
 
         <ErrorBoundary key={generalCheckLevel ? 'general' : activeTab}>
-        {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
-        {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
-        {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
-        {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} />}
-        {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
-        {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevel={level} />}
-        {/* {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />} */}
-        {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
-        {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
+          <Suspense fallback={<div className="tab-loading"><Loader2 className="spin" size={28} /></div>}>
+          {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
+          {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
+          {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
+          {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} theme={theme} />}
+          {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
+          {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevel={level} />}
+          {/* {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />} */}
+          {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
+          {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
+          </Suspense>
         </ErrorBoundary>
       </section>
       <AuthModalHost />

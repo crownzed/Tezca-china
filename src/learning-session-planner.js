@@ -14,6 +14,8 @@ export const SESSION_MODES = [
     id: 'micro',
     label: '5 phút',
     title: 'Ôn nhanh',
+    pillTitle: 'Ôn nhanh',
+    pillSub: '5 phút',
     limit: 5,
     newWords: 0,
     description: 'Giữ nhịp bằng từ cần ôn, không thêm tải mới.',
@@ -22,6 +24,8 @@ export const SESSION_MODES = [
     id: 'standard',
     label: '20 phút',
     title: 'Học hôm nay',
+    pillTitle: 'Vừa sức',
+    pillSub: '20 phút',
     limit: 10,
     newWords: 6,
     description: 'Cân bằng ôn, sửa lỗi và vài từ mới vừa sức.',
@@ -30,6 +34,8 @@ export const SESSION_MODES = [
     id: 'deep',
     label: '45 phút',
     title: 'Học sâu',
+    pillTitle: 'Tập trung sâu',
+    pillSub: '45 phút',
     limit: 16,
     newWords: 8,
     description: 'Thêm ngữ cảnh và nghe nhiều hơn khi nền ổn.',
@@ -60,29 +66,29 @@ function buildMissions({ analytics, stats, mode, weakWords, dueCount, repairCoun
     {
       key: 'due',
       label: 'Cần ôn',
-      value: protectedCount ? `${protectedCount} mục` : 'Tạo nền',
-      detail: protectedCount ? 'Ưu tiên phần dễ quên trước khi thêm mới.' : 'Bắt đầu bằng kiểm tra nhẹ để tạo dữ liệu.',
+      value: protectedCount ? `${protectedCount} từ sắp quên` : 'Tạo nền',
+      detail: protectedCount ? 'Xử lý nhanh nhóm này trước khi chúng "bay màu" khỏi não bộ.' : 'Bắt đầu bằng kiểm tra nhẹ để tạo dữ liệu.',
       tone: 'gold',
     },
     {
       key: 'repair',
       label: 'Sửa lỗi',
-      value: repairCount ? `${repairCount} từ` : 'Chưa có',
-      detail: repairCount ? weakWords.slice(0, 3).map(item => item.hanzi).join(', ') : 'Lỗi sai sẽ được gom tại đây sau mỗi phiên.',
+      value: repairCount ? `${repairCount} vết sẹo cần lành` : 'Chưa có',
+      detail: repairCount ? `Tập trung khắc phục triệt để lỗi sai của: ${weakWords.slice(0, 3).map(item => item.hanzi).join(', ')}...` : 'Lỗi sai sẽ được gom tại đây sau mỗi phiên.',
       tone: repairCount ? 'cinnabar' : 'jade',
     },
     {
       key: 'new',
       label: 'Từ mới',
-      value: newCount ? `${newCount} từ` : 'Tạm khóa',
-      detail: newCount ? mode.description : 'Phiên ngắn hoặc còn nhiều mục cần ôn.',
+      value: newCount ? `${newCount} từ` : 'Đang đóng băng',
+      detail: newCount ? mode.description : 'Dọn sạch từ cũ là hộp từ mới sẽ tự động mở ra ngay!',
       tone: newCount ? 'jade' : 'blue',
     },
     {
       key: 'stability',
       label: 'Trạng thái',
-      value: behavior.label,
-      detail: behavior.nudge || (hasHistory ? 'Dùng để chọn độ khó phiên hôm nay.' : 'Hoàn thành một phiên để đo nhịp nhớ.'),
+      value: `Nhịp độ: ${behavior.label}`,
+      detail: behavior.nudge || (hasHistory ? 'Giữ nhịp học ổn định, không nhồi nhét quá tải.' : 'Hoàn thành một phiên để đo nhịp nhớ.'),
       tone: ['ready_deep', 'maintenance'].includes(behavior.state) ? 'jade' : ['fragile', 'overloaded'].includes(behavior.state) ? 'cinnabar' : 'gold',
     },
   ];
@@ -129,10 +135,12 @@ export function buildTodaySessionPlan({ analytics, stats, focusLevel = 1, modeId
     newCount,
     focusWords,
     missions: buildMissions({ analytics, stats, mode, weakWords, dueCount, repairCount, newCount, behavior }),
-    title: behavior.state === 'returning' ? 'Khởi động lại' : behavior.state === 'fragile' ? 'Củng cố nhẹ' : behavior.state === 'overloaded' ? 'Giảm tải hôm nay' : mode.id === 'micro' ? 'Giữ nhịp hôm nay' : mode.id === 'deep' ? 'Phiên học sâu' : 'Học hôm nay',
-    subtitle: answered
-      ? `${behavior.label}: ưu tiên ${QUIZ_TYPE_LABELS[targetSkill] || 'Từ vựng'} HSK ${targetLevel}, dựa trên dữ liệu gần nhất.`
-      : `Khởi động HSK ${targetLevel} bằng phiên nhẹ để tạo đường chuẩn.`,
+    title: behavior.state === 'returning' ? 'Kích hoạt lại phản xạ' : behavior.state === 'fragile' ? 'Củng cố nhẹ' : behavior.state === 'overloaded' ? 'Giảm tải hôm nay' : mode.id === 'micro' ? 'Giữ nhịp hôm nay' : mode.id === 'deep' ? 'Phiên học sâu' : 'Học hôm nay',
+    subtitle: behavior.state === 'returning'
+      ? `Hệ thống đã gom sẵn các từ vựng HSK ${targetLevel} bạn dễ quên nhất để khởi động.`
+      : answered
+        ? `${behavior.label}: ưu tiên ${QUIZ_TYPE_LABELS[targetSkill] || 'Từ vựng'} HSK ${targetLevel}, dựa trên dữ liệu gần nhất.`
+        : `Khởi động HSK ${targetLevel} bằng phiên nhẹ để tạo đường chuẩn.`,
     reason: behavior.reason || recommendation.reason || 'Chưa đủ dữ liệu, nên bắt đầu bằng từ vựng HSK 1 để tạo đường chuẩn.',
     action: {
       level: targetLevel,

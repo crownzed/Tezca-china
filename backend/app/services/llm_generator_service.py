@@ -173,7 +173,7 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES) -> dict:
         {
             "url": DEEPSEEK_API_URL,
             "key": settings.deepseek_api_key,
-            "model": "deepseek-v4-pro",
+            "model": "deepseek-v4-flash",
             "json_mode": True,
         }
     ]
@@ -192,7 +192,11 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES) -> dict:
             {"role": "system", "content": "You are an expert Chinese language teacher who outputs ONLY valid JSON. Never include markdown fences or explanations outside the JSON."},
             {"role": "user", "content": prompt_text}
         ],
-        "max_tokens": 4000,
+        # deepseek-v4-pro là reasoning model: nó đốt token vào chain-of-thought
+        # (reasoning_content) TRƯỚC khi xuất JSON vào content. Với 4000, reasoning
+        # ăn sạch budget -> finish_reason=length, content rỗng -> parse fail.
+        # 8000 để reasoning xong vẫn còn chỗ cho JSON.
+        "max_tokens": 8000,
     }
 
     errors = []
@@ -454,8 +458,17 @@ def generate_questions_for_passage(
         if qty <= 0:
             continue
         n += 1
-        spec_lines.append(f"{n}. {st} (x{qty}): {_PASSAGE_SUBTYPE_INSTRUCTION[st]}")
+        qt = _SUBTYPE_TO_QUIZ_TYPE[st]
+        spec_lines.append(
+            f'{n}. question_subtype="{st}" (x{qty}), quiz_type="{qt}": {_PASSAGE_SUBTYPE_INSTRUCTION[st]}'
+        )
     spec_block = "\n".join(spec_lines)
+
+    qt_mapping_block = "\n".join(
+        f'   - question_subtype="{st}" -> quiz_type="{_SUBTYPE_TO_QUIZ_TYPE[st]}"'
+        for st in subtypes
+        if distribution[st] > 0
+    )
 
     prompt = f"""Ban la chuyen gia danh gia ngon ngu va thiet ke bai tap tieng Trung (Mandarin) cao cap.
 
@@ -492,7 +505,9 @@ QUY TAC BAT BUOC:
 4. cloze_translation PHAI co ___ trong prompt.
 5. sentence_scramble: 4 options la 4 cach sap xep ca cau; chi 1 cach dung.
 6. Moi cau PHAI bam sat noi dung doan van nguon o tren (dung lai cau/thong tin co that trong doan).
-7. Chi tra ve JSON, khong giai thich gi them."""
+7. quiz_type PHAI lay dung tu bang anh xa sau (KHONG dung ten question_subtype lam quiz_type):
+{qt_mapping_block}
+8. Chi tra ve JSON, khong giai thich gi them."""
 
     data = _call_api(prompt)
 
