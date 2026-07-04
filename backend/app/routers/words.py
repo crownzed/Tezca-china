@@ -56,6 +56,7 @@ def list_words(
                 hsk_level=w.hsk_level,
                 pos=w.pos or "",
                 radical=w.character_family or "",
+                component_hint=w.component_hint or "",
                 examples=examples,
             )
         )

@@ -63,6 +63,25 @@ async function collectTexts() {
     }
   }
 
+  // Quét cả từ vựng và câu ví dụ từ words_export.json (chỉ lọc HSK 1-4 để chạy nhanh)
+  try {
+    const exportPath = join(root, 'backend', 'app', 'data', 'words_export.json');
+    if (existsSync(exportPath)) {
+      const payload = JSON.parse(readFileSync(exportPath, 'utf8'));
+      const words = payload.words || [];
+      for (const w of words) {
+        if (Number(w.hsk_level) <= 4) {
+          addText(texts, w.hanzi);
+          for (const ex of w.examples || []) {
+            addText(texts, ex.cn);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Không thể đọc words_export.json để tạo audio:', err);
+  }
+
   addText(texts, '你好');
   addText(texts, '谢谢');
   addText(texts, '再见');

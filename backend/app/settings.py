@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     gemini_api_keys: str = ""  # comma-separated fallback keys for vilao.ai
     gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
-    gemini_model: str = "google/gemini-3.5-flash"
+    gemini_model: str = "ram/gemini-3.5-flash-low"
 
     # Google Gemini TTS. Dùng chung GEMINI_NATIVE_API_KEYS với speech (xem dưới);
     # chỉ giữ model + voice ở đây.

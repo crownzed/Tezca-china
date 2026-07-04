@@ -52,8 +52,10 @@
   --line-soft: rgba(44, 62, 80, 0.06) !important;
   --selected-text: var(--modern-zen-text) !important;
   --bg-pattern: url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21.184 20c.392-5.33 4.28-9.8 9.86-11.56 3.146-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15zM50 20c.39-5.33 4.28-9.8 9.86-11.56 3.14-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15zM0 20c.39-5.33 4.28-9.8 9.86-11.56 3.14-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15z' fill='%23127a5d' fill-opacity='0.025' fill-rule='evenodd'/%3E%3C/svg%3E");
+  --transition-bounce: 500ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  --transition-fluid: 400ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
   --transition-smooth: 400ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-  --transition-snappy: 200ms cubic-bezier(0.2, 0, 0, 1) !important;
+  --transition-snappy: 200ms cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 [data-theme='dark'] {
@@ -135,9 +137,13 @@
   margin-bottom: 4px !important;
   font-weight: 600 !important;
   color: var(--muted) !important;
-  transition: all var(--transition-snappy) !important;
+  transition: all var(--transition-bounce) !important;
   position: relative !important;
   overflow: hidden !important;
+}
+
+.core-sidebar button:active {
+  transform: scale(0.96) !important;
 }
 
 .core-sidebar button::before {
@@ -186,7 +192,7 @@
   border: 1px solid rgba(var(--shadow-color), 0.04) !important;
   border-radius: var(--radius) !important;
   box-shadow: var(--shadow-md) !important;
-  transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), border-color var(--transition-smooth) !important;
+  transition: transform var(--transition-bounce), box-shadow var(--transition-smooth), border-color var(--transition-smooth) !important;
 }
 
 [data-theme='dark'] .core-card,
@@ -197,9 +203,15 @@
 
 .core-card:hover,
 .analytics-panel:hover {
-  transform: translateY(-4px) !important;
+  transform: translateY(-4px) scale(1.01) !important;
   box-shadow: var(--shadow-lg) !important;
   border-color: rgba(var(--shadow-color), 0.08) !important;
+}
+
+.core-card:active,
+.analytics-panel:active {
+  transform: translateY(0) scale(0.98) !important;
+  box-shadow: var(--shadow-sm) !important;
 }
 
 [data-theme='dark'] .core-card:hover {
@@ -224,12 +236,17 @@
   font-weight: 600 !important;
   letter-spacing: 0.02em !important;
   box-shadow: 0 4px 12px rgba(18, 122, 93, 0.2) !important;
-  transition: all var(--transition-smooth) !important;
+  transition: all var(--transition-bounce) !important;
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px) !important;
+  transform: translateY(-2px) scale(1.02) !important;
   box-shadow: 0 8px 24px rgba(18, 122, 93, 0.3) !important;
+}
+
+.btn-primary:active {
+  transform: scale(0.95) !important;
+  box-shadow: 0 2px 8px rgba(18, 122, 93, 0.4) !important;
 }
 
 .btn-secondary {
@@ -239,13 +256,17 @@
   border-radius: 999px !important;
   padding: 0 24px !important;
   font-weight: 600 !important;
-  transition: all var(--transition-smooth) !important;
+  transition: all var(--transition-bounce) !important;
 }
 
 .btn-secondary:hover {
   background: rgba(var(--shadow-color), 0.03) !important;
   border-color: rgba(var(--shadow-color), 0.2) !important;
-  transform: translateY(-2px) !important;
+  transform: translateY(-2px) scale(1.02) !important;
+}
+
+.btn-secondary:active {
+  transform: scale(0.95) !important;
 }
 
 /* Topbar */
@@ -277,6 +298,10 @@
 .theme-toggle:hover {
   background: rgba(var(--shadow-color), 0.06) !important;
   transform: rotate(15deg) scale(1.1) !important;
+}
+
+.theme-toggle:active {
+  transform: rotate(0) scale(0.9) !important;
 }
 
 /* Typography Enhancements */
@@ -365,7 +390,7 @@ h3 {
   padding: 16px 24px !important;
   font-weight: 600 !important;
   font-size: 1.1rem !important;
-  transition: all var(--transition-snappy) !important;
+  transition: all var(--transition-bounce) !important;
   background: var(--modern-zen-card) !important;
   display: flex !important;
   align-items: center !important;
@@ -389,8 +414,12 @@ h3 {
 .option-grid button:hover {
   border-color: var(--modern-zen-primary) !important;
   background: rgba(18, 122, 93, 0.02) !important;
-  transform: translateY(-2px) !important;
+  transform: translateY(-2px) scale(1.01) !important;
   box-shadow: 0 4px 12px rgba(18, 122, 93, 0.08) !important;
+}
+
+.option-grid button:active {
+  transform: scale(0.98) !important;
 }
 
 .option-grid button.selected {
@@ -1354,7 +1383,7 @@ h3 {
   left: -6vw;
   background: var(--aurora-1) !important;
   transform: translate3d(calc(var(--px) * 1.4), calc(var(--py) * 1.4), 0);
-  animation: orbDrift1 26s ease-in-out infinite alternate !important;
+  animation: orbDrift1 26s ease-in-out infinite !important;
 }
 
 .immersive-bg .orb-2 {
@@ -1364,7 +1393,7 @@ h3 {
   right: -6vw;
   background: var(--aurora-2) !important;
   transform: translate3d(calc(var(--px) * -1.1), calc(var(--py) * -1.1), 0);
-  animation: orbDrift2 32s ease-in-out infinite alternate !important;
+  animation: orbDrift2 32s ease-in-out infinite !important;
 }
 
 .immersive-bg .orb-3 {
@@ -1374,25 +1403,28 @@ h3 {
   left: 38%;
   background: var(--aurora-3) !important;
   transform: translate3d(calc(var(--px) * 0.7), calc(var(--py) * 0.7), 0);
-  animation: orbDrift3 38s ease-in-out infinite alternate !important;
+  animation: orbDrift3 38s ease-in-out infinite !important;
 }
 
 @keyframes orbDrift1 {
-  to {
-    translate: 6vw 4vw;
-  }
+  0% { translate: 0 0; scale: 1; border-radius: 50%; }
+  33% { translate: 6vw -3vw; scale: 1.05; border-radius: 60% 40% 50% 50% / 40% 60% 50% 50%; }
+  66% { translate: -3vw 4vw; scale: 0.95; border-radius: 40% 60% 60% 40% / 60% 40% 40% 60%; }
+  100% { translate: 0 0; scale: 1; border-radius: 50%; }
 }
 
 @keyframes orbDrift2 {
-  to {
-    translate: -5vw -3vw;
-  }
+  0% { translate: 0 0; scale: 1; border-radius: 50%; }
+  33% { translate: -5vw -3vw; scale: 0.96; border-radius: 50% 50% 40% 60% / 50% 50% 60% 40%; }
+  66% { translate: 4vw 2vw; scale: 1.04; border-radius: 60% 40% 60% 40% / 40% 60% 40% 60%; }
+  100% { translate: 0 0; scale: 1; border-radius: 50%; }
 }
 
 @keyframes orbDrift3 {
-  to {
-    translate: 3vw -5vw;
-  }
+  0% { translate: 0 0; scale: 1; border-radius: 50%; }
+  33% { translate: 3vw -5vw; scale: 1.08; border-radius: 45% 55% 45% 55% / 55% 45% 55% 45%; }
+  66% { translate: -4vw 1vw; scale: 0.92; border-radius: 55% 45% 55% 45% / 45% 55% 45% 55%; }
+  100% { translate: 0 0; scale: 1; border-radius: 50%; }
 }
 
 /* Horizontal glowing data streams */
@@ -1637,63 +1669,38 @@ h3 {
    ========================================================================== */
 
 .mythical-art-bg {
-  position: absolute !important;
-  top: -2vh !important;
-  left: -2vw !important;
-  width: 104vw !important; /* Tràn viền rộng */
-  height: 104vh !important; /* Tràn viền cao */
+  position: fixed !important; /* Cố định với màn hình để không bị cuốn đi mất khi cuộn xa */
+  top: -20vh !important; /* Mở rộng 20vh lên trên */
+  left: -5vw !important; /* Mở rộng 5vw ra 2 bên */
+  width: 110vw !important;
+  height: 140vh !important; /* Tổng chiều cao 140vh để luôn dư dả không bị hụt phông */
+  background-image: url('./assets/dragon-phoenix.webp') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
   pointer-events: none !important;
-  mix-blend-mode: overlay; /* Hòa trộn trực tiếp với màu sắc dải màu phía sau nền */
-  opacity: 0.12; /* Độ mờ rất dịu cho Light Mode */
-  transition: opacity 0.5s ease, filter 0.5s ease;
+  mix-blend-mode: overlay;
+  opacity: 0.09; /* Hạ thêm opacity để hình ít gây chú ý hơn */
+  z-index: 1;
   will-change: transform;
-  z-index: 1; /* Nằm trên các orb nền nhưng dưới lớp card làm mờ */
-  animation: artFloat 55s ease-in-out infinite alternate !important; /* Trôi nổi siêu chậm */
-}
-
-/* Tối ưu hóa cho Theme Tối */
-[data-theme='dark'] .mythical-art-bg {
-  mix-blend-mode: soft-light;
-  opacity: 0.28; /* Độ mờ trên nền tối rất dịu */
-}
-
-.creature-svg {
-  width: 100% !important;
-  height: 100% !important;
-  display: block;
-}
-
-/* ================= 1. Các nét vẽ mây xoắn ốc cuộn dài và sóng nước phụ trợ ================= */
-.cloud-spiral, .wave-line {
-  fill: none;
-  stroke: rgba(15, 125, 140, 0.16); /* Màu xám xanh mòng két nhạt ở Light Mode */
-  stroke-width: 1.6px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: blur(1.2px); /* Làm mờ nhòe nhẹ để nét vẽ mịn màng như sương khói, không bị sắc/đơ */
-  transition: stroke 0.5s ease;
-}
-
-[data-theme='dark'] .cloud-spiral, 
-[data-theme='dark'] .wave-line {
-  stroke: rgba(147, 180, 204, 0.18) !important; /* Nhuộm màu xanh xám #93B4CC dịu nhẹ ở Dark Mode */
-  stroke-width: 1.4px;
-}
-
-/* ================= 2. Bức ảnh mẫu Rồng Phượng ở chính giữa ================= */
-.center-watermark-img {
-  /* Bỏ mask-image để bức ảnh cũ hiển thị trọn vẹn đầy đủ chi tiết */
   
-  /* Light Mode Filter */
+  /* HIỆU ỨNG PARALLAX CUỘN: Hình ảnh dịch chuyển lên trên vô cùng chậm (8% tốc độ cuộn), tạo chiều sâu 3D hoàn hảo mà không lo mất phông */
+  transform: translate3d(0, calc(var(--scroll-y, 0px) * -0.08), 0) !important;
+  transition: opacity 0.5s ease, filter 0.5s ease;
+  
+  /* Light Mode Filter: Xám, mờ mịn */
   filter: 
     grayscale(100%) 
     brightness(1.18) 
-    contrast(0.75)
+    contrast(0.65) /* Giảm độ tương phản để nét vẽ hòa tan, bớt gai góc */
+    blur(1px) 
     drop-shadow(1px 1px 1px rgba(255, 255, 255, 0.70));
 }
 
-[data-theme='dark'] .center-watermark-img {
-  /* Dark Mode Filter: Nhuộm màu nét sáng thành màu xanh xám #93B4CC mượt mà */
+/* Dark Mode Watermark: Đảo màu, nhuộm xanh xám #93B4CC, mờ mịn */
+[data-theme='dark'] .mythical-art-bg {
+  mix-blend-mode: soft-light;
+  opacity: 0.12; /* Hạ thêm opacity để hình ít gây chú ý hơn */
   filter: 
     grayscale(100%) 
     invert(100%) 
@@ -1701,27 +1708,504 @@ h3 {
     hue-rotate(175deg) 
     saturate(160%) 
     brightness(0.82) 
-    contrast(0.70)
-    drop-shadow(0 0 15px rgba(147, 180, 204, 0.35)) !important; /* Hào quang xanh xám dịu nhẹ */
-}
-
-/* Quỹ đạo chuyển động bồng bềnh và xoay nhẹ siêu chậm của bức tranh */
-@keyframes artFloat {
-  0% {
-    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
-  }
-  50% {
-    transform: translate3d(-10px, 10px, 0) rotate(1deg) scale(1.01);
-  }
-  100% {
-    transform: translate3d(0, 0, 0) rotate(-0.8deg) scale(0.99);
-  }
+    contrast(0.60) /* Giảm độ tương phản để bóng mờ chìm hẳn vào nền */
+    blur(1.5px)
+    drop-shadow(0 0 15px rgba(147, 180, 204, 0.35)) !important;
 }
 
 /* Tôn trọng cài đặt tắt chuyển động của hệ điều hành */
 @media (prefers-reduced-motion: reduce) {
   .mythical-art-bg {
-    animation: none !important;
     transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE UI (Bottom Navigation & Compact Cards)
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Chuyển Grid Desktop thành Block trên Mobile */
+  .core-app {
+    display: block !important;
+    padding-bottom: 80px !important; /* Dành khoảng trống cho Bottom Nav */
+  }
+
+  /* Biến Sidebar thành Bottom Navigation Bar */
+  .core-sidebar {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 64px !important;
+    flex-direction: row !important;
+    justify-content: space-around !important;
+    align-items: center !important;
+    padding: 8px 12px !important;
+    border-right: none !important;
+    border-top: 1px solid var(--glass-border) !important;
+    z-index: 100 !important;
+    box-shadow: 0 -4px 24px rgba(var(--shadow-color), 0.08) !important;
+    background: var(--modern-zen-card) !important; /* Đảm bảo nền mờ hoặc đặc để không bị lẫn chữ */
+  }
+
+  /* Ẩn Logo trên Mobile (không cần thiết trên Bottom Nav) */
+  .core-logo {
+    display: none !important;
+  }
+
+  /* Chỉnh lại các nút trên Sidebar thành Icon Tab */
+  .core-sidebar button {
+    flex: 1 !important;
+    flex-direction: column !important;
+    height: auto !important;
+    gap: 4px !important;
+    padding: 6px 4px !important;
+    justify-content: center !important;
+    margin: 0 !important;
+  }
+
+  .core-sidebar button::before {
+    display: none !important; /* Tắt gạch dọc báo active state trên Desktop */
+  }
+
+  .core-sidebar button span {
+    font-size: 0.65rem !important;
+    font-weight: 700 !important;
+  }
+
+  .core-sidebar button.active {
+    background: transparent !important; /* Xóa nền mờ của nút active Desktop */
+    color: var(--modern-zen-primary) !important;
+  }
+  
+  .core-sidebar button.active svg {
+    filter: drop-shadow(0 2px 4px rgba(18, 122, 93, 0.4));
+  }
+
+  /* Tối ưu không gian chính (Main Content) */
+  .core-shell {
+    padding: 12px 16px 24px 16px !important;
+  }
+
+  /* Thu gọn thẻ bài (Cards) */
+  .core-card,
+  .learning-question-card,
+  .analytics-panel,
+  .today-queue-panel {
+    padding: 20px 16px !important;
+    border-radius: var(--radius) !important;
+  }
+
+  /* Sửa lỗi "phình button" ở phần Học Hôm Nay */
+  .today-action-buttons button {
+    padding: 10px 12px !important;
+    height: auto !important;
+    min-height: 48px !important;
+    font-size: 0.9rem !important;
+    white-space: normal !important;
+    line-height: 1.3 !important;
+  }
+
+  /* Thu nhỏ chữ Hán khổng lồ trên thẻ hỏi */
+  .learning-question-card h2 {
+    font-size: 2.8rem !important;
+    margin: 16px 0 !important;
+  }
+  
+  /* Giảm size tiêu đề ở trên cùng */
+  .core-topbar h2 {
+    font-size: 1.35rem !important;
+  }
+
+  /* Option Grid (Các đáp án) đã có media query ở App/index, nhưng ta đảm bảo nó full width và padding vừa vặn */
+  .option-grid button {
+    padding: 16px 20px !important;
+    font-size: 1rem !important;
+  }
+}
+
+/* ==========================================================================
+   VOCABULARY REDESIGN (Premium & Minimalist)
+   ========================================================================== */
+
+
+main.core-page {
+  position: relative !important;
+}
+
+/* Thang tabs lọc HSK - Segmented control */
+.vocab-hsk-tabs {
+  display: inline-flex;
+  background: var(--modern-zen-chip) !important;
+  padding: 4px !important;
+  border-radius: 12px !important;
+  gap: 2px;
+  border: 1px solid rgba(var(--shadow-color), 0.05) !important;
+}
+
+.vocab-hsk-tabs button {
+  background: transparent !important;
+  border: none !important;
+  color: var(--muted) !important;
+  padding: 6px 14px !important;
+  border-radius: 8px !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  transition: all var(--transition-snappy) !important;
+}
+
+.vocab-hsk-tabs button.active {
+  background: var(--modern-zen-card) !important;
+  color: var(--modern-zen-primary) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* Search Box styling */
+.search-box {
+  border: 1.5px solid rgba(var(--shadow-color), 0.08) !important;
+  background: var(--modern-zen-card) !important;
+  border-radius: 12px !important;
+  padding: 0 16px !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: border-color var(--transition-snappy) !important;
+}
+
+.search-box:focus-within {
+  border-color: var(--modern-zen-primary) !important;
+  box-shadow: 0 0 0 3px var(--focus-ring) !important;
+}
+
+.search-box input {
+  font-size: 0.9rem !important;
+}
+
+/* Vocabulary Grid */
+.vocab-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+  gap: 16px !important;
+  padding: 8px 2px !important;
+  max-height: calc(100vh - 240px) !important;
+  overflow-y: auto !important;
+}
+
+/* Vocabulary Card */
+.vocab-card {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--modern-zen-card) !important;
+  border: 1px solid rgba(var(--shadow-color), 0.05) !important;
+  border-radius: var(--radius) !important;
+  padding: 20px 14px !important;
+  min-height: 124px !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: transform var(--transition-bounce), box-shadow var(--transition-smooth), border-color var(--transition-smooth) !important;
+  width: 100% !important;
+}
+
+.vocab-card:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  border-color: var(--modern-zen-primary) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.vocab-card:active {
+  transform: scale(0.96) !important;
+}
+
+.vocab-card.active {
+  background: rgba(18, 122, 93, 0.04) !important;
+  border-color: var(--modern-zen-primary) !important;
+  box-shadow: 0 4px 16px rgba(18, 122, 93, 0.08) !important;
+}
+
+.vocab-card strong {
+  font-size: 1.86rem !important;
+  color: var(--text) !important;
+  font-family: var(--font-cn) !important;
+  font-weight: 700 !important;
+  margin-bottom: 6px !important;
+}
+
+.vocab-card span {
+  font-size: 0.88rem !important;
+  color: var(--modern-zen-primary) !important;
+  font-weight: 600 !important;
+}
+
+.vocab-card small {
+  font-size: 0.78rem !important;
+  color: var(--muted) !important;
+  margin-top: 4px !important;
+  max-width: 90% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+
+/* Drawer Backdrop styling */
+.vocab-drawer-backdrop {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(4px) !important;
+  z-index: 1000 !important;
+  border-radius: var(--radius) !important;
+  animation: fadeIn 240ms ease both !important;
+}
+
+/* Side-over Drawer container */
+.vocab-drawer {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  background: var(--modern-zen-card) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow) !important;
+  z-index: 1001 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  animation: slideInRight var(--transition-bounce) both !important;
+  overflow: hidden !important;
+}
+
+/* Drawer Header */
+.vocab-drawer-header {
+  padding: 24px 28px 18px !important;
+  border-bottom: 1px solid var(--line-soft) !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  max-width: 800px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+}
+
+.vocab-drawer-header h2 {
+  font-size: 2.1rem !important;
+  font-weight: 800 !important;
+  color: var(--modern-zen-primary) !important;
+  margin: 4px 0 !important;
+}
+
+.vocab-drawer-header p {
+  color: var(--muted) !important;
+  margin: 4px 0 0 !important;
+  font-size: 1.02rem !important;
+}
+
+/* Drawer Close button */
+.vocab-drawer-close {
+  border: none !important;
+  background: var(--modern-zen-chip) !important;
+  color: var(--muted) !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  display: grid !important;
+  place-items: center !important;
+  font-size: 1.5rem !important;
+  cursor: pointer !important;
+  transition: all var(--transition-bounce) !important;
+  line-height: 1 !important;
+}
+
+.vocab-drawer-close:hover {
+  background: var(--cinnabar-soft) !important;
+  color: var(--cinnabar) !important;
+  transform: rotate(90deg) !important;
+}
+
+/* Drawer Body */
+.vocab-drawer-body {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 24px 28px 40px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 24px !important;
+  max-width: 800px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+}
+
+.vocab-drawer-section {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.vocab-section-title {
+  font-size: 0.8rem !important;
+  font-weight: 800 !important;
+  color: var(--dim) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  margin-bottom: 10px !important;
+  display: block !important;
+}
+
+/* Hanzi Hero Box */
+.hanzi-hero {
+  width: 100% !important;
+  min-height: 170px !important;
+  background: var(--modern-zen-bg) !important;
+  border: 1px solid rgba(var(--shadow-color), 0.05) !important;
+  border-radius: var(--radius-lg) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 16px !important;
+  box-shadow: inset 0 0 16px rgba(var(--shadow-color), 0.01), var(--shadow-sm) !important;
+}
+
+[data-theme='dark'] .hanzi-hero {
+  background: #242220 !important;
+  border-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Hanzi Writer Character Box */
+.hanzi-writer-char {
+  width: 110px !important;
+  height: 110px !important;
+  border: 1.5px dashed rgba(212, 163, 89, 0.3) !important;
+  border-radius: var(--radius) !important;
+  background: var(--modern-zen-card) !important;
+  cursor: pointer !important;
+  transition: transform var(--transition-bounce), border-color var(--transition-bounce) !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+[data-theme='dark'] .hanzi-writer-char {
+  border-color: rgba(232, 193, 122, 0.25) !important;
+}
+
+.hanzi-writer-char:hover {
+  transform: scale(1.05) translateY(-2px) !important;
+  border-color: var(--modern-zen-primary) !important;
+}
+
+/* Radical tags */
+.radical-strip {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.radical-strip span {
+  min-height: auto !important;
+  padding: 8px 12px !important;
+  background: rgba(var(--shadow-color), 0.02) !important;
+  border: 1px solid rgba(var(--shadow-color), 0.04) !important;
+  border-radius: 8px !important;
+  align-items: center !important;
+}
+
+.radical-strip strong {
+  font-size: 1.15rem !important;
+  color: var(--gold) !important;
+}
+
+.radical-strip small {
+  font-size: 0.78rem !important;
+}
+
+/* Example list */
+.vocab-example-list blockquote {
+  border-left: 3px solid var(--modern-zen-primary) !important;
+  background: rgba(18, 122, 93, 0.02) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 14px 16px !important;
+  transition: transform var(--transition-snappy) !important;
+}
+
+.vocab-example-list blockquote:hover {
+  transform: translateX(4px);
+}
+
+/* Handwriting Panel */
+.handwriting-panel {
+  border-top: 1px solid rgba(var(--shadow-color), 0.05) !important;
+  margin-top: 8px !important;
+  padding-top: 24px !important;
+}
+
+.handwriting-panel h3 {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  color: var(--muted) !important;
+  margin-bottom: 8px !important;
+}
+
+.handwriting-panel canvas {
+  border: 1.5px dashed rgba(var(--shadow-color), 0.1) !important;
+  border-radius: var(--radius) !important;
+  background: #fafaf8 !important;
+  cursor: crosshair;
+  width: 100% !important;
+  max-width: 420px !important;
+}
+
+/* Keyframes animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Responsive queries */
+@media (max-width: 768px) {
+  .vocab-head {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  
+  .vocab-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+  
+  .vocab-hsk-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    justify-content: flex-start !important;
+    padding: 6px !important;
+  }
+  
+  .vocab-hsk-tabs button {
+    flex: 0 0 auto !important;
+  }
+
+  .vocab-drawer {
+    width: 100% !important;
+  }
+
+  .vocab-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
   }
 }

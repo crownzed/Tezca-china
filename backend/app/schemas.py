@@ -567,6 +567,7 @@ class WordOut(BaseModel):
     hsk_level: int
     pos: str = ""
     radical: str = ""
+    component_hint: str = ""
     examples: list[WordExampleOut] = Field(default_factory=list)
 
 

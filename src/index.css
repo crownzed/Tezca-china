@@ -1765,6 +1765,14 @@ textarea {
   animation: spin 0.9s linear infinite;
 }
 
+.tab-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  color: var(--muted);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

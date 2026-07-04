@@ -214,13 +214,17 @@ class QuestionGeneratorService:
         if not base_prompt:
             return None
             
-        existing_count = self.db.scalar(
-            select(func.count(Question.id)).where(
+        duplicate_prompt = self.db.scalar(
+            select(Question).where(
                 Question.word_id == word.id,
-                Question.quiz_type == quiz_type
+                Question.quiz_type == quiz_type,
+                Question.prompt == base_prompt
             )
         )
-        prompt = base_prompt if not existing_count else f"{base_prompt} (v{existing_count + 1})"
+        if duplicate_prompt:
+            return duplicate_prompt
+
+        prompt = base_prompt
 
         audio_text = self._audio_for(word, quiz_type, seed)
         if audio_text and quiz_type != QuizType.vocab:
