@@ -1,0 +1,31 @@
+# Fly.io app config cho backend FastAPI (Tezca China).
+# Deploy từ thư mục backend/ (nơi có Dockerfile). DB dùng Turso (libSQL) remote,
+# nên KHÔNG cần volume/disk. Secrets (DATABASE_URL, TURSO_AUTH_TOKEN, các API key)
+# set qua `fly secrets set`, không ghi trong file này.
+
+app = "tezca-china-api"
+primary_region = "sin"  # Singapore — gần VN nhất
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"    # ngủ khi không có traffic để tiết kiệm
+  auto_start_machines = true     # tự dậy khi có request
+  min_machines_running = 0
+
+  [http_service.checks]
+    [[http_service.checks.http]]
+      path = "/health"
+      interval = "30s"
+      timeout = "5s"
+      grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"   # parselmouth + numpy cần bộ nhớ; nâng lên 1gb nếu OOM
