@@ -25,9 +25,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.db import SessionLocal, engine
-from sqlalchemy import func, select, text
+from sqlalchemy import func, inspect, select, text
 
 from app.models import Example, Question, QuizAttempt, UserProgress, Word
+
+
+def db_is_ready() -> bool:
+    """True nếu DB đã có bảng nội dung để QA. CI dùng SQLite rỗng (dev.db bị
+    gitignore, không có bước seed) -> chưa có bảng `words`. Khi đó QA không có
+    gì để kiểm: thoát sạch thay vì crash `no such table`."""
+    try:
+        return "words" in inspect(engine).get_table_names()
+    except Exception:
+        return False
 
 
 def health_metrics() -> dict:
@@ -166,6 +176,14 @@ def main():
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "checks": {},
     }
+
+    # ── Guard: DB chưa có bảng (vd CI với SQLite rỗng) → không có gì để QA ──
+    if not db_is_ready():
+        print("\n⚠ DB chưa có bảng nội dung (chưa seed) — bỏ qua QA, thoát sạch.")
+        print("  Đặt DATABASE_URL trỏ DB đã seed (prod) để QA chạy thật.")
+        report["status"] = "skipped"
+        report["reason"] = "database_not_seeded"
+        sys.exit(0)
 
     # ── Check 1: Health metrics ──
     print("\n── Check 1: Health metrics ──")
