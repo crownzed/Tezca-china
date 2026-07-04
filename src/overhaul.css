@@ -210,7 +210,6 @@
 
 .core-card:active,
 .analytics-panel:active {
-  transform: translateY(0) scale(0.98) !important;
   box-shadow: var(--shadow-sm) !important;
 }
 
@@ -1548,7 +1547,6 @@ h3 {
 /* Slow-ease entrance: questions/cards merge in rather than jump.
    No filter:blur here — a lingering filter (even blur(0) via fill mode) on a
    glass card would disable its own backdrop-filter. */
-.page-enter,
 .question-card.learning-question-card {
   animation: glassMergeIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
 }
@@ -1916,9 +1914,6 @@ main.core-page {
   box-shadow: var(--shadow-md) !important;
 }
 
-.vocab-card:active {
-  transform: scale(0.96) !important;
-}
 
 .vocab-card.active {
   background: rgba(18, 122, 93, 0.04) !important;

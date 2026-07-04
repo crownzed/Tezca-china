@@ -1,4 +1,5 @@
 import { inferBehaviorState } from './behavior-engine';
+import { scopedKey } from './user-scope';
 
 const QUIZ_TYPE_LABELS = {
   vocab: 'Từ vựng',
@@ -152,7 +153,7 @@ export function buildTodaySessionPlan({ analytics, stats, focusLevel = 1, modeId
 
 export function markLearningSessionStarted() {
   try {
-    window.localStorage.setItem('lastLearningSessionStartedAt', new Date().toISOString());
+    window.localStorage.setItem(scopedKey('lastLearningSessionStartedAt'), new Date().toISOString());
   } catch {
     /* ignore */
   }

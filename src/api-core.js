@@ -1,3 +1,5 @@
+import { scopedKey } from './user-scope';
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000');
 
 let authToken = null;
@@ -447,7 +449,7 @@ export async function submitQuiz(payload, questions = []) {
         word: q?.word || null,
       };
     });
-    localStorage.setItem('coreStats', JSON.stringify(next));
+    localStorage.setItem(scopedKey('coreStats'), JSON.stringify(next));
     writeLocalHistory({
       id: Date.now(),
       created_at: new Date().toISOString(),
@@ -462,13 +464,13 @@ export async function submitQuiz(payload, questions = []) {
 }
 
 function readLocalStats() {
-  try { return JSON.parse(localStorage.getItem('coreStats')) || { attempts: 0, answered: 0, correct: 0 }; }
+  try { return JSON.parse(localStorage.getItem(scopedKey('coreStats'))) || { attempts: 0, answered: 0, correct: 0 }; }
   catch { return { attempts: 0, answered: 0, correct: 0 }; }
 }
 
 function readLocalHistory() {
   try {
-    const history = JSON.parse(localStorage.getItem('coreHistory'));
+    const history = JSON.parse(localStorage.getItem(scopedKey('coreHistory')));
     return Array.isArray(history) ? history : [];
   } catch {
     return [];
@@ -478,7 +480,7 @@ function readLocalHistory() {
 function writeLocalHistory(attempt) {
   const history = readLocalHistory();
   const next = [...history, attempt].slice(-80);
-  localStorage.setItem('coreHistory', JSON.stringify(next));
+  localStorage.setItem(scopedKey('coreHistory'), JSON.stringify(next));
 }
 
 function pct(correct, total) {
@@ -621,7 +623,7 @@ function buildLocalAnalytics() {
 
 function readLocalProductionReadiness() {
   try {
-    const summaries = JSON.parse(localStorage.getItem('learningSessionSummaries')) || [];
+    const summaries = JSON.parse(localStorage.getItem(scopedKey('learningSessionSummaries'))) || [];
     const outputs = summaries.flatMap(session => session.answers || []).filter(answer => answer.item_type === 'guided_output');
     if (!outputs.length) return 0;
     return Math.round((outputs.filter(answer => answer.correct).length / outputs.length) * 100);
@@ -772,7 +774,7 @@ function buildLocalProfileStats() {
   const stats = readLocalStats();
   const dateKeys = history.map(item => toLocalDate(item.created_at)).filter(Boolean);
   try {
-    const summaries = JSON.parse(localStorage.getItem('learningSessionSummaries')) || [];
+    const summaries = JSON.parse(localStorage.getItem(scopedKey('learningSessionSummaries'))) || [];
     summaries.forEach(item => {
       const key = toLocalDate(item.completed_at || item.started_at);
       if (key) dateKeys.push(key);
@@ -791,7 +793,7 @@ function buildLocalProfileStats() {
     accuracy: answered ? Math.round((correct / answered) * 100) : 0,
   };
   try {
-    const summaries = JSON.parse(localStorage.getItem('learningSessionSummaries')) || [];
+    const summaries = JSON.parse(localStorage.getItem(scopedKey('learningSessionSummaries'))) || [];
     metrics.session_count = summaries.filter(item => item.completed_at).length;
   } catch { /* ignore */ }
   const titles = buildLocalTitles(metrics);

@@ -1,3 +1,5 @@
+import { scopedKey } from './user-scope';
+
 const STATE_COPY = {
   ready_deep: {
     label: 'Sẵn sàng học sâu',
@@ -53,8 +55,8 @@ function ewma(values, fallback = 0, alpha = 0.35) {
 }
 
 function recentAnswerEvents() {
-  const history = readJson('coreHistory', []);
-  const sessionSummaries = readJson('learningSessionSummaries', []);
+  const history = readJson(scopedKey('coreHistory'), []);
+  const sessionSummaries = readJson(scopedKey('learningSessionSummaries'), []);
   const quizEvents = history
     .flatMap(attempt => (attempt.answers || []).map(answer => ({ ...answer, created_at: attempt.created_at })))
   const sessionEvents = sessionSummaries
@@ -63,7 +65,7 @@ function recentAnswerEvents() {
 }
 
 function recentCompletionRate() {
-  const summaries = readJson('learningSessionSummaries', []);
+  const summaries = readJson(scopedKey('learningSessionSummaries'), []);
   if (!summaries.length) return 0;
   const recent = summaries.slice(-10);
   const completed = recent.filter(item => item.completed_at).length;
@@ -109,7 +111,7 @@ export function inferBehaviorState({ analytics, stats, selectedMode = 'standard'
     completionRate: recentCompletionRate(),
     wrongStreak: wrongStreak(events),
   };
-  const lastActivity = readDate('lastLearningSessionCompletedAt') || readDate('lastLearningSessionStartedAt');
+  const lastActivity = readDate(scopedKey('lastLearningSessionCompletedAt')) || readDate(scopedKey('lastLearningSessionStartedAt'));
   const inferredWeakCount = weakCount || analytics?.weak_words || stats?.weak_words || 0;
 
   let state = 'maintenance';
@@ -145,9 +147,9 @@ export function markLearningSessionCompleted(summary = {}) {
   if (typeof window === 'undefined') return;
   try {
     const completedAt = new Date().toISOString();
-    window.localStorage.setItem('lastLearningSessionCompletedAt', completedAt);
-    const summaries = readJson('learningSessionSummaries', []);
-    window.localStorage.setItem('learningSessionSummaries', JSON.stringify([...summaries, { ...summary, completed_at: completedAt }].slice(-20)));
+    window.localStorage.setItem(scopedKey('lastLearningSessionCompletedAt'), completedAt);
+    const summaries = readJson(scopedKey('learningSessionSummaries'), []);
+    window.localStorage.setItem(scopedKey('learningSessionSummaries'), JSON.stringify([...summaries, { ...summary, completed_at: completedAt }].slice(-20)));
   } catch {
     /* ignore */
   }
