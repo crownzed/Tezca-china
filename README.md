@@ -48,27 +48,13 @@ Cấu hình API base qua biến môi trường `VITE_API_BASE` (mặc định `h
 
 ## Deploy online
 
-**Frontend (Firebase Hosting):** https://tiengtrung-49e13.web.app
+**Frontend (Vercel):** https://tezca-china.vercel.app
 
 ```bash
-npm run deploy
+npm run deploy   # vercel --prod
 ```
 
-**Backend online** — chọn một trong hai cách:
-
-### Cách 1: Google Cloud Run (cùng project Firebase)
-
-1. Bật billing cho project `tiengtrung-49e13`: [Google Cloud Billing](https://console.cloud.google.com/billing/linkedaccount?project=tiengtrung-49e13)
-2. Deploy API:
-   ```bash
-   npm run deploy:api
-   ```
-3. Bật proxy `/api` trên Hosting và deploy lại:
-   ```bash
-   npm run deploy:all
-   ```
-
-### Cách 2: Fly.io + Turso (đang dùng)
+**Backend (Fly.io + Turso):**
 
 1. Deploy backend từ thư mục `backend/` (có `fly.toml`): `fly deploy`
 2. Set secrets trên Fly: `DATABASE_URL` (Turso libSQL), `TURSO_AUTH_TOKEN`, `JWT_SECRET`, các API key
@@ -76,10 +62,10 @@ npm run deploy
    ```
    VITE_API_BASE=https://tezca-china.fly.dev
    ```
-4. Deploy lại frontend: `npm run deploy` (Firebase) hoặc `vercel --prod`
+4. Deploy lại frontend: `npm run deploy`
 
-> Khi chưa có backend online, app vẫn chạy được ở chế độ offline trên Firebase.
+> Khi chưa có backend online, app vẫn chạy được ở chế độ offline trên Vercel.
 
 ## Công nghệ
 
-React 19 + Vite · FastAPI · SQLAlchemy · Turso (libSQL) · Fly.io · Vercel/Firebase
+React 19 + Vite · FastAPI · SQLAlchemy · Turso (libSQL) · Fly.io · Vercel

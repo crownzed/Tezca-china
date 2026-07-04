@@ -29,10 +29,7 @@ __pycache__/
 *.sln
 *.sw?
 
-# Firebase
-.firebase/
-firebase-debug.log
-firebase-debug.*.log
+# Vercel
 .vercel
 
 # Secrets / local env

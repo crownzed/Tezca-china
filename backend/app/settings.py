@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     jwt_expire_hours: int = 168
     cors_origins: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"
-        "https://tiengtrung-49e13.web.app,https://tiengtrung-49e13.firebaseapp.com,"
         "https://tezca-china.vercel.app,https://poseidonz227.id.vn,https://www.poseidonz227.id.vn"
     )
     turso_database_url: str = ""
