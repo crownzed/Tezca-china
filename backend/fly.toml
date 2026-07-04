@@ -3,7 +3,7 @@
 # nên KHÔNG cần volume/disk. Secrets (DATABASE_URL, TURSO_AUTH_TOKEN, các API key)
 # set qua `fly secrets set`, không ghi trong file này.
 
-app = "tezca-china-api"
+app = "tezca-china"
 primary_region = "sin"  # Singapore — gần VN nhất
 
 [build]
@@ -15,9 +15,9 @@ primary_region = "sin"  # Singapore — gần VN nhất
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"    # ngủ khi không có traffic để tiết kiệm
+  auto_stop_machines = "stop"    # dừng máy thừa khi vắng traffic
   auto_start_machines = true     # tự dậy khi có request
-  min_machines_running = 0
+  min_machines_running = 1       # giữ 1 máy luôn chạy → tránh cold-start mỗi lần
 
   [[http_service.checks]]
     path = "/health"
