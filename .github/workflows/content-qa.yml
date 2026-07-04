@@ -39,7 +39,9 @@ jobs:
           # QA cần DB đã seed để có gì kiểm. Trỏ vào prod (Postgres/Turso) qua
           # secret; nếu secret trống, runner rơi về SQLite rỗng -> db_is_ready()
           # false -> QA skip sạch (exit 0) thay vì crash.
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Secret rỗng -> fallback sqlite để không ghi đè default bằng "" (create_engine("") crash).
+          # Khi chưa có secret: sqlite rỗng -> guard db_is_ready() bắt -> exit 0. Có secret prod -> QA chạy thật.
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'sqlite:///./dev.db' }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python backend/app/scripts/cron_qa_runner.py
