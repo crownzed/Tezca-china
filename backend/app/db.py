@@ -6,15 +6,25 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from .settings import settings
 
 
-def _normalize_database_url(url: str) -> str:
-    """Force the psycopg3 driver for Postgres URLs.
+def _is_turso(url: str) -> bool:
+    """URL trỏ tới Turso/libSQL remote (không phải sqlite file local)."""
+    return url.startswith("libsql://") or url.startswith("sqlite+libsql://")
 
-    Managed providers (Neon, Supabase, Cloud SQL) hand out URLs like
-    ``postgres://`` or ``postgresql://``, which SQLAlchemy maps to the
-    psycopg2 driver. Only psycopg3 (``psycopg[binary]``) is installed, so we
-    rewrite the scheme to ``postgresql+psycopg://`` to avoid a boot-time
-    ImportError. Leaves sqlite and already-qualified URLs untouched.
+
+def _normalize_database_url(url: str) -> str:
+    """Chuẩn hóa scheme để khớp driver đã cài.
+
+    - Postgres: các provider (Neon, Supabase, Cloud SQL) trả ``postgres://`` /
+      ``postgresql://`` → SQLAlchemy map sang psycopg2, nhưng chỉ có psycopg3
+      (``psycopg[binary]``). Rewrite sang ``postgresql+psycopg://``.
+    - Turso/libSQL: ``libsql://host`` → ``sqlite+libsql://host?secure=true``
+      (scheme của dialect ``sqlalchemy-libsql``; ``secure=true`` bật TLS remote).
+      Auth token KHÔNG nhét vào URL mà truyền qua connect_args (xem _connect_args).
+    - Còn lại (sqlite file, URL đã đủ scheme): giữ nguyên.
     """
+    if _is_turso(url):
+        host = url.split("://", 1)[1].split("?", 1)[0].rstrip("/")
+        return f"sqlite+libsql://{host}?secure=true"
     if url.startswith("postgresql+") or url.startswith("postgres+"):
         return url
     if url.startswith("postgresql://"):
@@ -24,8 +34,19 @@ def _normalize_database_url(url: str) -> str:
     return url
 
 
+def _connect_args(raw_url: str, normalized_url: str) -> dict:
+    if _is_turso(raw_url):
+        # Dialect libSQL nhận auth_token qua connect_args. Không đặt
+        # check_same_thread (kết nối remote, không phải sqlite file cục bộ).
+        token = settings.turso_auth_token
+        return {"auth_token": token} if token else {}
+    if normalized_url.startswith("sqlite"):
+        return {"check_same_thread": False}
+    return {}
+
+
 database_url = _normalize_database_url(settings.database_url)
-connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+connect_args = _connect_args(settings.database_url, database_url)
 engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
@@ -46,7 +67,8 @@ def init_db() -> None:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
-    if settings.database_url.startswith("sqlite"):
+    # Turso/libSQL là họ sqlite (hỗ trợ PRAGMA) nên dùng chung nhánh ensure cột.
+    if settings.database_url.startswith("sqlite") or _is_turso(settings.database_url):
         _ensure_sqlite_word_columns()
         _ensure_sqlite_user_progress_columns()
     _ensure_indexes()
