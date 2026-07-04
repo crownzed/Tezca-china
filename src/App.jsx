@@ -832,38 +832,45 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     setLoading(true);
     stopSpeech();
     try {
-      const questionsByType = new Map();
-      primaryQuestions.forEach(row => {
-        const rows = questionsByType.get(row.quiz_type) || [];
-        rows.push(row);
-        questionsByType.set(row.quiz_type, rows);
-      });
-      const answersByType = new Map();
-      primaryAnswers.forEach(answer => {
-        const rows = answersByType.get(answer.quiz_type) || [];
-        rows.push({
-          question_id: answer.question_id,
-          selected_index: answer.selected_index,
-          latency_ms: answer.latency_ms,
-          confidence: answer.confidence,
-          error_tag: answer.error_tag || null,
+      // Lưu tiến độ lên server. Kết quả đã tính xong từ dữ liệu local nên nếu
+      // bước lưu thất bại (mất mạng / backend cold-start), vẫn phải hiện màn
+      // kết quả — nếu không UI kẹt lại ở câu cuối, không thoát được.
+      try {
+        const questionsByType = new Map();
+        primaryQuestions.forEach(row => {
+          const rows = questionsByType.get(row.quiz_type) || [];
+          rows.push(row);
+          questionsByType.set(row.quiz_type, rows);
         });
-        answersByType.set(answer.quiz_type, rows);
-      });
-      await Promise.all([...answersByType.entries()].map(([type, rows]) => (
-        submitQuiz({
-          user_id: userId,
-          level,
-          quiz_type: type,
-          session_id: session?.id,
-          record_events: false,
-          answers: rows,
-        }, questionsByType.get(type) || [])
-      )));
-      if (session?.id) {
-        await completeLearningSession({ user_id: userId, session_id: session.id, summary });
+        const answersByType = new Map();
+        primaryAnswers.forEach(answer => {
+          const rows = answersByType.get(answer.quiz_type) || [];
+          rows.push({
+            question_id: answer.question_id,
+            selected_index: answer.selected_index,
+            latency_ms: answer.latency_ms,
+            confidence: answer.confidence,
+            error_tag: answer.error_tag || null,
+          });
+          answersByType.set(answer.quiz_type, rows);
+        });
+        await Promise.all([...answersByType.entries()].map(([type, rows]) => (
+          submitQuiz({
+            user_id: userId,
+            level,
+            quiz_type: type,
+            session_id: session?.id,
+            record_events: false,
+            answers: rows,
+          }, questionsByType.get(type) || [])
+        )));
+        if (session?.id) {
+          await completeLearningSession({ user_id: userId, session_id: session.id, summary });
+        }
+        await refreshStats?.();
+      } catch {
+        /* lưu tiến độ thất bại — vẫn hiển thị kết quả local phía dưới */
       }
-      await refreshStats?.();
       setCompletedQuestions(primaryQuestions);
       setResult({ ...summary, answers: primaryAnswers, repairs: finalAnswers.filter(row => row.is_repair) });
       setQuizItems([]);
