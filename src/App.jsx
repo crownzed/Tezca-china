@@ -252,11 +252,29 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
   const hasData = (analytics?.answered || 0) > 0;
   const chartRows = trendRows.length ? trendRows : [{ label: 'P1', accuracy: 0, score: 0, total: 0 }];
   const maxIndex = Math.max(1, chartRows.length - 1);
-  const trendPoints = chartRows.map((item, index) => {
-    const x = 8 + (index / maxIndex) * 184;
-    const y = 92 - clampPercent(item.accuracy) * 0.78;
-    return `${x},${y}`;
-  }).join(' ');
+  
+  // Tạo đường cong Bezier mượt mà cho biểu đồ xu hướng (Doc 7.2)
+  let trendPath = '';
+  let trendAreaPath = '';
+  const trendPointsList = chartRows.map((item, index) => {
+    const x = 12 + (index / maxIndex) * 176;
+    const y = 90 - clampPercent(item.accuracy) * 0.72; // y chạy từ 18 (100%) đến 90 (0%)
+    return { x, y, ...item };
+  });
+
+  if (trendPointsList.length > 0) {
+    trendPath = `M ${trendPointsList[0].x} ${trendPointsList[0].y}`;
+    for (let i = 0; i < trendPointsList.length - 1; i++) {
+      const p0 = trendPointsList[i];
+      const p1 = trendPointsList[i + 1];
+      const cp1x = p0.x + 176 / (maxIndex * 3);
+      const cp1y = p0.y;
+      const cp2x = p1.x - 176 / (maxIndex * 3);
+      const cp2y = p1.y;
+      trendPath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p1.x} ${p1.y}`;
+    }
+    trendAreaPath = `${trendPath} L ${trendPointsList[trendPointsList.length - 1].x} 90 L ${trendPointsList[0].x} 90 Z`;
+  }
   const bestType = typeRows.filter(item => item.answered > 0).sort((a, b) => b.accuracy - a.accuracy)[0];
   const weakType = typeRows.filter(item => item.answered > 0).sort((a, b) => a.accuracy - b.accuracy)[0];
   // Readiness theo kỹ năng (doc 7.2): dashboard ưu tiên hiện độ sẵn sàng từng
@@ -340,19 +358,31 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
             <svg className="trend-chart" viewBox="0 0 200 100" role="img" aria-label="Xu hướng độ chính xác">
               <defs>
                 <linearGradient id="trendAreaGradient" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="var(--jade)" stopOpacity="0.18" />
+                  <stop offset="0%" stopColor="var(--jade)" stopOpacity="0.25" />
                   <stop offset="100%" stopColor="var(--jade)" stopOpacity="0" />
                 </linearGradient>
+                <filter id="glowFilter" x="-10%" y="-10%" width="120%" height="120%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="var(--jade)" floodOpacity="0.4" />
+                </filter>
               </defs>
-              <line x1="8" y1="92" x2="192" y2="92" />
-              <line x1="8" y1="14" x2="8" y2="92" />
-              <polygon className="trend-area" points={`8,92 ${trendPoints} 192,92`} />
-              <polyline points={trendPoints} />
-              {chartRows.map((item, index) => {
-                const x = 8 + (index / maxIndex) * 184;
-                const y = 92 - clampPercent(item.accuracy) * 0.78;
-                return <circle key={`${item.label}-${index}`} cx={x} cy={y} r="3.8" />;
-              })}
+              {/* Lưới tọa độ đẹp mắt dạng chấm mảnh */}
+              <line x1="12" y1="18" x2="188" y2="18" stroke="rgba(var(--shadow-color, 0,0,0), 0.06)" strokeDasharray="3 3" />
+              <line x1="12" y1="54" x2="188" y2="54" stroke="rgba(var(--shadow-color, 0,0,0), 0.06)" strokeDasharray="3 3" />
+              <line x1="12" y1="90" x2="188" y2="90" stroke="rgba(var(--shadow-color, 0,0,0), 0.15)" strokeWidth="1.2" />
+              
+              {/* Vùng màu Gradient dưới đường cong */}
+              {trendAreaPath && <path className="trend-area" d={trendAreaPath} />}
+              
+              {/* Đường cong xu hướng mượt mà có hiệu ứng phát sáng */}
+              {trendPath && <path className="trend-line" d={trendPath} filter="url(#glowFilter)" fill="none" stroke="var(--jade)" strokeWidth="3.2" strokeLinecap="round" />}
+              
+              {/* Các điểm nút dữ liệu tương tác */}
+              {trendPointsList.map((item, index) => (
+                <g key={`${item.label}-${index}`} className="trend-dot-group">
+                  <circle cx={item.x} cy={item.y} r="8" className="trend-dot-ring" />
+                  <circle cx={item.x} cy={item.y} r="3.8" className="trend-dot" />
+                </g>
+              ))}
             </svg>
             <div className="trend-labels">
               {chartRows.slice(-4).map((item, index) => <span key={`${item.label}-${index}`}>{item.label}: {item.accuracy}%</span>)}
