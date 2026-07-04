@@ -854,32 +854,61 @@ select:focus-visible {
 
 .trend-chart {
   width: 100%;
-  height: 158px;
+  height: 168px;
   display: block;
-}
-
-.trend-chart line {
-  stroke: var(--track-bg);
-  stroke-width: 1.2;
+  overflow: visible; /* Cho phép bóng đổ và vòng ring hiển thị ra ngoài */
 }
 
 .trend-chart .trend-area {
   fill: url(#trendAreaGradient);
   stroke: none;
+  transition: opacity 0.3s ease;
 }
 
-.trend-chart polyline {
-  fill: none;
-  stroke: var(--jade);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.trend-chart .trend-line {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawLine 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-.trend-chart circle {
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.trend-dot-group {
+  cursor: pointer;
+}
+
+.trend-dot {
   fill: var(--jade);
   stroke: var(--modern-zen-card);
-  stroke-width: 2;
+  stroke-width: 2px;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), fill 0.25s ease;
+  transform-origin: center;
+}
+
+.trend-dot-ring {
+  fill: var(--jade);
+  fill-opacity: 0;
+  stroke: var(--jade);
+  stroke-width: 1.5px;
+  stroke-opacity: 0;
+  transition: stroke-opacity 0.25s ease, fill-opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center;
+  transform: scale(0.6);
+}
+
+.trend-dot-group:hover .trend-dot {
+  transform: scale(1.35) translate(0px, 0px); /* Bù đắp để neo đúng tâm */
+  fill: var(--ink);
+}
+
+.trend-dot-group:hover .trend-dot-ring {
+  stroke-opacity: 0.65;
+  fill-opacity: 0.12;
+  transform: scale(1.4);
 }
 
 .trend-labels {
