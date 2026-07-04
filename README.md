@@ -68,17 +68,18 @@ npm run deploy
    npm run deploy:all
    ```
 
-### Cách 2: Render (miễn phí, không cần billing GCP)
+### Cách 2: Fly.io + Turso (đang dùng)
 
-1. Đẩy repo lên GitHub, tạo **Blueprint** từ file `render.yaml` trên [Render](https://render.com)
-2. Sau khi có URL API (vd. `https://tiengtrung-api.onrender.com`), sửa `.env.production`:
+1. Deploy backend từ thư mục `backend/` (có `fly.toml`): `fly deploy`
+2. Set secrets trên Fly: `DATABASE_URL` (Turso libSQL), `TURSO_AUTH_TOKEN`, `JWT_SECRET`, các API key
+3. Trỏ `.env.production` sang URL Fly:
    ```
-   VITE_API_BASE=https://tiengtrung-api.onrender.com
+   VITE_API_BASE=https://tezca-china.fly.dev
    ```
-3. Deploy lại frontend: `npm run deploy`
+4. Deploy lại frontend: `npm run deploy` (Firebase) hoặc `vercel --prod`
 
 > Khi chưa có backend online, app vẫn chạy được ở chế độ offline trên Firebase.
 
 ## Công nghệ
 
-React 19 + Vite · FastAPI · SQLAlchemy · SQLite
+React 19 + Vite · FastAPI · SQLAlchemy · Turso (libSQL) · Fly.io · Vercel/Firebase
