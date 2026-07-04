@@ -11,6 +11,8 @@ class Settings(BaseSettings):
         "https://tiengtrung-49e13.web.app,https://tiengtrung-49e13.firebaseapp.com,"
         "https://tezca-china.vercel.app,https://poseidonz227.id.vn,https://www.poseidonz227.id.vn"
     )
+    turso_database_url: str = ""
+    turso_auth_token: str = ""
     deepseek_api_key: str = ""
     gemini_api_keys: str = ""  # comma-separated fallback keys for vilao.ai
     gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
