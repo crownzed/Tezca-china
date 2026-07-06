@@ -2151,13 +2151,92 @@ main.core-page {
   margin-bottom: 8px !important;
 }
 
-.handwriting-panel canvas {
-  border: 1.5px dashed rgba(var(--shadow-color), 0.1) !important;
+.handwriting-hint-text {
+  font-size: 0.8rem !important;
+  color: var(--muted) !important;
+  opacity: 0.8 !important;
+  margin: 0 0 12px !important;
+}
+
+.handwriting-char-tabs {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+
+.handwriting-char-tabs button {
+  min-width: 40px !important;
+  height: 40px !important;
+  font-size: 1.15rem !important;
+  border: 1.5px solid rgba(var(--shadow-color), 0.12) !important;
+  border-radius: var(--radius) !important;
+  background: var(--modern-zen-card) !important;
+  color: var(--text) !important;
+  cursor: pointer !important;
+  transition: border-color var(--transition-bounce), transform var(--transition-bounce) !important;
+}
+
+.handwriting-char-tabs button.active {
+  border-color: var(--modern-zen-primary) !important;
+  color: var(--modern-zen-primary) !important;
+  transform: translateY(-1px) !important;
+}
+
+.handwriting-quiz-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.handwriting-quiz-grid {
+  width: min(220px, 100%) !important;
+  aspect-ratio: 1 / 1 !important;
+  border: 1.5px dashed rgba(var(--shadow-color), 0.15) !important;
   border-radius: var(--radius) !important;
   background: #fafaf8 !important;
+  touch-action: none !important;
   cursor: crosshair;
+}
+
+.handwriting-quiz-grid svg {
   width: 100% !important;
-  max-width: 420px !important;
+  height: 100% !important;
+}
+
+[data-theme='dark'] .handwriting-quiz-grid {
+  background: #242220 !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.handwriting-stats {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+  align-items: center !important;
+  font-size: 0.85rem !important;
+  color: var(--muted) !important;
+}
+
+.handwriting-stats strong {
+  color: var(--modern-zen-primary) !important;
+}
+
+.handwriting-miss {
+  color: #d9534f !important;
+}
+
+.handwriting-done {
+  color: var(--modern-zen-primary) !important;
+  font-weight: 800 !important;
+}
+
+.handwriting-actions {
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: center !important;
+  margin-top: 14px !important;
 }
 
 /* Keyframes animations */

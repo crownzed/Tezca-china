@@ -2573,6 +2573,37 @@ function mergeProductionResult(remoteResult, localResult) {
   };
 }
 
+// Zen theme colors matching current active theme (light or dark)
+function zenWriterColors(theme) {
+  const isDark = theme === 'dark';
+  return {
+    strokeColor: isDark ? '#2DBA91' : '#127a5d', // zen primary
+    radicalColor: isDark ? '#E8C17A' : '#d4a359', // zen gold
+    outlineColor: isDark ? '#2E2B27' : '#EAE5DA', // zen grid outline
+  };
+}
+
+// Nạp dữ liệu nét chữ từ file tự host trên chính origin của app (public/hanzi-data,
+// do scripts/generate-hanzi-data.mjs copy sẵn) thay vì CDN jsdelivr mặc định —
+// jsdelivr hay bị chặn ở TQ và không chạy offline. Khớp hướng local-first.
+const hanziDataCache = new Map();
+function loadHanziCharData(char, onLoad, onError) {
+  if (hanziDataCache.has(char)) {
+    onLoad(hanziDataCache.get(char));
+    return;
+  }
+  fetch(`/hanzi-data/${encodeURIComponent(char)}.json`)
+    .then(res => {
+      if (!res.ok) throw new Error(`hanzi-data ${char}: ${res.status}`);
+      return res.json();
+    })
+    .then(data => {
+      hanziDataCache.set(char, data);
+      onLoad(data);
+    })
+    .catch(err => onError(err));
+}
+
 function HanziWriterElement({ character, theme }) {
   const containerRef = useRef(null);
   const writerRef = useRef(null);
@@ -2582,12 +2613,6 @@ function HanziWriterElement({ character, theme }) {
     let cancelled = false;
     containerRef.current.innerHTML = '';
 
-    // Zen theme colors matching current active theme (light or dark)
-    const isDark = theme === 'dark';
-    const strokeColor = isDark ? '#2DBA91' : '#127a5d'; // zen primary
-    const radicalColor = isDark ? '#E8C17A' : '#d4a359'; // zen gold
-    const outlineColor = isDark ? '#2E2B27' : '#EAE5DA'; // zen grid outline
-
     import('hanzi-writer').then(({ default: HanziWriter }) => {
       if (cancelled || !containerRef.current) return;
       const writer = HanziWriter.create(containerRef.current, character, {
@@ -2596,9 +2621,8 @@ function HanziWriterElement({ character, theme }) {
         padding: 5,
         strokeAnimationSpeed: 1.2,
         delayBetweenStrokes: 220,
-        strokeColor,
-        radicalColor,
-        outlineColor,
+        charDataLoader: loadHanziCharData,
+        ...zenWriterColors(theme),
         showOutline: true
       });
 
@@ -2779,7 +2803,7 @@ function VocabLibrary({ focusLevel, theme }) {
                 </div>
               </div>
 
-              <HandwritingPad targetWord={selectedWord} />
+              <HandwritingPad key={selectedWord.key} targetWord={selectedWord} theme={theme} />
             </div>
           </div>
         </>
@@ -2788,92 +2812,137 @@ function VocabLibrary({ focusLevel, theme }) {
   );
 }
 
-function HandwritingPad({ targetWord }) {
-  const canvasRef = useRef(null);
-  const drawingRef = useRef(false);
-  const lastPointRef = useRef(null);
+function HandwritingPad({ targetWord, theme }) {
+  const containerRef = useRef(null);
+  const writerRef = useRef(null);
+  const themeRef = useRef(theme);
+  const chars = useMemo(
+    () => (targetWord.hanzi || '').split('').filter(ch => /[一-鿿]/.test(ch)),
+    [targetWord.hanzi]
+  );
+  const [charIndex, setCharIndex] = useState(0);
+  const [strokeProgress, setStrokeProgress] = useState({ done: 0, total: 0 });
+  const [mistakes, setMistakes] = useState(0);
+  const [completed, setCompleted] = useState(false);
 
-  const prepareCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
-    const width = Math.max(1, Math.round(rect.width * ratio));
-    const height = Math.max(1, Math.round(rect.height * ratio));
-    if (canvas.width === width && canvas.height === height) return;
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+  const activeChar = chars[charIndex];
+
+  const resetStats = useCallback(() => {
+    setStrokeProgress({ done: 0, total: 0 });
+    setMistakes(0);
+    setCompleted(false);
+  }, []);
+
+  const runQuiz = useCallback((writer) => {
+    writer.quiz({
+      onCorrectStroke(data) {
+        setStrokeProgress({ done: data.strokeNum + 1, total: data.strokeNum + 1 + data.strokesRemaining });
+      },
+      onMistake(data) {
+        setMistakes(data.totalMistakes);
+      },
+      onComplete() {
+        setCompleted(true);
+      },
+    });
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(prepareCanvas, 0);
-    window.addEventListener('resize', prepareCanvas);
+    if (!containerRef.current) return undefined;
+    containerRef.current.innerHTML = '';
+    writerRef.current = null;
+    resetStats();
+    if (!activeChar) return undefined;
+    let cancelled = false;
+
+    const drawingColor = getComputedStyle(document.documentElement).getPropertyValue('--gold').trim() || '#f2b84b';
+
+    import('hanzi-writer').then(({ default: HanziWriter }) => {
+      if (cancelled || !containerRef.current) return;
+      const writer = HanziWriter.create(containerRef.current, activeChar, {
+        width: 220,
+        height: 220,
+        padding: 8,
+        showCharacter: false,
+        showOutline: true,
+        showHintAfterMisses: 2,
+        highlightOnComplete: true,
+        charDataLoader: loadHanziCharData,
+        ...zenWriterColors(themeRef.current),
+        drawingColor,
+        drawingWidth: 24,
+      });
+      writerRef.current = writer;
+      runQuiz(writer);
+    });
+
     return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('resize', prepareCanvas);
+      cancelled = true;
+      writerRef.current?.cancelQuiz();
+      writerRef.current = null;
     };
-  }, [prepareCanvas]);
+  }, [activeChar, resetStats, runQuiz]);
 
-  const canvasPoint = (event) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  // Đổi theme thì chỉ nhuộm lại màu, không dựng lại quiz -> giữ nguyên tiến độ nét đang viết.
+  useEffect(() => {
+    themeRef.current = theme;
+    const writer = writerRef.current;
+    if (!writer) return;
+    const colors = zenWriterColors(theme);
+    writer.updateColor('strokeColor', colors.strokeColor);
+    writer.updateColor('radicalColor', colors.radicalColor);
+    writer.updateColor('outlineColor', colors.outlineColor);
+  }, [theme]);
+
+  const restart = () => {
+    const writer = writerRef.current;
+    if (!writer) return;
+    writer.cancelQuiz();
+    resetStats();
+    runQuiz(writer);
   };
 
-  const startDraw = (event) => {
-    prepareCanvas();
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const point = canvasPoint(event);
-    drawingRef.current = true;
-    lastPointRef.current = point;
-    ctx.lineWidth = 7;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--gold').trim() || '#f2b84b';
-    ctx.beginPath();
-    ctx.moveTo(point.x, point.y);
-    ctx.lineTo(point.x, point.y);
-    ctx.stroke();
-    canvas.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-  };
-
-  const draw = (event) => {
-    if (!drawingRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const point = canvasPoint(event);
-    const last = lastPointRef.current || point;
-    ctx.quadraticCurveTo(last.x, last.y, (last.x + point.x) / 2, (last.y + point.y) / 2);
-    ctx.stroke();
-    lastPointRef.current = point;
-    event.preventDefault();
-  };
-
-  const endDraw = () => {
-    drawingRef.current = false;
-    lastPointRef.current = null;
-  };
-
-  const clear = () => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    canvas.getContext('2d').clearRect(0, 0, rect.width, rect.height);
-  };
+  const showHint = () => writerRef.current?.animateCharacter();
 
   return (
     <div className="handwriting-panel">
-      <div>
-        <span className="core-eyebrow">Handwriting</span>
-        <h3>Tập viết: {targetWord.hanzi}</h3>
+      <div className="handwriting-head">
+        <div>
+          <span className="core-eyebrow">Handwriting</span>
+          <h3>Tập viết: {targetWord.hanzi}</h3>
+          <p className="handwriting-hint-text">Viết gần đúng nét, hệ thống sẽ tự hoàn chỉnh thành nét chuẩn.</p>
+        </div>
+        {chars.length > 1 && (
+          <div className="handwriting-char-tabs">
+            {chars.map((ch, i) => (
+              <button
+                key={`${ch}-${i}`}
+                type="button"
+                className={i === charIndex ? 'active' : ''}
+                onClick={() => setCharIndex(i)}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <canvas ref={canvasRef} width="420" height="220" onPointerDown={startDraw} onPointerMove={draw} onPointerUp={endDraw} onPointerLeave={endDraw} />
-      <button className="btn-secondary" type="button" onClick={clear}>Xóa nét</button>
+
+      <div className="handwriting-quiz-wrap">
+        <div ref={containerRef} className="handwriting-quiz-grid" />
+        <div className="handwriting-stats">
+          <span>
+            Nét <strong>{strokeProgress.done}/{strokeProgress.total || '?'}</strong>
+          </span>
+          {mistakes > 0 && <span className="handwriting-miss">Sai: {mistakes}</span>}
+          {completed && <span className="handwriting-done">Hoàn thành ✓</span>}
+        </div>
+      </div>
+
+      <div className="handwriting-actions">
+        <button className="btn-secondary" type="button" onClick={restart}>Viết lại</button>
+        <button className="btn-secondary" type="button" onClick={showHint}>Xem nét chuẩn</button>
+      </div>
     </div>
   );
 }
