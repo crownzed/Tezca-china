@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+
+# Generated at build time from hanzi-writer-data
+public/hanzi-data
 *.db
 backend/.venv/
 backend/server*.log
