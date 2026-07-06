@@ -188,6 +188,21 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
                 <p className="pron-line"><b>Mục tiêu:</b> {result.target_hanzi} <i>{result.target_pinyin}</i></p>
                 {result.detailed_feedback && <p className="pron-tip pron-tip--dsp">{result.detailed_feedback}</p>}
                 {result.tip && <p className="pron-tip">{result.tip}</p>}
+                {(result.fluency || result.prosody) && (
+                  <div className="pron-macro">
+                    {result.fluency && (
+                      <span className="pron-macro-chip" title="Tốc độ nói và số lần ngắt nghỉ">
+                        Lưu loát: {result.fluency.speech_rate} âm tiết/giây
+                        {result.fluency.pause_count > 0 ? ` · ${result.fluency.pause_count} lần ngắt` : ' · liền mạch'}
+                      </span>
+                    )}
+                    {result.prosody && (
+                      <span className="pron-macro-chip" title="Độ rộng cao độ cả câu (semitone)">
+                        Ngữ điệu: {result.prosody.pitch_range_semitones} st
+                      </span>
+                    )}
+                  </div>
+                )}
                 {result.tone_syllables?.length > 0 && (
                   <div className="pron-errs">
                     <b>Thanh điệu từng âm tiết:</b>

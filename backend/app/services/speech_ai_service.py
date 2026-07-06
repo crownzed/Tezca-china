@@ -165,6 +165,9 @@ def score_pronunciation(
 
     if tone_result is not None:
         dsp_tone_accuracy = tone_result["tone_accuracy"]
+        fluency = tone_result.get("fluency")
+        prosody = tone_result.get("prosody")
+        macro_feedback = tone_result.get("macro_feedback", "")
         # The acoustic layer measures tones from the real F0 contour, so we blend
         # against base_score (syllable identity, tones stripped) rather than
         # identity_score — that avoids scoring tones twice and keeps the 60/40
@@ -192,8 +195,18 @@ def score_pronunciation(
         dsp_feedback = ""
         per_syllable = []
         f0_contour = []
+        fluency = None
+        prosody = None
+        macro_feedback = ""
 
-    tip = _pronunciation_tip(target_hanzi, breakdown, dsp_feedback)
+    tip = _pronunciation_tip(
+        target_hanzi,
+        breakdown,
+        dsp_feedback,
+        per_syllable=per_syllable,
+        fluency=fluency,
+        prosody=prosody,
+    )
 
     return {
         "score": final_score,
@@ -208,7 +221,10 @@ def score_pronunciation(
         "syllable_errors": breakdown["syllable_errors"],
         "tone_syllables": per_syllable,
         "user_f0_contour": f0_contour,
+        "fluency": fluency,
+        "prosody": prosody,
         "detailed_feedback": dsp_feedback,
+        "macro_feedback": macro_feedback,
         "tip": tip,
     }
 
@@ -237,34 +253,79 @@ def _score_tones_safe(audio_b64: str, target_tones: list[int]) -> dict | None:
         return None
 
 
-def _pronunciation_tip(target_hanzi: str, breakdown: dict, dsp_feedback: str = "") -> str:
-    """Ask Gemini for one short Vietnamese tip based on concrete errors.
+def _pronunciation_tip(
+    target_hanzi: str,
+    breakdown: dict,
+    dsp_feedback: str = "",
+    *,
+    per_syllable: list[dict] | None = None,
+    fluency: dict | None = None,
+    prosody: dict | None = None,
+) -> str:
+    """Ask Gemini, acting as a phonetics coach, for one short Vietnamese tip.
 
-    Feeds both the identity errors (from pinyin_scorer) and the acoustic
-    diagnosis (from the DSP layer) so the tip can address tone *realization*,
-    not just which syllable was wrong.
+    Instead of hand-writing a prose summary, we pack ALL diagnostic signals into
+    a single structured JSON block: identity errors (pinyin_scorer), per-syllable
+    acoustic results (DTW distance vs each Chao template), and the macro layer
+    (speech rate, pauses, pitch range, declination). Feeding measured numbers —
+    not adjectives — is what lets the model say "thanh 4 của 'shì' chưa đủ dốc
+    (độ lệch DTW 1.8)" instead of a generic tip, and keeps it from hallucinating
+    errors that the acoustic layer didn't actually find.
     """
     has_identity_err = bool(breakdown["tone_errors"] or breakdown["syllable_errors"])
-    if not has_identity_err and not dsp_feedback:
+    macro_feedback = " ".join(
+        d["feedback"] for d in (fluency, prosody) if d and d.get("feedback")
+    )
+    if not has_identity_err and not dsp_feedback and not macro_feedback:
         return "Phát âm chuẩn, giữ nguyên nhịp và thanh điệu như vậy."
 
+    # Structured diagnostic payload. Everything the model needs to reason from,
+    # in one JSON object — no prose, no adjectives it has to trust blindly.
+    diagnosis = {
+        "cau_muc_tieu": target_hanzi,
+        "pinyin_muc_tieu": breakdown["target"],
+        "nguoi_hoc_doc": breakdown["actual"],
+        "loi_thanh_dieu": breakdown["tone_errors"],
+        "loi_am_tiet": breakdown["syllable_errors"],
+        # Per-syllable acoustic detail: DTW distance to the expected Chao tone
+        # template. ~0 = khớp hình dáng, cao = lệch nhiều.
+        "chi_tiet_am_hoc_tung_am_tiet": [
+            {
+                "vi_tri": s["pos"] + 1,
+                "thanh": s["tone"],
+                "do_lech_DTW": s["distance"],
+                "dat": s["ok"],
+                "chan_doan": s.get("feedback"),
+            }
+            for s in (per_syllable or [])
+        ],
+        "luu_loat": fluency,   # speech_rate, pause_count, total_pause_sec, span_sec
+        "ngu_dieu_ca_cau": prosody,  # pitch_range_semitones, declination_semitones
+    }
+
     prompt = (
-        "Bạn là giáo viên phát âm tiếng Trung. Người học đọc câu: "
-        f"{target_hanzi}\n"
-        f"Pinyin mục tiêu: {breakdown['target']}\n"
-        f"Người học đọc: {breakdown['actual']}\n"
-        f"Lỗi thanh điệu (nhận dạng): {json.dumps(breakdown['tone_errors'], ensure_ascii=False)}\n"
-        f"Lỗi âm tiết: {json.dumps(breakdown['syllable_errors'], ensure_ascii=False)}\n"
-        f"Phân tích âm học (đường F0/thanh điệu thực tế): {dsp_feedback or '(không có)'}\n"
-        "Viết MỘT lời khuyên ngắn (tối đa 2 câu) bằng TIẾNG VIỆT, ưu tiên chỉ rõ "
-        "âm/thanh cần sửa và cách sửa dựa trên phân tích âm học. Trả về văn bản "
-        "thuần, không markdown."
+        "Bạn là CHUYÊN GIA NGÔN NGỮ HỌC và huấn luyện viên ngữ âm tiếng Trung cho "
+        "người Việt. Dưới đây là dữ liệu chẩn đoán ĐO ĐẠC được từ bản ghi âm của "
+        "người học (đường cao độ F0 phân tích bằng Praat, khớp DTW với mẫu thanh "
+        "điệu Chao, cùng số liệu lưu loát và ngữ điệu):\n\n"
+        f"{json.dumps(diagnosis, ensure_ascii=False, indent=2)}\n\n"
+        "Quy tắc phản hồi:\n"
+        "- CHỈ dựa vào số liệu trên, TUYỆT ĐỐI không bịa lỗi không có trong dữ liệu.\n"
+        "- Ưu tiên lỗi nghiêm trọng nhất (độ lệch DTW cao nhất, hoặc lỗi âm tiết).\n"
+        "- Nếu số liệu tốt (không có lỗi), khen ngắn gọn và nói giữ nguyên.\n"
+        "- Chỉ rõ âm tiết/thanh cụ thể và cách sửa bằng động tác giọng (ví dụ: bắt "
+        "đầu từ âm vực cao rồi hạ giọng rơi mạnh cho thanh 4).\n"
+        "Viết TỐI ĐA 2 câu bằng TIẾNG VIỆT, văn bản thuần, không markdown."
     )
     try:
         return _call_native_gemini([{"text": prompt}]).strip()
     except RuntimeError:
         # Tip is non-critical; the deterministic score still stands.
-        return dsp_feedback or "Chú ý các âm tiết bị sai thanh điệu được liệt kê bên dưới."
+        return (
+            dsp_feedback
+            or macro_feedback
+            or "Chú ý các âm tiết bị sai thanh điệu được liệt kê bên dưới."
+        )
 
 
 # ---------------------------------------------------------------------------
