@@ -401,6 +401,129 @@ def _tone_feedback(tone: int, dist: float, user_seg_norm: list[float]) -> str | 
     return None
 
 
+# --- Macro-level: fluency + sentence prosody -------------------------------
+# These reuse the SAME F0 contour the tone scorer already computes — no extra
+# audio pass, no new dependency. They answer "how was the delivery" (rhythm,
+# hesitation, intonation range) rather than "was each tone right".
+
+# An interior unvoiced gap longer than this (seconds) counts as a hesitation
+# pause. Short gaps between syllables (stops/aspiration) are normal speech and
+# must NOT be counted, or every utterance would look halting.
+_PAUSE_MIN_SEC = 0.25
+# Comfortable Mandarin reading rate is ~3-5 syllables/sec. Outside this band the
+# delivery is either halting or rushed. Used only to phrase feedback, not to
+# score — rate depends on sentence length and is diagnostic, not a grade.
+_RATE_SLOW = 2.0
+_RATE_FAST = 6.0
+# Whole-utterance pitch span (semitones) below this reads as flat/monotone;
+# above the high mark it is unusually wide (often octave-jump artifacts or
+# over-acting). 10th/90th percentiles are used so a single bad frame can't
+# widen the span.
+_PROSODY_FLAT_ST = 3.0
+_PROSODY_WIDE_ST = 16.0
+
+
+def _frame_step_sec(duration_sec: float, n_frames: int) -> float:
+    """Seconds per F0 frame, derived from clip duration / frame count.
+
+    Deriving it this way (instead of reading parselmouth's internal time step)
+    keeps the two-pass re-tracking transparent to callers: however many frames
+    the tracker returned, they span the whole clip uniformly.
+    """
+    if n_frames <= 0:
+        return 0.0
+    return duration_sec / n_frames
+
+
+def _analyze_fluency(contour: list[float], frame_step: float, n_syllables: int) -> dict | None:
+    """Speech rate + hesitation pauses from the voiced/unvoiced pattern.
+
+    speech_rate is syllables per second over the *spoken span* (first voiced
+    frame to last), so leading/trailing silence never deflates it. Pauses are
+    interior unvoiced runs longer than _PAUSE_MIN_SEC — genuine hesitations,
+    not the short gaps that separate every syllable.
+    """
+    if frame_step <= 0 or n_syllables <= 0:
+        return None
+
+    voiced_idx = [i for i, v in enumerate(contour) if v > 0]
+    if len(voiced_idx) < _MIN_VOICED_FRAMES:
+        return None
+
+    first, last = voiced_idx[0], voiced_idx[-1]
+    span_sec = (last - first + 1) * frame_step
+    if span_sec <= 0:
+        return None
+    speech_rate = n_syllables / span_sec
+
+    # Interior unvoiced runs (between first and last voiced frame).
+    pause_count = 0
+    total_pause_sec = 0.0
+    gap = 0
+    for i in range(first, last + 1):
+        if contour[i] <= 0:
+            gap += 1
+        elif gap:
+            gap_sec = gap * frame_step
+            if gap_sec >= _PAUSE_MIN_SEC:
+                pause_count += 1
+                total_pause_sec += gap_sec
+            gap = 0
+
+    lines: list[str] = []
+    if speech_rate < _RATE_SLOW:
+        lines.append("Bạn đọc hơi chậm và ngập ngừng; hãy nối các âm tiết liền mạch hơn.")
+    elif speech_rate > _RATE_FAST:
+        lines.append("Bạn đọc hơi nhanh; chậm lại một chút để phát âm rõ từng âm tiết.")
+    if pause_count:
+        lines.append(f"Có {pause_count} lần ngắt nghỉ giữa câu; cố gắng đọc trôi chảy một hơi.")
+
+    return {
+        "speech_rate": round(speech_rate, 2),
+        "pause_count": pause_count,
+        "total_pause_sec": round(total_pause_sec, 2),
+        "span_sec": round(span_sec, 2),
+        "feedback": " ".join(lines),
+    }
+
+
+def _analyze_prosody(contour: list[float]) -> dict | None:
+    """Whole-sentence intonation: pitch range + overall declination.
+
+    Uses 10th/90th percentiles of voiced F0 for a robust range (semitones), and
+    the net drift from the first third to the last third to detect the natural
+    downward declination of a statement. Flags a flat/monotone delivery, which
+    is the most common Vietnamese-learner intonation issue.
+    """
+    voiced = [v for v in contour if v > 0]
+    if len(voiced) < _MIN_VOICED_FRAMES:
+        return None
+
+    import numpy as np
+
+    arr = np.asarray(voiced, dtype=np.float64)
+    lo, hi = np.percentile(arr, [10, 90])
+    pitch_range_st = float(12.0 * np.log2(hi / lo)) if lo > 0 else 0.0
+
+    # Overall rise/fall across the utterance in semitones (relative to median).
+    k = max(1, len(arr) // 3)
+    head = float(np.median(arr[:k]))
+    tail = float(np.median(arr[-k:]))
+    declination_st = float(12.0 * np.log2(tail / head)) if head > 0 else 0.0
+
+    lines: list[str] = []
+    if pitch_range_st < _PROSODY_FLAT_ST:
+        lines.append("Ngữ điệu cả câu khá phẳng; hãy lên/xuống giọng rõ hơn theo thanh điệu.")
+    elif pitch_range_st > _PROSODY_WIDE_ST:
+        lines.append("Cao độ dao động quá rộng; giữ giọng ổn định hơn để nghe tự nhiên.")
+
+    return {
+        "pitch_range_semitones": round(pitch_range_st, 1),
+        "declination_semitones": round(declination_st, 1),
+        "feedback": " ".join(lines),
+    }
+
+
 def score_tones(audio_bytes: bytes, target_tones: list[int]) -> dict:
     """Acoustic tone scoring for one utterance.
 
@@ -461,9 +584,21 @@ def score_tones(audio_bytes: bytes, target_tones: list[int]) -> dict:
 
     tone_accuracy = float(np.mean(accuracies)) if accuracies else 0.0
 
+    # Macro layer: reuse the same contour for delivery-level diagnostics.
+    frame_step = _frame_step_sec(len(samples) / framerate, len(contour))
+    fluency = _analyze_fluency(contour, frame_step, len(target_tones))
+    prosody = _analyze_prosody(contour)
+
+    macro_lines = [
+        d["feedback"] for d in (fluency, prosody) if d and d["feedback"]
+    ]
+
     return {
         "tone_accuracy": round(tone_accuracy, 3),
         "per_syllable": per_syllable,
         "user_f0_contour": [round(v, 1) for v in contour],
         "feedback": " ".join(feedback_lines),
+        "fluency": fluency,
+        "prosody": prosody,
+        "macro_feedback": " ".join(macro_lines),
     }

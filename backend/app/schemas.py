@@ -514,6 +514,22 @@ class PronunciationToneSyllable(BaseModel):
     feedback: str | None = None
 
 
+class PronunciationFluency(BaseModel):
+    """Macro delivery metrics from the voiced/unvoiced pattern of the F0 contour."""
+    speech_rate: float = 0.0  # syllables per second over the spoken span
+    pause_count: int = 0  # interior hesitation pauses (> _PAUSE_MIN_SEC)
+    total_pause_sec: float = 0.0
+    span_sec: float = 0.0
+    feedback: str = ""
+
+
+class PronunciationProsody(BaseModel):
+    """Whole-sentence intonation metrics from voiced F0."""
+    pitch_range_semitones: float = 0.0
+    declination_semitones: float = 0.0
+    feedback: str = ""
+
+
 class PronunciationScoreOut(BaseModel):
     score: int  # blended identity + acoustic
     base_score: int
@@ -527,7 +543,10 @@ class PronunciationScoreOut(BaseModel):
     syllable_errors: list[PronunciationSyllableError] = Field(default_factory=list)
     tone_syllables: list[PronunciationToneSyllable] = Field(default_factory=list)
     user_f0_contour: list[float] = Field(default_factory=list)
+    fluency: PronunciationFluency | None = None
+    prosody: PronunciationProsody | None = None
     detailed_feedback: str = ""
+    macro_feedback: str = ""
     tip: str = ""
 
 

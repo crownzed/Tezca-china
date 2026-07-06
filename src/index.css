@@ -4773,6 +4773,23 @@ blockquote small {
   border-color: color-mix(in srgb, var(--jade) 28%, transparent);
 }
 
+.pron-macro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 2px;
+}
+
+.pron-macro-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+  border: 1px solid color-mix(in srgb, var(--muted) 22%, transparent);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .pron-errs {
   display: grid;
   gap: 6px;
