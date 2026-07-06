@@ -164,10 +164,25 @@ def score_pronunciation(
     tone_result = _score_tones_safe(audio_b64, target_tones)
 
     if tone_result is not None:
-        tone_accuracy = tone_result["tone_accuracy"]
-        # Blend: identity dominates (did they say the right syllables?), acoustic
-        # refines (did the tones have the right shape?). 65/35 split.
-        final_score = round(identity_score * 0.65 + tone_accuracy * 100 * 0.35)
+        dsp_tone_accuracy = tone_result["tone_accuracy"]
+        # The acoustic layer measures tones from the real F0 contour, so we blend
+        # against base_score (syllable identity, tones stripped) rather than
+        # identity_score — that avoids scoring tones twice and keeps the 60/40
+        # syllable/tone weighting pinyin_scorer was designed around.
+        #
+        # But DSP alone deciding 40% of the grade lets a lenient or mis-split
+        # acoustic result inflate the score even when Gemini clearly heard a wrong
+        # tone. So we cross-check: take the WORSE of the DSP accuracy and Gemini's
+        # own tone-correct ratio. Either layer can veto a tone. (syllable_errors
+        # are excluded here — they already lower base_score, so counting them again
+        # would double-penalize the 0.6 term.)
+        n_tone_slots = len(target_tones)
+        if n_tone_slots > 0:
+            gemini_tone_ratio = max(0.0, 1.0 - len(breakdown["tone_errors"]) / n_tone_slots)
+            tone_accuracy = min(dsp_tone_accuracy, gemini_tone_ratio)
+        else:
+            tone_accuracy = dsp_tone_accuracy
+        final_score = round(breakdown["base_score"] * 0.6 + tone_accuracy * 100 * 0.4)
         dsp_feedback = tone_result["feedback"]
         per_syllable = tone_result["per_syllable"]
         f0_contour = tone_result["user_f0_contour"]

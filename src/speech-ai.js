@@ -25,6 +25,56 @@ function arrayBufferToBase64(bytes) {
   return btoa(binary);
 }
 
+// Condition the mono signal for pitch/tone analysis:
+//   1) remove DC offset (a nonzero mean biases the F0 autocorrelation),
+//   2) trim leading/trailing silence (spurious voiced runs confuse syllable
+//      splitting), keeping a small margin so real onsets aren't clipped,
+//   3) peak-normalize to a consistent level so quiet clips don't under-drive
+//      the F0 tracker — but only when there's real signal, to avoid blowing up
+//      background noise in an empty recording.
+function conditionSignal(samples, sampleRate) {
+  const n = samples.length;
+  if (!n) return samples;
+
+  let mean = 0;
+  for (let i = 0; i < n; i += 1) mean += samples[i];
+  mean /= n;
+
+  let peak = 0;
+  for (let i = 0; i < n; i += 1) {
+    samples[i] -= mean;
+    const abs = Math.abs(samples[i]);
+    if (abs > peak) peak = abs;
+  }
+  if (peak < 1e-4) return samples; // effectively silent — leave untouched
+
+  // Energy-based silence trim over ~10ms windows.
+  const win = Math.max(1, Math.round(sampleRate * 0.01));
+  const gate = Math.max(0.02, peak * 0.08);
+  const windowRms = (i) => {
+    let e = 0;
+    for (let j = i; j < i + win; j += 1) e += samples[j] * samples[j];
+    return Math.sqrt(e / win);
+  };
+  let start = 0;
+  let end = n;
+  for (let i = 0; i + win <= n; i += win) {
+    if (windowRms(i) >= gate) { start = i; break; }
+  }
+  for (let i = n - win; i >= 0; i -= win) {
+    if (windowRms(i) >= gate) { end = i + win; break; }
+  }
+  const margin = Math.round(sampleRate * 0.05); // 50ms guard
+  start = Math.max(0, start - margin);
+  end = Math.min(n, end + margin);
+  const trimmed = start > 0 || end < n ? samples.subarray(start, end) : samples;
+
+  // Peak-normalize the trimmed region to ~0.95 full scale.
+  const gain = 0.95 / peak;
+  for (let i = 0; i < trimmed.length; i += 1) trimmed[i] *= gain;
+  return trimmed;
+}
+
 // Downmix to mono and resample (linear) from the capture rate to the target.
 function resampleToMono(channels, inRate, outRate) {
   const inLength = channels[0].length;
@@ -84,7 +134,17 @@ export async function startRecording() {
   if (!isRecordingSupported()) {
     throw new Error('Trình duyệt không hỗ trợ ghi âm.');
   }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  // Disable the browser's voice-call DSP: echo cancellation, noise suppression
+  // and auto gain control all distort the pitch contour and amplitude dynamics
+  // that the tone scorer measures. We want the raw mic signal.
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: 1,
+    },
+  });
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   const audioCtx = new AudioCtx();
   const source = audioCtx.createMediaStreamSource(stream);
@@ -120,7 +180,8 @@ export async function startRecording() {
           let pos = 0;
           for (const c of chunks) { merged.set(c, pos); pos += c.length; }
           const mono = resampleToMono([merged], captureRate, TARGET_SAMPLE_RATE);
-          const wav = encodeWav(mono, TARGET_SAMPLE_RATE);
+          const conditioned = conditionSignal(mono, TARGET_SAMPLE_RATE);
+          const wav = encodeWav(conditioned, TARGET_SAMPLE_RATE);
           const base64 = arrayBufferToBase64(new Uint8Array(wav));
           resolve({ base64, mimeType: 'audio/wav' });
         } catch (err) {

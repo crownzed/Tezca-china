@@ -40,9 +40,20 @@ _TONE_TEMPLATES: dict[int, list[float]] = {
 }
 
 # Pitch tracking bounds (Hz). Wide enough for both male and female learners.
+# These are the WIDE first-pass bounds; the second pass narrows around the
+# speaker's own measured range (see _extract_f0).
 _F0_FLOOR = 70.0
 _F0_CEILING = 400.0
 _MIN_VOICED_FRAMES = 3
+
+# Two-pass pitch floor/ceiling factors (Hirst's method): after a wide first pass,
+# re-track between q15 * this_low and q85 * this_high of the speaker's own pitch
+# distribution. This cuts octave errors far better than fixed global bounds.
+_PASS2_FLOOR_FACTOR = 0.75
+_PASS2_CEIL_FACTOR = 1.5
+# An adjacent-frame jump beyond this ratio (in either direction) is treated as a
+# pitch-halving/doubling artifact and pulled back toward its neighbours.
+_OCTAVE_JUMP_RATIO = 1.8
 
 
 class ToneDspError(RuntimeError):
@@ -78,19 +89,84 @@ def _decode_wav(audio_bytes: bytes) -> tuple[list[float], int]:
     return samples.tolist(), framerate
 
 
-def _extract_f0(samples: list[float], framerate: int) -> list[float]:
-    """Extract the F0 contour (Hz) using parselmouth/Praat, voiced frames only.
+def _median3(contour: list[float]) -> list[float]:
+    """3-point median filter over voiced frames only.
 
-    Unvoiced frames (Praat returns 0) are dropped — tones live on voiced
-    portions. Returns the raw Hz contour for the whole utterance.
+    Removes single-frame F0 spikes (a classic tracker artifact) without
+    smearing genuine tone movement. Unvoiced frames (0.0) are left as gaps and
+    never pulled into the median so voiced/unvoiced boundaries stay sharp.
+    """
+    n = len(contour)
+    if n < 3:
+        return contour
+    out = list(contour)
+    for i in range(1, n - 1):
+        a, b, c = contour[i - 1], contour[i], contour[i + 1]
+        if a > 0 and b > 0 and c > 0:
+            out[i] = sorted((a, b, c))[1]
+    return out
+
+
+def _fix_octave_jumps(contour: list[float]) -> list[float]:
+    """Pull back frames that halved/doubled relative to a stable neighbour.
+
+    Praat occasionally locks onto twice or half the true F0 for a frame or two.
+    When a voiced frame differs from the previous voiced frame by more than
+    _OCTAVE_JUMP_RATIO and multiplying/dividing by 2 lands it back near that
+    neighbour, we treat it as an octave error and correct it.
+    """
+    out = list(contour)
+    prev = 0.0
+    for i, v in enumerate(out):
+        if v <= 0:
+            # Reset across unvoiced gaps: a pitch reset between two syllables is
+            # genuine, not an octave artifact, so never compare frames from
+            # different voiced runs.
+            prev = 0.0
+            continue
+        if prev > 0:
+            ratio = v / prev
+            if ratio >= _OCTAVE_JUMP_RATIO and abs(v / 2 - prev) < abs(v - prev):
+                out[i] = v / 2
+            elif ratio <= 1 / _OCTAVE_JUMP_RATIO and abs(v * 2 - prev) < abs(v - prev):
+                out[i] = v * 2
+        prev = out[i]
+    return out
+
+
+def _extract_f0(samples: list[float], framerate: int) -> list[float]:
+    """Extract a cleaned F0 contour (Hz) via a two-pass Praat track.
+
+    Pass 1 (wide bounds) measures the speaker's own pitch distribution; pass 2
+    re-tracks between q15/q85 percentiles (scaled by _PASS2_* factors) so the
+    tracker searches the RIGHT range for this speaker — the single biggest lever
+    against octave errors. The result is then octave-corrected and median
+    filtered. Unvoiced frames (Praat returns 0) are kept as 0 gaps.
     """
     import numpy as np
     import parselmouth
 
     sound = parselmouth.Sound(np.asarray(samples, dtype=np.float64), sampling_frequency=framerate)
-    pitch = sound.to_pitch(pitch_floor=_F0_FLOOR, pitch_ceiling=_F0_CEILING)
-    f0 = pitch.selected_array["frequency"]  # 0.0 where unvoiced
-    return [float(v) for v in f0]
+
+    # Pass 1 — wide bounds, just to learn this speaker's range.
+    pitch1 = sound.to_pitch_ac(pitch_floor=_F0_FLOOR, pitch_ceiling=_F0_CEILING)
+    f0 = pitch1.selected_array["frequency"]  # default: keep pass-1 track
+    voiced1 = f0[f0 > 0]
+
+    # Pass 2 — re-track within the speaker's own range, but only when pass 1 saw
+    # enough voiced frames to estimate it and the derived band is non-degenerate.
+    if voiced1.size >= _MIN_VOICED_FRAMES:
+        q15, q85 = np.percentile(voiced1, [15, 85])
+        floor = max(_F0_FLOOR, float(q15) * _PASS2_FLOOR_FACTOR)
+        ceil = min(_F0_CEILING, float(q85) * _PASS2_CEIL_FACTOR)
+        if ceil - floor >= 20:
+            pitch2 = sound.to_pitch_ac(pitch_floor=floor, pitch_ceiling=ceil)
+            f0 = pitch2.selected_array["frequency"]
+
+    contour = [float(v) for v in f0]
+    contour = _fix_octave_jumps(contour)
+    contour = _median3(contour)
+    return contour
 
 
 def _split_syllables(contour: list[float], n_syllables: int) -> list[list[float]]:
@@ -235,6 +311,27 @@ def _net_slope(seq: list[float]) -> float:
     return tail - head
 
 
+def _resample_linear(seq: list[float], length: int) -> list[float]:
+    """Linearly resample ``seq`` to exactly ``length`` points."""
+    n = len(seq)
+    if n == 0 or length <= 0:
+        return []
+    if n == length:
+        return list(seq)
+    if length == 1:
+        return [sum(seq) / n]
+    if n == 1:
+        return [seq[0]] * length
+    out = [0.0] * length
+    for i in range(length):
+        pos = i * (n - 1) / (length - 1)
+        i0 = int(pos)
+        i1 = min(i0 + 1, n - 1)
+        frac = pos - i0
+        out[i] = seq[i0] * (1 - frac) + seq[i1] * frac
+    return out
+
+
 def _contour_distance(seg_norm: list[float], template: list[float]) -> float:
     """Combined tone distance: DTW shape cost + a slope-direction penalty.
 
@@ -243,10 +340,31 @@ def _contour_distance(seg_norm: list[float], template: list[float]) -> float:
     Tones are defined by direction + slope, so we add the absolute difference in
     net slope between the user's syllable and the template. This is what catches
     "said with the wrong tone contour" that DTW by itself lets through.
+
+    The slope term compares net rise/fall, but ``_net_slope`` averages over the
+    first/last thirds — so a 3-point template and a 40-point syllable measure
+    slope over very different fractions of their span, inflating the gap for a
+    correctly-realized tone. We resample the template to the segment's length
+    first so both slopes are measured on the same footing. (DTW is unaffected —
+    it already warps across length differences.)
     """
     shape = _dtw_distance(seg_norm, template)
-    slope_gap = abs(_net_slope(seg_norm) - _net_slope(template))
+    tpl_for_slope = _resample_linear(template, len(seg_norm)) if seg_norm else template
+    slope_gap = abs(_net_slope(seg_norm) - _net_slope(tpl_for_slope))
     return shape + _SLOPE_WEIGHT * slope_gap
+
+
+def _dist_to_accuracy(dist: float) -> float:
+    """Map one syllable's Chao-level distance to a 0-1 accuracy.
+
+    Below _TONE_OK_DIST is ~perfect (1.0), at/above _TONE_MAX_DIST is fully wrong
+    (0.0), linear in between. Applied PER SYLLABLE (then averaged) so a single
+    badly-missed tone can't drag the whole utterance below what its own map
+    allows — and, conversely, so a real miss can't be hidden by averaging its raw
+    (unbounded) distance against near-zero distances from correct syllables.
+    """
+    span = max(_TONE_MAX_DIST - _TONE_OK_DIST, 1e-6)
+    return max(0.0, min(1.0, 1.0 - (dist - _TONE_OK_DIST) / span))
 
 
 def _tone_feedback(tone: int, dist: float, user_seg_norm: list[float]) -> str | None:
@@ -310,7 +428,7 @@ def score_tones(audio_bytes: bytes, target_tones: list[int]) -> dict:
         raise ToneDspError("Không tách được âm tiết từ đường F0.")
 
     per_syllable: list[dict] = []
-    distances: list[float] = []
+    accuracies: list[float] = []
     feedback_lines: list[str] = []
 
     for pos, tone in enumerate(target_tones):
@@ -319,14 +437,14 @@ def score_tones(audio_bytes: bytes, target_tones: list[int]) -> dict:
                 "pos": pos, "tone": tone, "distance": None, "ok": False,
                 "feedback": "Không nghe rõ âm tiết này (thiếu giọng).",
             })
-            distances.append(2.0)  # max-ish penalty
+            accuracies.append(0.0)  # missing syllable = fully wrong for this slot
             feedback_lines.append(f"Âm tiết {pos + 1}: chưa phát âm rõ.")
             continue
 
         seg_norm = _shape_normalize(segments[pos])
         template = _center_template(_TONE_TEMPLATES.get(tone, _TONE_TEMPLATES[5]))
         dist = _contour_distance(seg_norm, template)
-        distances.append(dist)
+        accuracies.append(_dist_to_accuracy(dist))
         fb = _tone_feedback(tone, dist, seg_norm)
         ok = dist < _TONE_OK_DIST
         per_syllable.append({
@@ -336,13 +454,12 @@ def score_tones(audio_bytes: bytes, target_tones: list[int]) -> dict:
         if fb:
             feedback_lines.append(f"Âm tiết {pos + 1} (thanh {tone}): {fb}")
 
-    # Map mean DTW distance (Chao levels) to 0-1 accuracy: at/below _TONE_OK_DIST
-    # is ~perfect, at/above _TONE_MAX_DIST is fully wrong, linear in between.
+    # Average PER-SYLLABLE accuracy (each already clamped to [0,1]) rather than
+    # mapping a mean raw distance — the latter let one unbounded miss dominate and
+    # could hide a moderate miss behind near-perfect neighbours.
     import numpy as np
 
-    mean_dist = float(np.mean(distances)) if distances else _TONE_MAX_DIST
-    span = max(_TONE_MAX_DIST - _TONE_OK_DIST, 1e-6)
-    tone_accuracy = max(0.0, min(1.0, 1.0 - (mean_dist - _TONE_OK_DIST) / span))
+    tone_accuracy = float(np.mean(accuracies)) if accuracies else 0.0
 
     return {
         "tone_accuracy": round(tone_accuracy, 3),
