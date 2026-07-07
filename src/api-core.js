@@ -36,12 +36,20 @@ async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
   const backoff = () => RETRY_BACKOFFS_MS[RETRY_BACKOFFS_MS.length - retry] ?? 8000;
+  // Chỉ thử lại request idempotent. GET/HEAD luôn an toàn. POST/PUT/PATCH có
+  // thể đã được server xử lý xong trước khi kết nối rớt / trả 504 → retry mù sẽ
+  // gửi lại và ghi trùng (vd: recordLearningEvent ghi 2 lần, lệch accuracy +
+  // lịch SRS). POST chỉ retry khi caller khẳng định an toàn qua options.retryable
+  // (endpoint sinh nội dung, không ghi tiến độ người dùng).
+  const method = (options.method || 'GET').toUpperCase();
+  const isIdempotent = method === 'GET' || method === 'HEAD' || options.retryable === true;
+  const canRetry = isIdempotent && retry > 0;
   let res;
   try {
     res = await fetch(`${API_BASE}${path}`, { headers, ...options });
   } catch {
     // fetch chỉ ném khi mất mạng / CORS / server không phản hồi.
-    if (retry > 0) {
+    if (canRetry) {
       await delay(backoff());
       return request(path, options, retry - 1);
     }
@@ -49,7 +57,7 @@ async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
   }
   if (!res.ok) {
     // 502/503/504: backend đang khởi động (cold start) → thử lại với backoff.
-    if ((res.status === 502 || res.status === 503 || res.status === 504) && retry > 0) {
+    if ((res.status === 502 || res.status === 503 || res.status === 504) && canRetry) {
       await delay(backoff());
       return request(path, options, retry - 1);
     }
@@ -272,7 +280,7 @@ async function localQuestions({ level, quiz_type, limit }) {
 
 export async function startQuiz(payload) {
   try {
-    const data = await request('/api/quiz', { method: 'POST', body: JSON.stringify(payload) });
+    const data = await request('/api/quiz', { method: 'POST', body: JSON.stringify(payload), retryable: true });
     if (Array.isArray(data.questions) && data.questions.length) return data;
     const questions = await localQuestions(payload);
     return { questions, offline: true, empty_remote: true };

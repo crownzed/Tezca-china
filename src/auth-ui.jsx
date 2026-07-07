@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Award, Flame, Loader2, LogIn, LogOut, Medal, Trophy, User, UserPlus, X } from 'lucide-react';
 import { getLeaderboard, getUserProfile, updateProfile } from './api-core';
 import { useAuth } from './auth-core';
+import SpaceVortexBackground from './components/SpaceVortexBackground.jsx';
 
 function AuthForm({ mode, setMode }) {
   const { login, register } = useAuth();
@@ -106,6 +107,7 @@ function AuthModal() {
 export function AuthGate({ children }) {
   const { isAuthenticated, loading } = useAuth();
   const [mode, setMode] = useState('login');
+  const cardRef = useRef(null);
 
   if (loading) {
     return (
@@ -118,12 +120,14 @@ export function AuthGate({ children }) {
   if (isAuthenticated) return children;
 
   return (
-    <div className="auth-gate">
-      <div className="auth-gate__card core-card">
+    <div className="auth-gate" style={{ position: 'relative', overflow: 'hidden' }}>
+      <SpaceVortexBackground active={true} cardRef={cardRef} />
+      <div className="auth-gate__vignette" />
+      <div ref={cardRef} className="auth-gate__card auth-gate__card--glass" style={{ position: 'relative', zIndex: 10 }}>
         <div className="auth-gate__brand">
           <img src="/logo.jpg" alt="Logo" />
-          <h1>Học tiếng Trung HSK</h1>
-          <p>{mode === 'login' ? 'Đăng nhập để bắt đầu học và lưu tiến độ.' : 'Tạo tài khoản để bắt đầu hành trình HSK của bạn.'}</p>
+          <h1>Học tiếng Trung theo cách của tôi</h1>
+          <p className={mode === 'login' ? 'auth-gate__slogan' : undefined}>{mode === 'login' ? 'Học là việc của bạn.' : 'Tạo tài khoản để bắt đầu hành trình học tiếng Trung theo cách của riêng bạn.'}</p>
         </div>
         <AuthForm mode={mode} setMode={setMode} />
       </div>
