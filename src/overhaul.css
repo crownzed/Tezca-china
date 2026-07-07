@@ -398,7 +398,8 @@ h3 {
   color: var(--modern-zen-text) !important;
 }
 
-.option-grid button span {
+.option-grid button > span:not(.clickable-text) {
+  flex: 0 0 auto !important;
   background: rgba(var(--shadow-color), 0.04) !important;
   width: 32px !important;
   height: 32px !important;
@@ -408,6 +409,37 @@ h3 {
   border-radius: 50% !important;
   font-size: 0.9rem !important;
   font-weight: 700 !important;
+}
+
+/* Reset span-chip từ index.css cho cụm chữ Hán + từng chữ tap-để-tra:
+   index.css ép MỌI span thành hình tròn 28px nền vàng -> phải trả về text thường. */
+.option-grid button > .clickable-text {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  display: inline !important;
+  place-items: initial !important;
+  text-align: left !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.option-grid button .tap-char {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  background: none !important;
+  border-radius: 0 !important;
+  display: inline !important;
+  place-items: initial !important;
+}
+
+.option-grid button .tap-char.has-dict {
+  border-bottom: 1px dashed var(--line) !important;
 }
 
 .option-grid button:hover {
@@ -426,14 +458,14 @@ h3 {
   background: rgba(18, 122, 93, 0.05) !important;
 }
 
-.option-grid button.selected span {
+.option-grid button.selected > span:not(.clickable-text) {
   background: var(--modern-zen-primary) !important;
   color: white !important;
 }
 
 /* Hanzi Text Display - Make it massive */
 .learning-question-card h2 {
-  font-size: 4rem !important;
+  font-size: 2.2rem !important;
   font-family: var(--font-cn) !important;
   font-weight: 700 !important;
   text-align: center !important;
@@ -712,13 +744,13 @@ h3 {
 }
 
 .learning-question-card h2 {
-  font-size: 4.5rem !important;
+  font-size: 2.2rem !important;
   font-weight: 800 !important;
   text-align: center;
   color: var(--modern-zen-text) !important;
   margin: 24px 0 !important;
   font-family: var(--font-cn), var(--font) !important;
-  line-height: 1.1 !important;
+  line-height: 1.25 !important;
 }
 
 /* Đoạn đọc dài (reading/translation): không dùng cỡ chữ Hán khổng lồ căn
@@ -736,6 +768,23 @@ h3 {
   word-break: break-word;
   white-space: normal !important;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Câu điền từ (cloze): là cả câu có chỗ trống, không phải 1 chữ Hán đơn.
+   Cỡ 2.2rem của h2 mặc định làm câu dài tràn/quá to → giảm còn vừa đọc,
+   cho xuống dòng và căn giữa theo khối. */
+.learning-question-card h2.cloze-prompt {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  line-height: 1.6 !important;
+  margin: 18px 0 !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal !important;
+}
+
+.learning-question-card h2.cloze-prompt .cloze-blank {
+  height: 1em;
 }
 
 .option-grid {
@@ -765,7 +814,8 @@ h3 {
   box-shadow: 0 4px 12px rgba(var(--shadow-color), 0.02) !important;
 }
 
-.option-grid button span {
+.option-grid button > span:not(.clickable-text) {
+  flex: 0 0 auto !important;
   width: 36px !important;
   height: 36px !important;
   border-radius: 50% !important;
@@ -776,6 +826,14 @@ h3 {
   color: var(--muted) !important;
   font-weight: 700 !important;
   transition: all var(--transition-snappy) !important;
+}
+
+/* Chữ Hán trong đáp án: hiển thị như văn bản bình thường, không bị biến thành chip tròn */
+.option-grid button .clickable-text {
+  font-size: 1.6rem !important;
+  font-family: var(--font-cn), var(--font) !important;
+  line-height: 1.5 !important;
+  text-align: left !important;
 }
 
 .option-grid button:not(:disabled):hover {
@@ -792,7 +850,7 @@ h3 {
   transform: translateY(-2px) !important;
 }
 
-.option-grid button.selected span {
+.option-grid button.selected > span:not(.clickable-text) {
   background: var(--jade-gradient) !important;
   color: white !important;
 }
@@ -803,7 +861,7 @@ h3 {
   box-shadow: 0 8px 24px rgba(18, 122, 93, 0.12) !important;
 }
 
-.option-grid button.option-correct span {
+.option-grid button.option-correct > span:not(.clickable-text) {
   background: var(--modern-zen-primary) !important;
   color: white !important;
 }
@@ -814,7 +872,7 @@ h3 {
   box-shadow: 0 8px 24px rgba(194, 64, 47, 0.12) !important;
 }
 
-.option-grid button.option-wrong span {
+.option-grid button.option-wrong > span:not(.clickable-text) {
   background: #C2402F !important;
   color: white !important;
 }
@@ -1808,7 +1866,7 @@ h3 {
 
   /* Thu nhỏ chữ Hán khổng lồ trên thẻ hỏi */
   .learning-question-card h2 {
-    font-size: 2.8rem !important;
+    font-size: 1.8rem !important;
     margin: 16px 0 !important;
   }
   
@@ -2281,5 +2339,293 @@ main.core-page {
   .vocab-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 12px !important;
+  }
+}
+
+/* ============================================================
+   GRAMMAR LAB — mục Ngữ pháp độc lập
+   Dùng lại biến màu/bán kính/bóng của theme (overhaul :root).
+   Các class quiz (core-card, option-grid, feedback-panel...) đã có
+   sẵn style; đây chỉ bổ sung phần riêng của Grammar Lab.
+   ============================================================ */
+
+.grammar-lab .core-section-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Dải tóm tắt tiến độ */
+.grammar-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.grammar-summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 88px;
+}
+
+.grammar-summary-stat strong {
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--jade);
+}
+
+.grammar-summary-stat small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.grammar-review-cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Lưới chọn cấp HSK */
+.grammar-level-grid {
+  display: flex;
+  gap: 10px;
+}
+
+.grammar-level-grid .level-card {
+  flex: 1;
+}
+
+/* Lưới thẻ bài */
+.grammar-lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.grammar-lesson-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grammar-lesson-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.grammar-lesson-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.grammar-lesson-head strong {
+  font-size: 1rem;
+}
+
+.grammar-lesson-head small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.grammar-emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.grammar-due-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--gold-soft);
+  color: var(--gold);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Thanh mastery */
+.grammar-mastery-bar {
+  height: 8px;
+  background: var(--track-bg);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.grammar-mastery-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--jade-gradient);
+  border-radius: 99px;
+  transition: width var(--transition-smooth);
+}
+
+.grammar-lesson-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.grammar-lesson-actions button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Nút quay lại trên topline */
+.grammar-back,
+.quiz-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.grammar-back:hover,
+.quiz-back:hover {
+  color: var(--jade);
+}
+
+.grammar-level-badge {
+  background: var(--jade-soft);
+  color: var(--jade);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Màn lý thuyết */
+.grammar-theory {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grammar-theory-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.grammar-theory-desc {
+  color: var(--muted);
+  margin: 0;
+}
+
+.grammar-structure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--jade-soft);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.grammar-structure small {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  color: var(--jade);
+  font-weight: 700;
+}
+
+.grammar-structure strong {
+  font-size: 1.15rem;
+}
+
+.grammar-explain {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.grammar-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.grammar-examples > small {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.grammar-example {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 3px solid var(--jade-soft);
+  padding-left: 12px;
+}
+
+.grammar-example-cn {
+  font-size: 1.15rem;
+}
+
+.grammar-example-pinyin {
+  font-size: 0.9rem;
+}
+
+.grammar-example-vi {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.grammar-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--gold-soft);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.grammar-note svg {
+  color: var(--gold);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.grammar-theory-cta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .grammar-lesson-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grammar-summary {
+    gap: 12px;
+  }
+
+  .grammar-review-cta {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
   }
 }

@@ -35,6 +35,11 @@ __pycache__/
 # Vercel
 .vercel
 
+# Obsidian - config thay đổi liên tục theo thao tác, không cần commit
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+
 # Secrets / local env
 backend/.env
 .env.production.local

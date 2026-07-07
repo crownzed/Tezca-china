@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, Bell, BellOff, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
 import { completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -12,53 +12,14 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 const CustomVocabInput = lazy(() => import('./components/CustomVocabInput.jsx'));
 const PronunciationPractice = lazy(() => import('./components/PronunciationPractice.jsx'));
 const VoiceChat = lazy(() => import('./components/VoiceChat.jsx'));
-import { loadAllFlashcards } from './vocab-loader.js';
+const GrammarLab = lazy(() => import('./components/GrammarLab.jsx'));
 import { notificationPermission, requestNotificationPermission, scheduleDailyReminder, cancelReminder, showNotification } from './notifications.js';
 import { resolveDecompositions } from './radicals-db.js';
+import { ClickableChineseText, TonedPinyin } from './components/chinese-text.jsx';
 
 // Module-level clock helper. Kept out of component scope so React's purity
 // lint doesn't flag the (intentional) impure read inside event handlers.
 const now = () => performance.now();
-
-let globalDictionary = new Map();
-loadAllFlashcards().then(cards => {
-  cards.forEach(c => {
-    if (c.character && !globalDictionary.has(c.character)) {
-      globalDictionary.set(c.character, c);
-    }
-  });
-});
-
-function ClickableChineseText({ text, className = '' }) {
-  const [activeIdx, setActiveIdx] = useState(null);
-
-  if (!text) return null;
-
-  return (
-    <span className={`clickable-text ${className}`}>
-      {text.split('').map((char, index) => {
-        const card = globalDictionary.get(char);
-        const hasDict = Boolean(card);
-        return (
-          <span
-            key={index}
-            className={`tap-char ${hasDict ? 'has-dict' : ''} ${activeIdx === index ? 'active' : ''}`}
-            onClick={() => hasDict && setActiveIdx(prev => prev === index ? null : index)}
-          >
-            {char}
-            {activeIdx === index && hasDict && (
-              <span className="tap-tooltip" onClick={(e) => e.stopPropagation()}>
-                <strong>{card.character}</strong>
-                <em>{card.pinyin}</em>
-                <small>{card.meaning}</small>
-              </span>
-            )}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
 
 const THEME_PALETTE_VERSION = 'modern-zen-v1';
 const LEVELS = [1, 2, 3, 4, 5, 6];
@@ -95,6 +56,7 @@ function isPassagePrompt(quizType) {
 const NAV = [
   { id: 'dashboard', label: 'Trang chính', icon: BarChart3 },
   { id: 'quiz', label: 'Luyện tập', icon: Play },
+  { id: 'grammar', label: 'Ngữ pháp', icon: Blocks },
   { id: 'vocab', label: 'Từ vựng', icon: Search },
   { id: 'custom', label: 'Tự tạo', icon: PenTool },
   { id: 'speak', label: 'Phát âm', icon: Mic },
@@ -1146,6 +1108,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
       {question && (
         <section key={item.id} className={`core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
           <div className="question-topline">
+            <button type="button" className="quiz-back" onClick={cancelLoad}><ArrowLeft size={16} /> Thoát</button>
             <span>{isRepair ? 'Ôn lại' : questionType?.label || 'Câu hỏi'}</span>
             <strong>{index + 1}/{quizItems.length}</strong>
           </div>
@@ -1176,9 +1139,6 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
           ) : activeQuizType === 'drag_drop' ? (
             <div className="drag-drop-prompt">
               <p className="drag-drop-label">Sắp xếp thành câu đúng</p>
-              {question.metadata_json?.sentence_vi && (
-                <p className="drag-drop-hint-vi">💬 {question.metadata_json.sentence_vi}</p>
-              )}
             </div>
           ) : (
             <h2 className={isPassagePrompt(question.quiz_type) ? 'prompt--passage' : ''}>{isPassagePrompt(question.quiz_type) ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
@@ -1255,6 +1215,18 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
               </div>
             </div>
 
+          ) : activeQuizType === 'drag_drop' ? (
+            // Câu drag_drop thiếu segments hợp lệ (thường là câu cũ tái dùng từ
+            // DB, sinh trước khi có guard). Không rơi xuống lưới trắc nghiệm —
+            // options chỉ là placeholder dummy — mà cho bỏ qua sạch.
+            <div className="drag-drop-area drag-drop-unavailable">
+              <p className="drag-hint">Câu này không khả dụng để sắp xếp.</p>
+              <div className="drag-drop-actions">
+                <button className="btn-primary" onClick={continueQuiz} disabled={submitting}>
+                  Bỏ qua
+                </button>
+              </div>
+            </div>
           ) : activeQuizType === 'voice' ? (
             <div className="voice-area">
               <div className="voice-word-hero">{question.word?.hanzi || ''}</div>
@@ -1412,87 +1384,6 @@ function errorTagLabel(tag) {
 
 function errorTagHint(tag) {
   return errorTagInfo(tag)?.hint || '';
-}
-
-// Tô màu thanh điệu theo dấu pinyin (doc 3.1: thanh điệu là khoá ghi nhớ).
-// Phát hiện thanh qua dấu phụ trên nguyên âm, không cần số thanh.
-const TONE_MARKS = {
-  1: 'āēīōūǖĀĒĪŌŪǕ',
-  2: 'áéíóúǘÁÉÍÓÚǗ',
-  3: 'ǎěǐǒǔǚǍĚǏǑǓǙ',
-  4: 'àèìòùǜÀÈÌÒÙǛ',
-};
-
-function toneOfSyllable(syllable) {
-  for (const ch of syllable) {
-    for (const tone of [1, 2, 3, 4]) {
-      if (TONE_MARKS[tone].includes(ch)) return tone;
-    }
-  }
-  // Fallback: số thanh cuối âm tiết (vd "xue2") khi không có dấu phụ.
-  const trailing = syllable.match(/[1-5](?!.*[1-5])/);
-  if (trailing) return Number(trailing[0]);
-  return 5; // không dấu → thanh nhẹ
-}
-
-// Nguyên âm có dấu thanh + nguyên âm trơn, dùng để dò ranh giới âm tiết.
-const PINYIN_VOWELS = 'aeiouüvāēīōūǖáéíóúǘǎěǐǒǔǚàèìòùǜ';
-const isPinyinVowel = (ch) => PINYIN_VOWELS.includes(ch.toLowerCase());
-
-// Tách một token pinyin dính liền (vd "jīntiān") thành từng âm tiết.
-// Âm tiết mới bắt đầu khi gặp phụ âm onset sau khi đã thấy nguyên âm,
-// trừ các coda hợp lệ: n (khi không đứng trước nguyên âm), ng, r (erhua).
-function splitPinyinToken(token) {
-  const text = token.toLowerCase();
-  const out = [];
-  let cur = '';
-  let sawVowel = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const c = text[i];
-    const next = text[i + 1];
-    if (isPinyinVowel(c)) {
-      cur += c;
-      sawVowel = true;
-    } else if (!sawVowel) {
-      cur += c; // phụ âm đầu (gồm cụm zh/ch/sh)
-    } else if (c === 'n' && !(next && isPinyinVowel(next))) {
-      cur += c; // n coda
-    } else if (c === 'g' && cur.endsWith('n')) {
-      cur += c; // ng coda
-    } else if (c === 'r' && !(next && isPinyinVowel(next))) {
-      cur += c; // r coda / erhua
-    } else {
-      if (cur) out.push(cur);
-      cur = c;
-      sawVowel = false;
-    }
-  }
-  if (cur) out.push(cur);
-  return out;
-}
-
-function tonedPinyin(pinyin) {
-  const text = cleanText(pinyin);
-  if (!text) return [];
-  // Tách theo khoảng trắng trước, rồi tách tiếp mỗi token dính liền.
-  const syllables = text.split(/\s+/).flatMap(splitPinyinToken);
-  return syllables.map((syllable, idx) => ({
-    key: `${syllable}-${idx}`,
-    text: syllable,
-    tone: toneOfSyllable(syllable),
-  }));
-}
-
-function TonedPinyin({ pinyin, className = '' }) {
-  const syllables = tonedPinyin(pinyin);
-  if (!syllables.length) return null;
-  return (
-    <span className={`toned-pinyin ${className}`} aria-label={pinyin}>
-      {syllables.map(part => (
-        <span key={part.key} className={`tone-${part.tone}`}>{part.text}</span>
-      ))}
-    </span>
-  );
 }
 
 // Card ENCODE sau khi trả lời (doc 5.2 REVEAL→ENCODE): hiện hanzi lớn,
@@ -1934,6 +1825,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       {isPractice && (
         <section key={item.id} className={`core-card chinese-practice-card chinese-practice-card--${item.type}`} aria-live="polite">
           <div className="question-topline">
+            <button type="button" className="quiz-back" onClick={onExit}><ArrowLeft size={16} /> Thoát</button>
             <span>{item.type === 'guided_output' ? 'Apply' : item.type === 'pinyin_typing' ? 'Pinyin' : item.type === 'tone_drill' ? 'Tone drill' : item.type === 'micro_reading' ? 'Micro reading' : 'Chinese layer'}</span>
             <strong>{Math.min(index, questionItems.length)}</strong>
           </div>
@@ -2037,6 +1929,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       {question && (
         <section key={item.id} className={`core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
           <div className="question-topline">
+            <button type="button" className="quiz-back" onClick={onExit}><ArrowLeft size={16} /> Thoát</button>
             <span>{isRepair ? 'Ôn lại' : questionType?.label || 'Câu hỏi'}</span>
             <strong>{Math.min(index, questionItems.length)}/{questionItems.length}</strong>
           </div>
@@ -2323,6 +2216,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
       {question && (
         <section key={question.id} className={`core-card question-card ${advancing ? 'is-advancing' : ''}`} aria-live="polite">
           <div className="question-topline">
+            <button type="button" className="quiz-back" onClick={onExit}><ArrowLeft size={16} /> Thoát</button>
             <span>{questionType?.label || 'Đang kiểm tra'}</span>
             <strong>{index + 1}</strong>
           </div>
@@ -3315,6 +3209,7 @@ export default function App() {
           {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
           {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
           {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
+          {!generalCheckLevel && activeTab === 'grammar' && <GrammarLab focusLevel={level} />}
           {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} theme={theme} />}
           {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
           {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevel={level} />}
