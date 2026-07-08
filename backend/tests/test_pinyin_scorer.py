@@ -58,6 +58,25 @@ def test_neutral_tone_not_penalized():
     assert result["score"] == 100
 
 
+def test_omitted_tone_is_penalized():
+    # Người học bỏ dấu thanh trong khi mục tiêu có thanh rõ → phải bị trừ điểm
+    # thanh (trước đây được tha vì a_tone=5 bị coi là "không có thanh").
+    result = score_pinyin("nǐ hǎo", "ni hao")
+    assert result["base_score"] == 100  # âm tiết đúng
+    assert result["score"] < 100         # nhưng thanh bị bỏ → trừ điểm
+    assert len(result["tone_errors"]) == 2
+    assert result["tone_total"] == 2
+
+
+def test_untoned_target_not_penalized():
+    # Dữ liệu bẩn: mục tiêu thiếu dấu thanh → không đủ căn cứ chấm thanh, điểm
+    # bằng nhận diện âm tiết, không phạt oan người đọc đúng.
+    result = score_pinyin("ni hao", "nǐ hǎo")
+    assert result["tone_total"] == 0
+    assert result["score"] == result["base_score"] == 100
+    assert len(result["tone_errors"]) == 0
+
+
 def test_case_insensitive():
     result = score_pinyin("Zhōng guó", "zhōng guó")
     assert result["base_score"] == 100

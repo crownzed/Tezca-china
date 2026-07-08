@@ -102,11 +102,14 @@ def extract_features(
     seen = max(0, int(seen))
     interval = max(1, int(interval_days or 1))
 
-    # due_urgency: tỉ lệ quá hạn so với khoảng ôn. Đúng hạn → 1, chưa tới → <1.
-    if overdue_days is None or elapsed_days is None:
+    # due_urgency: mức QUÁ HẠN so với khoảng ôn. Chưa tới hạn (overdue_days < 0)
+    # → 0; đúng hạn → 0; quá hạn càng lâu → tiến tới 1. Trước đây dùng
+    # elapsed/interval nên từ CHƯA tới hạn vẫn nhận urgency cao gần 1 khi gần
+    # tới hạn — sai ngữ nghĩa "quá hạn" và đẩy nhầm từ chưa cần ôn lên đầu.
+    if overdue_days is None:
         due_urgency = 0.0
     else:
-        due_urgency = _clamp(elapsed_days / interval)
+        due_urgency = _clamp(overdue_days / interval)
 
     # forgetting_risk = 1 - R(stability=interval, elapsed).
     if elapsed_days is None:

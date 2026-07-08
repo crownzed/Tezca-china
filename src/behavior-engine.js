@@ -60,8 +60,13 @@ function recentAnswerEvents() {
   const quizEvents = history
     .flatMap(attempt => (attempt.answers || []).map(answer => ({ ...answer, created_at: attempt.created_at })))
   const sessionEvents = sessionSummaries
-    .flatMap(session => (session.answers || []).map(answer => ({ ...answer, created_at: session.completed_at })));
-  return [...quizEvents, ...sessionEvents].slice(-40);
+    .flatMap(session => (session.answers || []).map(answer => ({ ...answer, created_at: session.completed_at || session.started_at })));
+  // Trộn HAI nguồn rồi sắp theo created_at TĂNG DẦN trước khi lấy 40 gần nhất.
+  // Trước đây chỉ nối [...quiz, ...session] theo nguồn nên slice(-40) thiên lệch
+  // về session events bất kể độ mới thật; wrongStreak/EWMA (đọc theo thứ tự thời
+  // gian) vì thế tính trên dữ liệu sai thứ tự → phân loại fragile/overloaded lệch.
+  const toTime = (e) => { const t = new Date(e.created_at).getTime(); return Number.isNaN(t) ? 0 : t; };
+  return [...quizEvents, ...sessionEvents].sort((a, b) => toTime(a) - toTime(b)).slice(-40);
 }
 
 function recentCompletionRate() {
@@ -149,7 +154,23 @@ export function markLearningSessionCompleted(summary = {}) {
     const completedAt = new Date().toISOString();
     window.localStorage.setItem(scopedKey('lastLearningSessionCompletedAt'), completedAt);
     const summaries = readJson(scopedKey('learningSessionSummaries'), []);
-    window.localStorage.setItem(scopedKey('learningSessionSummaries'), JSON.stringify([...summaries, { ...summary, completed_at: completedAt }].slice(-20)));
+    // Cập nhật record "phiên bắt đầu" (completed_at=null) gần nhất do
+    // markLearningSessionStarted ghi, thay vì luôn thêm mới — nếu không, mỗi phiên
+    // sẽ có 2 bản ghi (1 dở + 1 xong) và recentCompletionRate lệch. Không tìm thấy
+    // record mở nào (vd phiên khởi tạo trước bản vá này) thì thêm mới như cũ.
+    let patched = false;
+    const next = [];
+    for (let i = summaries.length - 1; i >= 0; i -= 1) {
+      const item = summaries[i];
+      if (!patched && item && !item.completed_at) {
+        next.unshift({ ...item, ...summary, completed_at: completedAt });
+        patched = true;
+      } else {
+        next.unshift(item);
+      }
+    }
+    if (!patched) next.push({ ...summary, completed_at: completedAt });
+    window.localStorage.setItem(scopedKey('learningSessionSummaries'), JSON.stringify(next.slice(-20)));
   } catch {
     /* ignore */
   }

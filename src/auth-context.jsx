@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getMe, loginUser, registerUser, setAuthToken } from './api-core';
+import { getMe, loginUser, registerUser, setAuthExpiredHandler, setAuthToken } from './api-core';
 import { AUTH_STORAGE_KEY, AuthContext, readStoredAuth } from './auth-core';
 import { setCurrentUserId } from './user-scope';
 
@@ -40,6 +40,13 @@ export function AuthProvider({ children }) {
       .then(user => persistAuth({ token: stored.token, user }))
       .catch(() => persistAuth(null))
       .finally(() => setLoading(false));
+  }, [persistAuth]);
+
+  // Bất kỳ call API nào nhận 401 (token hết hạn/không hợp lệ) → đăng xuất sạch,
+  // không chỉ getMe. api-core gọi handler này khi request mang token user gặp 401.
+  useEffect(() => {
+    setAuthExpiredHandler(() => persistAuth(null));
+    return () => setAuthExpiredHandler(null);
   }, [persistAuth]);
 
   const login = useCallback(async (loginValue, password) => {

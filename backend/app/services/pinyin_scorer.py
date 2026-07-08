@@ -31,6 +31,9 @@ class PinyinScore(TypedDict):
     score: int
     base_score: int  # score ignoring tones
     tone_errors: list[ToneError]
+    # Số slot có thanh điệu XÁC ĐỊNH ở mục tiêu (âm tiết khớp, thanh != nhẹ) —
+    # mẫu số để tính tỉ lệ thanh đúng. 0 nghĩa là không có gì để chấm thanh.
+    tone_total: int
     syllable_errors: list[SyllableError]
     target: str
     actual: str
@@ -97,7 +100,8 @@ def score_pinyin(target: str, actual: str) -> PinyinScore:
             score=0,
             base_score=0,
             tone_errors=[],
-            syllable_errors=[SyllableError(pos=0, type="missing", expected=target, got="")],
+            tone_total=0,
+            syllable_errors=[SyllableError(pos=0, type="missing", expected=target, got=None)],
             target=target,
             actual=actual,
         )
@@ -105,6 +109,9 @@ def score_pinyin(target: str, actual: str) -> PinyinScore:
     max_len = max(len(target_syls), len(actual_syls))
     tone_errors: list[ToneError] = []
     syllable_errors: list[SyllableError] = []
+    # Chỉ chấm thanh trên slot mà âm tiết KHỚP và mục tiêu có thanh XÁC ĐỊNH
+    # (1-4). Thanh nhẹ (5) hoặc mục tiêu thiếu dấu → không đủ căn cứ, bỏ khỏi mẫu số.
+    tone_total = 0
 
     for i in range(max_len):
         t_syl = target_syls[i] if i < len(target_syls) else None
@@ -130,25 +137,35 @@ def score_pinyin(target: str, actual: str) -> PinyinScore:
             syllable_errors.append(SyllableError(
                 pos=i, type="wrong_syllable", expected=t_syl, got=a_syl,
             ))
-        elif t_tone != a_tone and t_tone != 5 and a_tone != 5:
-            # Only flag tone error if both have explicit tones
-            tone_errors.append(ToneError(
-                pos=i, expected_tone=t_tone, got_tone=a_tone, syllable=t_syl,
-            ))
+        elif t_tone != 5:
+            # Mục tiêu có thanh xác định → slot này chấm thanh được.
+            tone_total += 1
+            # a_tone == 5 nghĩa là người học BỎ dấu thanh: tính là sai thanh
+            # (trước đây được tha, khiến bỏ dấu vẫn full điểm thanh).
+            if t_tone != a_tone:
+                tone_errors.append(ToneError(
+                    pos=i, expected_tone=t_tone, got_tone=a_tone, syllable=t_syl,
+                ))
 
-    # Scoring
+    # Điểm nhận diện âm tiết (bỏ qua thanh) — luôn tính trên toàn bộ slot.
     total_base = max_len
-    total_tone = max_len
     base_correct = total_base - len(syllable_errors)
-    tone_correct = total_tone - len(tone_errors) - len(syllable_errors)
-
     base_score = max(0, round((base_correct / total_base) * 100))
-    score = max(0, round(((base_correct * 0.6 + tone_correct * 0.4) / total_base) * 100))
+
+    base_component = base_correct / total_base
+    if tone_total > 0:
+        tone_component = max(0.0, (tone_total - len(tone_errors)) / tone_total)
+        score = max(0, round((base_component * 0.6 + tone_component * 0.4) * 100))
+    else:
+        # Không có thanh nào để chấm (mục tiêu toàn thanh nhẹ / thiếu dấu) →
+        # điểm bằng nhận diện âm tiết, không phạt/thưởng thanh.
+        score = base_score
 
     return PinyinScore(
         score=score,
         base_score=base_score,
         tone_errors=tone_errors,
+        tone_total=tone_total,
         syllable_errors=syllable_errors,
         target=target,
         actual=actual,

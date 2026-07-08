@@ -262,6 +262,9 @@ class TodaySessionOut(BaseModel):
     due_count: int
     weak_count: int
     new_count: int
+    # Số từ THẬT SỰ được đưa vào phiên (len(focus_words)). due_count/weak_count là
+    # tổng đến hạn/yếu để thống kê; focus_count mới là số item giao thực tế.
+    focus_count: int = 0
     target_skills: list[str]
     focus_words: list[TodayFocusWord]
     missions: list[TodayMission]

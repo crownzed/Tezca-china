@@ -10,6 +10,7 @@ Features:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -52,7 +53,10 @@ def _save_cache() -> None:
 
 
 def _cache_key(sentence_cn: str) -> str:
-    return sentence_cn.strip()[:120]
+    # Hash TOÀN câu thay vì cắt [:120] — hai câu khác nhau chung 120 ký tự đầu
+    # trước đây trả cùng verdict cache (câu dài dễ đụng). sha1 đủ để tránh đụng
+    # mà key vẫn ngắn/ổn định.
+    return hashlib.sha1(sentence_cn.strip().encode("utf-8")).hexdigest()
 
 
 def check_sentence(

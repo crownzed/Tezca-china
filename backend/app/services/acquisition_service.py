@@ -90,8 +90,15 @@ def acquisition_stage(
     # Kỹ năng tiếp nhận = max(nhận diện, nghe) — trẻ con nhận ra qua bất kỳ kênh nào.
     recall_signal = max(recognition, listening)
 
-    # MASTERED: sản sinh tự do vững + trí nhớ ổn định cao.
-    if production >= THRESHOLDS["mastered_production"] and mastery >= THRESHOLDS["mastered_mastery"]:
+    # MASTERED: sản sinh tự do vững + trí nhớ ổn định cao. MASTERED phải BAO HÀM
+    # điều kiện của USABLE (context đủ) — không thể "thuần thục" một từ mà chưa
+    # từng hiểu nó trong ngữ cảnh. Nếu không, một từ production/mastery cao nhưng
+    # context=0 sẽ nhảy thẳng lên MASTERED, bỏ qua USABLE (ngữ nghĩa nấc sai).
+    if (
+        production >= THRESHOLDS["mastered_production"]
+        and mastery >= THRESHOLDS["mastered_mastery"]
+        and context >= THRESHOLDS["usable_context"]
+    ):
         return "MASTERED"
 
     # USABLE: bắt đầu tự sản sinh có hướng dẫn + hiểu ngữ cảnh đủ.

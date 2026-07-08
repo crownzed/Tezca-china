@@ -52,6 +52,10 @@ class AuthService:
             select(User).where(or_(User.username == login, User.email == login))
         )
 
+    def get_user_by_email(self, email: str) -> User | None:
+        email = email.strip().lower()
+        return self.db.scalar(select(User).where(User.email == email))
+
     def register(self, username: str, email: str, password: str, display_name: str | None = None) -> User:
         username = username.strip().lower()
         email = email.strip().lower()

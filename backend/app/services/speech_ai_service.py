@@ -179,7 +179,11 @@ def score_pronunciation(
         # own tone-correct ratio. Either layer can veto a tone. (syllable_errors
         # are excluded here — they already lower base_score, so counting them again
         # would double-penalize the 0.6 term.)
-        n_tone_slots = len(target_tones)
+        # Mẫu số là số slot có thanh XÁC ĐỊNH (tone_total) — cùng tập slot mà
+        # DSP chấm (đã loại thanh nhẹ). Dùng len(target_tones) như trước sẽ pha
+        # loãng tỉ lệ khi có âm thanh nhẹ. Khi không có slot nào chấm được, chỉ
+        # dùng DSP (đã tự loại thanh nhẹ khỏi trung bình của nó).
+        n_tone_slots = breakdown["tone_total"]
         if n_tone_slots > 0:
             gemini_tone_ratio = max(0.0, 1.0 - len(breakdown["tone_errors"]) / n_tone_slots)
             tone_accuracy = min(dsp_tone_accuracy, gemini_tone_ratio)

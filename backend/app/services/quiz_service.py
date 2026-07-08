@@ -14,6 +14,8 @@ from ..schemas import AnswerResult, QuizSubmitRequest, QuizSubmitResponse
 from ..settings import settings
 from .event_service import LearningEventService
 from .item_difficulty import difficulty_fit, is_low_quality
+from .distractor_policy import order_distractors_by_stage
+from .acquisition_service import acquisition_stage
 from .question_generator import (
     QUESTION_SUBTYPE_DIALOGUE,
     QUESTION_SUBTYPE_KEYWORD,
@@ -305,6 +307,67 @@ def _inject_user_distractors(
     question.metadata_json = meta
 
 
+def _inject_stage_confusable(
+    question: Question,
+    target_word: Word | None,
+    stage: str | None,
+    conf_word_by_hanzi: dict[str, Word],
+) -> None:
+    """Thay tối đa 1 distractor bằng confusable sắp theo NẤC THỤ ĐẮC của user.
+
+    Kích hoạt ``distractor_policy.order_distractors_by_stage``: người mới gặp
+    distractor xa (dễ loại), người thạo gặp gần (buộc phân biệt tinh). Dùng
+    ĐÚNG cơ chế swap an toàn của ``_inject_user_distractors`` — chỉ đổi slot
+    KHÔNG phải đáp án đúng, giữ nguyên ``correct_index`` nên không ảnh hưởng
+    chấm điểm; không commit (row bank dùng chung không đổi trên DB).
+    """
+    if not target_word or not question.word_id:
+        return
+    confusables = target_word.confusable_words_json or []
+    conf_hanzi = [c if isinstance(c, str) else c.get("hanzi") for c in confusables]
+    conf_hanzi = [h for h in conf_hanzi if h]
+    if not conf_hanzi:
+        return
+    conf_hanzi = order_distractors_by_stage(conf_hanzi, stage)
+
+    option_wids = (question.metadata_json or {}).get("option_word_ids") or []
+    if len(option_wids) < 4:
+        return
+    correct_idx = question.correct_index
+    options = list(question.options or [])
+    existing_wids = {wid for wid in option_wids if wid is not None}
+
+    chosen = None
+    for h in conf_hanzi:
+        w = conf_word_by_hanzi.get(h)
+        if w and w.id not in existing_wids and w.id != question.word_id:
+            chosen = w
+            break
+    if not chosen:
+        return
+
+    if question.quiz_type in (QuizType.vocab, QuizType.listening, QuizType.dialogue, QuizType.translation):
+        text = chosen.meaning_vi or chosen.meaning_en
+    else:
+        text = chosen.hanzi
+    if not text or text in options:
+        return
+
+    distractor_positions = [i for i in range(len(options)) if i != correct_idx]
+    if not distractor_positions:
+        return
+    swap_pos = distractor_positions[-1]
+    options[swap_pos] = text
+    new_wids = list(option_wids)
+    new_wids[swap_pos] = chosen.id
+
+    question.options = options
+    meta = dict(question.metadata_json or {})
+    meta["option_word_ids"] = new_wids
+    meta["stage_distractor"] = stage
+    question.metadata_json = meta
+
+
 class QuizService:
     def __init__(self, db: Session):
         self.db = db
@@ -345,8 +408,7 @@ class QuizService:
             .order_by(Question.created_at.desc())
             .limit(bank_size * 2)
         )
-        # dialogue nhánh dưới truy cập question.word cho từng candidate
-        # (_refresh_dialogue_options) → eager-load để tránh N+1 lazy-load.
+        # dialogue: eager-load question.word để tránh N+1 lazy-load khi lọc/rank.
         if quiz_type == QuizType.dialogue:
             candidates_query = candidates_query.options(selectinload(Question.word))
         candidates = self.db.scalars(candidates_query).all()
@@ -354,7 +416,14 @@ class QuizService:
             candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_SENTENCE]
         if quiz_type == QuizType.dialogue:
             candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_DIALOGUE]
-            self._refresh_dialogue_options(candidates)
+            # Loại các row dialogue legacy có option quá dài (>55 ký tự) khỏi lượt
+            # phục vụ. Trước đây chúng được regenerate + commit tại chỗ với seed
+            # ngẫu nhiên (_refresh_dialogue_options), nhưng việc mutate row DÙNG
+            # CHUNG giữa serve và submit gây chấm sai: một fetch khác (người dùng
+            # khác hoặc thread nền) hoán vị options + ghi đè correct_index, khiến
+            # selected_index đã gửi trỏ nhầm đáp án. Bản sinh mới dùng option_vi
+            # ngắn nên không dính; background gen sẽ bổ sung dần row ngắn thay thế.
+            candidates = [q for q in candidates if not any(len(opt) > 55 for opt in (q.options or []))]
         if quiz_type == QuizType.translation:
             candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_PARAGRAPH]
         if quiz_type == QuizType.cloze:
@@ -403,45 +472,83 @@ class QuizService:
     def _personalize_distractors(self, user_id: str, questions: list[Question]) -> None:
         """Chèn distractor cá nhân hóa cho các câu ĐÃ chọn (không quét toàn bank).
 
-        Chỉ chạy trên ``limit`` câu cuối cùng thay vì mọi candidate, và nạp tất
-        cả confused word bằng một truy vấn ``IN`` duy nhất thay vì mỗi câu một
-        lần ``db.scalar`` — giữ nguyên kết quả nhưng cắt số round-trip DB.
-        """
-        confusion_map = _build_user_confusion_map(self.db, user_id)
-        if not confusion_map:
-            return
-        needed_ids: set[int] = set()
-        for q in questions:
-            for cid in confusion_map.get(q.word_id or -1, []):
-                needed_ids.add(cid)
-        if not needed_ids:
-            return
-        words = self.db.scalars(select(Word).where(Word.id.in_(needed_ids))).all()
-        word_by_id = {w.id: w for w in words}
-        for q in questions:
-            _inject_user_distractors(q, confusion_map, word_by_id)
+        Hai tầng, ĐỀU đi qua cơ chế swap an toàn (chỉ đổi slot KHÔNG phải đáp án
+        đúng, giữ nguyên ``correct_index``, KHÔNG commit → row bank dùng chung
+        không đổi trên DB, chấm điểm không bị lệch):
 
-    def _refresh_dialogue_options(self, questions: list[Question]) -> None:
-        changed = False
-        import random
-        seed = random.randint(0, 1000000)
-        for question in questions:
-            if not question.word or not any(len(option) > 55 for option in question.options or []):
+        1. Ưu tiên tín hiệu lỗi THẬT: thay 1 distractor bằng từ user từng nhầm
+           với từ đích (``_inject_user_distractors``).
+        2. Với câu chưa nhận swap ở (1): dùng ``confusable_words_json`` sắp theo
+           NẤC THỤ ĐẮC của user (``_inject_stage_confusable``) — kích hoạt
+           ``distractor_policy``. Chạy cả khi user chưa có lịch sử nhầm.
+
+        Tất cả dữ liệu (từ đích, tiến độ, confusable) nạp theo lô bằng truy vấn
+        ``IN`` để tránh N+1.
+        """
+        # Từ đích của các câu (batch) — tránh lazy-load q.word từng câu (N+1).
+        target_ids = {q.word_id for q in questions if q.word_id}
+        if not target_ids:
+            return
+        target_words = self.db.scalars(select(Word).where(Word.id.in_(target_ids))).all()
+        target_by_id = {w.id: w for w in target_words}
+
+        # Tầng 1: distractor từ lỗi thật (nếu có lịch sử nhầm).
+        personalized_ids: set[int] = set()
+        confusion_map = _build_user_confusion_map(self.db, user_id)
+        if confusion_map:
+            needed_ids: set[int] = set()
+            for q in questions:
+                for cid in confusion_map.get(q.word_id or -1, []):
+                    needed_ids.add(cid)
+            if needed_ids:
+                confused_words = self.db.scalars(select(Word).where(Word.id.in_(needed_ids))).all()
+                confused_by_id = {w.id: w for w in confused_words}
+                for q in questions:
+                    before = (q.metadata_json or {}).get("personalized")
+                    _inject_user_distractors(q, confusion_map, confused_by_id)
+                    if (q.metadata_json or {}).get("personalized") and not before:
+                        personalized_ids.add(q.id)
+
+        # Tầng 2: distractor theo nấc thụ đắc cho các câu chưa được swap ở tầng 1.
+        remaining = [q for q in questions if q.id not in personalized_ids and q.word_id]
+        if not remaining:
+            return
+        # Tiến độ user cho các từ đích (batch) → suy ra stage per-word.
+        progress_rows = self.db.scalars(
+            select(UserProgress).where(
+                UserProgress.user_id == user_id,
+                UserProgress.word_id.in_(target_ids),
+            )
+        ).all()
+        progress_by_word = {p.word_id: p for p in progress_rows}
+        # Gom mọi hanzi confusable của các từ đích còn lại → batch-load 1 lần.
+        conf_hanzi_all: set[str] = set()
+        for q in remaining:
+            tw = target_by_id.get(q.word_id)
+            if not tw:
                 continue
-            options, correct_index, option_word_ids = self.generator._options_with_words(question.word, QuizType.dialogue, seed)
-            if len(options) < 4:
+            for c in (tw.confusable_words_json or []):
+                h = c if isinstance(c, str) else c.get("hanzi")
+                if h:
+                    conf_hanzi_all.add(h)
+        if not conf_hanzi_all:
+            return
+        conf_words = self.db.scalars(select(Word).where(Word.hanzi.in_(conf_hanzi_all))).all()
+        conf_word_by_hanzi = {w.hanzi: w for w in conf_words}
+        for q in remaining:
+            tw = target_by_id.get(q.word_id)
+            if not tw:
                 continue
-            question.options = options
-            question.correct_index = correct_index
-            question.explanation = self.generator._explanation_for(question.word, QuizType.dialogue, seed)
-            question.audio_text = self.generator._audio_for(question.word, QuizType.dialogue, seed)
-            meta = dict(question.metadata_json or {})
-            meta["option_word_ids"] = option_word_ids
-            meta["question_subtype"] = meta.get("question_subtype", QUESTION_SUBTYPE_DIALOGUE)
-            question.metadata_json = meta
-            changed = True
-        if changed:
-            self.db.commit()
+            p = progress_by_word.get(q.word_id)
+            stage = acquisition_stage(
+                seen=p.seen if p else 0,
+                recognition_score=p.recognition_score if p else 0,
+                listening_score=p.listening_score if p else 0,
+                context_score=p.context_score if p else 0,
+                production_score=p.production_score if p else 0,
+                mastery=p.mastery if p else 0,
+            ) if p else None
+            _inject_stage_confusable(q, tw, stage, conf_word_by_hanzi)
 
     def submit(self, payload: QuizSubmitRequest) -> QuizSubmitResponse:
         question_ids = [answer.question_id for answer in payload.answers]
