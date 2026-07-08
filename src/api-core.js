@@ -34,7 +34,10 @@ const RETRY_BACKOFFS_MS = [2000, 4000, 6000, 8000];
 
 async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  // Token admin (nếu caller truyền Authorization qua options.headers) được ưu
+  // tiên; nếu không, dùng token user toàn cục. Nhờ vậy request admin không bị
+  // token user đang đăng nhập ghi đè.
+  if (authToken && !headers.Authorization) headers.Authorization = `Bearer ${authToken}`;
   const backoff = () => RETRY_BACKOFFS_MS[RETRY_BACKOFFS_MS.length - retry] ?? 8000;
   // Chỉ thử lại request idempotent. GET/HEAD luôn an toàn. POST/PUT/PATCH có
   // thể đã được server xử lý xong trước khi kết nối rớt / trả 504 → retry mù sẽ
@@ -686,6 +689,14 @@ export async function loginUser(payload) {
   return request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function forgotPassword(email) {
+  return request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function resetPassword(token, newPassword) {
+  return request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, new_password: newPassword }) });
+}
+
 export async function getMe() {
   return request('/api/auth/me');
 }
@@ -883,5 +894,46 @@ export async function draftQuizFromTopic(payload) {
 // payload: { quiz_title, source, session_type, questions }
 export async function saveQuizToLibrary(payload) {
   return request('/api/custom-vocab/save', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// --- Admin (single admin) ---------------------------------------------------
+// Token admin TÁCH khỏi token user: truyền thẳng qua header mỗi request thay vì
+// setAuthToken toàn cục, để phiên admin không đụng phiên học của người dùng.
+
+const adminHeaders = (token) => ({ Authorization: `Bearer ${token}` });
+
+export async function adminLogin(payload) {
+  return request('/api/admin/login', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function adminListUsers(token) {
+  return request('/api/admin/users', { headers: adminHeaders(token) });
+}
+
+export async function adminSetUserActive(token, userId, isActive) {
+  return request(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+export async function adminDeleteUser(token, userId) {
+  return request(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+}
+
+export async function adminGetConfig(token) {
+  return request('/api/admin/config', { headers: adminHeaders(token) });
+}
+
+export async function adminUpdateConfig(token, updates) {
+  return request('/api/admin/config', {
+    method: 'PATCH',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ updates }),
+  });
 }
 

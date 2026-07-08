@@ -4,7 +4,8 @@ import './index.css'
 import './overhaul.css'
 import App from './App.jsx'
 import { AuthProvider } from './auth-context.jsx'
-import { AuthGate } from './auth-ui.jsx'
+import { AuthGate, ResetPasswordPage } from './auth-ui.jsx'
+import AdminApp from './admin-ui.jsx'
 import { warmUpBackend } from './api-core.js'
 
 // Ping /health sớm để đánh thức backend Render free-tier trước khi user bấm AI.
@@ -21,12 +22,28 @@ window.addEventListener('vite:preloadError', () => {
   window.location.reload();
 });
 
+// Link đặt lại mật khẩu (gửi qua email) trỏ tới /reset-password?token=...
+// SPA rewrite mọi path về index.html, nên nhận diện path ở đây và render trang
+// reset ĐỘC LẬP — ngoài AuthGate — vì người dùng lúc này chưa đăng nhập.
+const isResetRoute = window.location.pathname === '/reset-password';
+// Trang /admin độc lập hoàn toàn: có phiên đăng nhập admin riêng (token tách
+// khỏi user), nên render NGOÀI AuthProvider/AuthGate — không dùng phiên user.
+const isAdminRoute = window.location.pathname === '/admin';
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <AuthProvider>
-      <AuthGate>
-        <App />
-      </AuthGate>
-    </AuthProvider>
+    {isAdminRoute ? (
+      <AdminApp />
+    ) : (
+      <AuthProvider>
+        {isResetRoute ? (
+          <ResetPasswordPage />
+        ) : (
+          <AuthGate>
+            <App />
+          </AuthGate>
+        )}
+      </AuthProvider>
+    )}
   </StrictMode>,
 )

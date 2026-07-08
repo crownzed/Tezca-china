@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     turso_database_url: str = ""
     turso_auth_token: str = ""
     deepseek_api_key: str = ""
+
+    # Single-admin credentials. Không hardcode: đọc từ env. Khi cả hai còn rỗng,
+    # dependency require_admin trả 503 "admin not configured". password_hash phải
+    # là bcrypt hash (cùng thư viện passlib[bcrypt] mà auth_service dùng).
+    admin_email: str = ""
+    admin_password_hash: str = ""
     gemini_api_keys: str = ""  # comma-separated fallback keys for vilao.ai
     gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
     gemini_model: str = "ram/gemini-3.5-flash-low"
@@ -39,7 +45,33 @@ class Settings(BaseSettings):
     # trên (dùng cho fallback đọc tiếng Trung) để chọn giọng Việt tự nhiên hơn.
     elevenlabs_feedback_voice_id: str = "BlZK9tHPU6XXjwOSIiYA"
 
+    # SMTP — gửi email đặt lại mật khẩu. Nếu smtp_host trống, luồng reset vẫn
+    # chạy (sinh + lưu token) nhưng chỉ log link ra console thay vì gửi mail —
+    # tiện cho môi trường dev không cấu hình SMTP.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""  # địa chỉ From; mặc định dùng smtp_user nếu trống
+    smtp_use_tls: bool = True  # STARTTLS trên cổng 587
+    # Gốc URL frontend để dựng link reset: {frontend_url}/reset-password?token=...
+    frontend_url: str = "http://localhost:5173"
+    # Thời hạn token đặt lại mật khẩu (phút).
+    password_reset_expire_minutes: int = 30
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @property
+    def smtp_from_addr(self) -> str:
+        return self.smtp_from or self.smtp_user
+
+    @property
+    def admin_configured(self) -> bool:
+        return bool(self.admin_email.strip() and self.admin_password_hash.strip())
+
+    @property
+    def admin_email_normalized(self) -> str:
+        return self.admin_email.strip().lower()
 
     @property
     def cors_list(self) -> list[str]:

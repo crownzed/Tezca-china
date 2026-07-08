@@ -71,6 +71,7 @@ def init_db() -> None:
     if settings.database_url.startswith("sqlite") or _is_turso(settings.database_url):
         _ensure_sqlite_word_columns()
         _ensure_sqlite_user_progress_columns()
+    _ensure_user_columns()
     _ensure_indexes()
 
 
@@ -110,6 +111,26 @@ def _ensure_sqlite_word_columns() -> None:
         for name, ddl in columns.items():
             if name not in existing:
                 conn.execute(text(f"ALTER TABLE words ADD COLUMN {name} {ddl}"))
+
+def _ensure_user_columns() -> None:
+    """Thêm cột ``is_active`` vào bảng ``users`` đã tồn tại.
+
+    ``create_all`` không ALTER bảng cũ, nên user đã đăng ký trước khi có cột này
+    sẽ thiếu ``is_active`` -> mọi query User vỡ. SQLite/libSQL không hỗ trợ
+    ``ADD COLUMN IF NOT EXISTS`` nên phải kiểm tra qua PRAGMA; Postgres hỗ trợ
+    trực tiếp. Mặc định 1 (true) để user hiện có vẫn đăng nhập được sau migrate.
+    """
+    if settings.database_url.startswith("sqlite") or _is_turso(settings.database_url):
+        with engine.begin() as conn:
+            existing = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
+            if "is_active" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+    else:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"
+            ))
+
 
 def _ensure_sqlite_user_progress_columns() -> None:
     columns = {
