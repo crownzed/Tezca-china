@@ -1,9 +1,30 @@
 import { useEffect, useState, useRef } from 'react';
-import { Award, CheckCircle2, Flame, KeyRound, Loader2, LogIn, LogOut, Medal, Pencil, Save, Trash2, Trophy, User, UserPlus, X } from 'lucide-react';
+import { Award, CheckCircle2, Eye, EyeOff, Flame, KeyRound, Loader2, LogIn, LogOut, Medal, Pencil, Save, Trash2, Trophy, User, UserPlus, X } from 'lucide-react';
 import { changePassword, deleteAccount, forgotPassword, getLeaderboard, getUserProfile, resetPassword, updateProfile } from './api-core';
 import { useAuth } from './auth-core';
 import { scopedKey } from './user-scope';
 import SpaceVortexBackground from './components/SpaceVortexBackground.jsx';
+
+// Ô nhập mật khẩu kèm nút hiện/ẩn (icon con mắt). Toggle type text/password cục
+// bộ; mọi prop khác (value, onChange, required, minLength, autoComplete...) chuyển
+// thẳng xuống input để dùng thay cho <input type="password"> ở mọi form auth.
+function PasswordInput(props) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="password-input">
+      <input {...props} type={show ? 'text' : 'password'} />
+      <button
+        type="button"
+        className="password-input__toggle"
+        onClick={() => setShow(v => !v)}
+        aria-label={show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+        tabIndex={-1}
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </span>
+  );
+}
 
 function AuthForm({ mode, setMode }) {
   const { login, register } = useAuth();
@@ -107,7 +128,7 @@ function AuthForm({ mode, setMode }) {
         )}
         <label>
           Mật khẩu
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+          <PasswordInput value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         </label>
 
         {mode === 'login' && (
@@ -212,11 +233,11 @@ export function ResetPasswordPage() {
           <form className="auth-form" onSubmit={handleSubmit}>
             <label>
               Mật khẩu mới
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
+              <PasswordInput value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
             </label>
             <label>
               Xác nhận mật khẩu mới
-              <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password" />
+              <PasswordInput value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password" />
             </label>
 
             {error && <p className="auth-form__error">{error}</p>}
@@ -563,15 +584,15 @@ function ChangePasswordSection() {
         <form className="account-form" onSubmit={handleSubmit}>
           <label>
             Mật khẩu hiện tại
-            <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required minLength={6} autoComplete="current-password" />
+            <PasswordInput value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required minLength={6} autoComplete="current-password" />
           </label>
           <label>
             Mật khẩu mới
-            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
+            <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
           </label>
           <label>
             Xác nhận mật khẩu mới
-            <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
+            <PasswordInput value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
           </label>
           {error && <p className="account-form__error">{error}</p>}
           <div className="account-form__actions">
