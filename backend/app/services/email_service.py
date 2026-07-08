@@ -1,6 +1,7 @@
 import logging
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr
 
 from ..settings import settings
 
@@ -23,7 +24,9 @@ class EmailService:
 
         message = EmailMessage()
         message["Subject"] = subject
-        message["From"] = settings.smtp_from_addr
+        # Tên hiển thị (nếu có) đứng trước địa chỉ để hộp thư hiện brand thay vì
+        # địa chỉ Gmail cá nhân. formataddr encode đúng tên có dấu tiếng Việt.
+        message["From"] = formataddr((settings.smtp_from_name, settings.smtp_from_addr)) if settings.smtp_from_name else settings.smtp_from_addr
         message["To"] = to
         message.set_content(body_text)
         if body_html:

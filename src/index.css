@@ -4068,6 +4068,42 @@ blockquote small {
   font: inherit;
 }
 
+/* Ô mật khẩu có nút hiện/ẩn: input chừa lề phải cho nút mắt đặt đè lên. */
+.password-input {
+  position: relative;
+  display: block;
+}
+
+.password-input input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+/* Thẻ glass (trang đăng nhập/reset) đặt padding input bằng !important, nên phải
+   ghi đè cùng mức để chừa chỗ cho nút mắt — nếu không nút sẽ đè lên chữ. */
+.auth-gate__card--glass .password-input input {
+  padding-right: 44px !important;
+}
+
+.password-input__toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.password-input__toggle:hover {
+  color: var(--text);
+}
+
 .auth-form__error {
   margin: 0;
   color: var(--danger-text);

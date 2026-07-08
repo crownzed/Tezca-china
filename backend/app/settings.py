@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = ""  # địa chỉ From; mặc định dùng smtp_user nếu trống
+    # Tên hiển thị người gửi (kèm trước địa chỉ). Gmail vẫn để lộ địa chỉ thật
+    # trong header, nhưng hộp thư người nhận hiện tên này thay vì email cá nhân.
+    smtp_from_name: str = "Học tiếng Trung"
     smtp_use_tls: bool = True  # STARTTLS trên cổng 587
     # Gốc URL frontend để dựng link reset: {frontend_url}/reset-password?token=...
     frontend_url: str = "http://localhost:5173"
