@@ -5624,3 +5624,392 @@ blockquote small {
     animation: none !important;
   }
 }
+
+/* ══ Admin panel (/admin) ═══════════════════════════════════════════════════
+   Data-dense dashboard. Mỗi trường hiển thị ĐÚNG trạng thái của nó:
+   - Tài khoản: chip xanh (hoạt động) / đỏ (đã khoá), hàng mờ khi đang xử lý.
+   - Cấu hình: field "đã đổi" viền vàng + cờ, nút hoàn tác từng field.
+   Màu lấy từ token chung (--jade/--cinnabar/--gold/--line) nên tự hợp light+dark. */
+
+.admin-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+  min-height: 100dvh;
+}
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--jade);
+}
+
+.admin-topbar__brand h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-topbar__brand p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.admin-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.admin-section {
+  padding: 22px;
+}
+
+.admin-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.admin-section__header h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-section__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── KPI strip ─────────────────────────────────────────────────────────── */
+.admin-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.admin-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--control-bg);
+}
+
+.admin-stat span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.admin-stat strong {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.admin-stat--active strong { color: var(--jade); }
+.admin-stat--locked strong { color: var(--cinnabar); }
+
+/* ── User list ─────────────────────────────────────────────────────────── */
+.admin-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--jade);
+  border-radius: var(--radius);
+  background: var(--paper);
+  transition: border-color 200ms ease, opacity 200ms ease, background 200ms ease;
+}
+
+.admin-user-row--locked {
+  border-left-color: var(--cinnabar);
+  background: var(--cinnabar-soft);
+}
+
+.admin-user-row--busy {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.admin-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-user-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-user-name strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-user-handle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.admin-user-email {
+  font-size: 13px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.admin-user-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.admin-user-date {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.admin-user-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.admin-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.admin-action--unlock {
+  color: var(--jade);
+  border-color: color-mix(in srgb, var(--jade) 40%, transparent);
+}
+
+/* ── Status badge ──────────────────────────────────────────────────────── */
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.admin-badge--active {
+  color: var(--badge-strong-text);
+  background: var(--jade-soft);
+  border-color: color-mix(in srgb, var(--jade) 26%, transparent);
+}
+
+.admin-badge--locked {
+  color: var(--cinnabar);
+  background: var(--cinnabar-soft);
+  border-color: color-mix(in srgb, var(--cinnabar) 30%, transparent);
+}
+
+/* ── Config form ───────────────────────────────────────────────────────── */
+.admin-dirty-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+}
+
+.admin-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.admin-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.admin-config-field--dirty {
+  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+  background: var(--gold-soft);
+}
+
+.admin-config-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  font-family: 'Fira Code', ui-monospace, monospace;
+  word-break: break-all;
+}
+
+.admin-field-flag {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  background: var(--gold-soft);
+  padding: 1px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.admin-config-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-config-input input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--text);
+  font-size: 14px;
+  font-family: 'Fira Code', ui-monospace, monospace;
+}
+
+.admin-config-input input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--jade);
+}
+
+.admin-field-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--gold) 36%, transparent);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--gold);
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.admin-field-reset:hover { background: var(--gold-soft); }
+
+.admin-config-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-config-actions .btn-primary,
+.admin-config-actions .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Shared states: loading / empty ────────────────────────────────────── */
+.admin-loading {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+  color: var(--jade);
+}
+
+.admin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 0;
+  color: var(--muted);
+}
+
+.admin-login-card { max-width: 420px; }
+
+@media (max-width: 720px) {
+  .admin-stat-strip { grid-template-columns: 1fr; }
+  .admin-config-grid { grid-template-columns: 1fr; }
+  .admin-user-row { flex-direction: column; align-items: stretch; }
+  .admin-user-actions { width: 100%; }
+  .admin-action { flex: 1; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-user-row,
+  .admin-config-field,
+  .admin-config-input input,
+  .admin-field-reset {
+    transition: none !important;
+  }
+}
