@@ -72,7 +72,10 @@ export function recordGrammarResult(lessonId, { correct, total }) {
   const nextCorrect = prev.correct + correct;
   const nextWrong = prev.wrong + wrong;
   const mastery = clamp(nextCorrect * 14 - nextWrong * 18, 0, 100);
-  const box = passed ? Math.min(5, Math.max(1, prev.box) + 1) : 1;
+  // Pass → lên 1 box (lần đầu 0→1, vào box 1 = ôn cùng ngày theo
+  // LEITNER_INTERVALS[0]=0). Trước đây Math.max(1, prev.box)+1 khiến pass đầu
+  // nhảy thẳng box 2 (1 ngày), bỏ qua nấc ôn cùng ngày. Fail → tụt về box 1.
+  const box = passed ? Math.min(5, prev.box + 1) : 1;
   const now = Date.now();
   const intervalDays = LEITNER_INTERVALS[box - 1] ?? 0;
 

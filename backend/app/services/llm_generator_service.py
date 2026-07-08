@@ -82,18 +82,13 @@ def _validate_word_entry(item: dict) -> Tuple[bool, str]:
     if not isinstance(questions, list) or len(questions) == 0:
         return False, "No questions"
 
-    valid_count = 0
-    for q in questions:
-        ok, _ = _validate_question(q, item["hanzi"])
-        if ok:
-            valid_count += 1
-
-    if valid_count == 0:
+    # Validate MỘT lần mỗi câu (trước đây gọi 2 lần: đếm rồi lọc lại).
+    valid_questions = [q for q in questions if _validate_question(q, item["hanzi"])[0]]
+    if not valid_questions:
         return False, "No valid questions after validation"
 
-    # Update questions list to only valid ones
-    item["questions"] = [q for q in questions if _validate_question(q, item["hanzi"])[0]]
-    return True, f"{len(item['questions'])} valid questions"
+    item["questions"] = valid_questions
+    return True, f"{len(valid_questions)} valid questions"
 
 
 def _extract_content(result_json: dict):

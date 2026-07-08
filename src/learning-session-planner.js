@@ -153,7 +153,17 @@ export function buildTodaySessionPlan({ analytics, stats, focusLevel = 1, modeId
 
 export function markLearningSessionStarted() {
   try {
-    window.localStorage.setItem(scopedKey('lastLearningSessionStartedAt'), new Date().toISOString());
+    const startedAt = new Date().toISOString();
+    window.localStorage.setItem(scopedKey('lastLearningSessionStartedAt'), startedAt);
+    // Ghi một summary "phiên bắt đầu" với completed_at=null để recentCompletionRate
+    // đếm được cả phiên BỎ DỞ. Trước đây chỉ phiên hoàn thành mới được lưu summary,
+    // nên completed/tổng luôn = 1 (completionRate luôn 100%) → gate ready_deep hiển
+    // nhiên đúng và tín hiệu "quá tải" chết. markLearningSessionCompleted sẽ cập nhật
+    // record dở gần nhất thay vì thêm mới.
+    const raw = window.localStorage.getItem(scopedKey('learningSessionSummaries'));
+    const summaries = (() => { try { return JSON.parse(raw) || []; } catch { return []; } })();
+    const next = [...summaries, { started_at: startedAt, completed_at: null }].slice(-20);
+    window.localStorage.setItem(scopedKey('learningSessionSummaries'), JSON.stringify(next));
   } catch {
     /* ignore */
   }

@@ -90,6 +90,17 @@ class ExtractFeaturesTest(unittest.TestCase):
         self.assertEqual(f.due_urgency, 1.0)
         self.assertGreater(f.forgetting_risk, 0.0)
 
+    def test_not_yet_due_word_zero_urgency(self):
+        # Chưa tới hạn ôn (overdue_days < 0) -> due_urgency = 0 dù gần tới hạn.
+        # Trước đây dùng elapsed/interval nên từ chưa tới hạn vẫn nhận urgency cao.
+        f = extract_features(
+            seen=5, wrong=0, interval_days=10,
+            elapsed_days=9, overdue_days=-1,
+            recent_error_count=0, word_level=1, focus_level=1,
+            frequency_band="core_hsk",
+        )
+        self.assertEqual(f.due_urgency, 0.0)
+
     def test_error_need_rises_with_wrongs(self):
         low = extract_features(
             seen=10, wrong=0, interval_days=3, elapsed_days=1, overdue_days=0,

@@ -564,6 +564,17 @@ def score_tones(audio_bytes: bytes, target_tones: list[int]) -> dict:
             feedback_lines.append(f"Âm tiết {pos + 1}: chưa phát âm rõ.")
             continue
 
+        # Thanh nhẹ (5) không có contour cố định — template phẳng [3,3] không
+        # phải chuẩn đáng tin, nên KHÔNG đưa slot này vào trung bình accuracy
+        # (trước đây contour thật bị so với template phẳng → kéo điểm oan). Vẫn
+        # giữ per_syllable để alignment vị trí không lệch.
+        if tone == 5:
+            per_syllable.append({
+                "pos": pos, "tone": tone, "distance": None, "ok": True,
+                "feedback": "",
+            })
+            continue
+
         seg_norm = _shape_normalize(segments[pos])
         template = _center_template(_TONE_TEMPLATES.get(tone, _TONE_TEMPLATES[5]))
         dist = _contour_distance(seg_norm, template)
@@ -582,7 +593,12 @@ def score_tones(audio_bytes: bytes, target_tones: list[int]) -> dict:
     # could hide a moderate miss behind near-perfect neighbours.
     import numpy as np
 
-    tone_accuracy = float(np.mean(accuracies)) if accuracies else 0.0
+    # Mọi slot đều là thanh nhẹ (5) → không có gì để chấm bằng DSP. Báo lỗi mềm
+    # để tầng gọi rơi về identity_score thay vì trả accuracy 0 gây phạt oan.
+    if not accuracies:
+        raise ToneDspError("Không có thanh điệu xác định để chấm (toàn thanh nhẹ).")
+
+    tone_accuracy = float(np.mean(accuracies))
 
     # Macro layer: reuse the same contour for delivery-level diagnostics.
     frame_step = _frame_step_sec(len(samples) / framerate, len(contour))

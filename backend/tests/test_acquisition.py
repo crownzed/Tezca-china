@@ -103,6 +103,19 @@ class AcquisitionStageTest(unittest.TestCase):
             "USABLE",
         )
 
+    def test_mastered_blocked_without_context(self):
+        # Sản sinh + trí nhớ cao nhưng CHƯA hiểu ngữ cảnh (context=0) không được
+        # là MASTERED: MASTERED phải bao hàm điều kiện của USABLE (context đủ).
+        stage = _stage(
+            seen=20,
+            recognition_score=30,
+            context_score=0,
+            production_score=80,
+            mastery=85,
+        )
+        self.assertNotEqual(stage, "MASTERED")
+        self.assertNotEqual(stage, "USABLE")
+
 
 class MonotonicityTest(unittest.TestCase):
     def test_stage_never_regresses_as_scores_rise(self):

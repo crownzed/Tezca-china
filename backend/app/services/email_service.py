@@ -19,7 +19,13 @@ class EmailService:
     @staticmethod
     def send(to: str, subject: str, body_text: str, body_html: str | None = None) -> bool:
         if not EmailService.is_configured():
-            logger.warning("SMTP chưa cấu hình — bỏ qua gửi mail tới %s. Nội dung:\n%s", to, body_text)
+            # Ở production KHÔNG log nội dung: body chứa link reset kèm token,
+            # đổ ra log là rò rỉ đường đặt lại mật khẩu cho ai đọc được log.
+            # Chỉ dev (SMTP chưa cấu hình) mới in link ra console cho tiện thử.
+            if settings.is_production:
+                logger.error("SMTP chưa cấu hình ở production — KHÔNG gửi được mail tới %s.", to)
+            else:
+                logger.warning("SMTP chưa cấu hình — bỏ qua gửi mail tới %s. Nội dung:\n%s", to, body_text)
             return False
 
         message = EmailMessage()

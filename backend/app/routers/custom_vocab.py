@@ -5,7 +5,7 @@ from typing import List
 import logging
 
 from ..db import get_db
-from ..models import Word, Question, QuizType, LearningSession
+from ..models import Word, Question, QuizType, LearningSession, User
 from ..schemas import (
     CustomVocabGenerateRequest,
     CustomVocabGenerateResponse,
@@ -26,6 +26,14 @@ from .quiz import _question_out
 
 router = APIRouter(prefix="/api/custom-vocab", tags=["custom_vocab"])
 logger = logging.getLogger(__name__)
+
+_GENERIC_ERROR = "Không xử lý được yêu cầu, vui lòng thử lại."
+
+
+def _safe_correct_index(value) -> int:
+    """Ép correct_index từ LLM về [0, 3]. Options luôn là 4 lựa chọn nên index
+    ngoài khoảng (LLM trả bậy) sẽ khiến câu không bao giờ chấm đúng — clamp về 0."""
+    return value if isinstance(value, int) and 0 <= value <= 3 else 0
 
 
 # ---------------------------------------------------------------------------
@@ -99,11 +107,10 @@ def _passage_drafts(text: str, hsk_level: int, count: int, subtypes: List[str] |
 def generate_custom_vocab(
     request: CustomVocabGenerateRequest,
     db: Session = Depends(get_db),
-    # Uncomment the following line if auth is required
-    # user=Depends(get_current_user)
+    user: User = Depends(get_current_user),
 ):
     try:
-        user_id = "local-user" # Or user.id if using auth
+        user_id = user.id
         
         # 1. Gọi DeepSeek API để sinh dữ liệu
         data = generate_exercises_for_vocab(request.words)
@@ -146,7 +153,11 @@ def generate_custom_vocab(
                     options = q_data.get("options", [])
                     correct_index = q_data.get("correct_index", 0)
                     explanation = q_data.get("explanation", "")
-                    
+                    # Phòng thủ: LLM có thể trả correct_index ngoài [0,3] → chấm
+                    # sai/không bao giờ đúng. Ép về khoảng hợp lệ.
+                    if not isinstance(correct_index, int) or not (0 <= correct_index < 4):
+                        correct_index = 0
+
                     if len(options) == 4:
                         q = Question(
                             word_id=word.id,
@@ -187,19 +198,23 @@ def generate_custom_vocab(
             questions=[_question_out(q) for q in generated_questions]
         )
         
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Generate custom vocab error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Không xử lý được yêu cầu")
 
 
 @router.post("/generate-from-text", response_model=CustomVocabGenerateResponse)
 def generate_from_text(
     request: PassageGenerateRequest,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     try:
-        user_id = "local-user"
+        user_id = user.id
 
         # 1. Goi LLM de sinh 5 cau hoi suy luan ngon ngu tu doan van
         data = generate_questions_for_passage(request.text)
@@ -230,7 +245,7 @@ def generate_from_text(
                 quiz_type=q_type,
                 prompt=q_data.get("prompt", ""),
                 options=options,
-                correct_index=q_data.get("correct_index", 0),
+                correct_index=_safe_correct_index(q_data.get("correct_index", 0)),
                 explanation=q_data.get("explanation", ""),
                 audio_text="",
                 metadata_json={
@@ -269,7 +284,7 @@ def generate_from_text(
     except Exception as e:
         db.rollback()
         logger.error(f"Generate from text error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Không xử lý được yêu cầu")
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +294,7 @@ def generate_from_text(
 # ---------------------------------------------------------------------------
 
 @router.post("/draft/vocab", response_model=QuizDraftOut)
-def draft_from_vocab(request: CustomVocabGenerateRequest):
+def draft_from_vocab(request: CustomVocabGenerateRequest, user: User = Depends(get_current_user)):
     """Nguon [Tu danh sach tu vung]: sinh bai tap per-word de xem truoc."""
     try:
         return _vocab_drafts(request.words)
@@ -287,11 +302,11 @@ def draft_from_vocab(request: CustomVocabGenerateRequest):
         raise
     except Exception as e:
         logger.error(f"Draft vocab error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Không xử lý được yêu cầu")
 
 
 @router.post("/draft/passage", response_model=QuizDraftOut)
-def draft_from_passage(request: PassageGenerateRequest):
+def draft_from_passage(request: PassageGenerateRequest, user: User = Depends(get_current_user)):
     """Nguon [Tu doan van]: sinh cau hoi suy luan tu doan van nguoi dung dan."""
     try:
         return _passage_drafts(
@@ -305,11 +320,11 @@ def draft_from_passage(request: PassageGenerateRequest):
         raise
     except Exception as e:
         logger.error(f"Draft passage error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Không xử lý được yêu cầu")
 
 
 @router.post("/draft/topic", response_model=QuizDraftOut)
-def draft_from_topic(request: TopicGenerateRequest):
+def draft_from_topic(request: TopicGenerateRequest, user: User = Depends(get_current_user)):
     """Nguon [Tu chu de] (ket hop ca 2): AI sinh doan van theo chu de + cap HSK,
     roi sinh cau hoi tu chinh doan van do."""
     try:
@@ -328,13 +343,13 @@ def draft_from_topic(request: TopicGenerateRequest):
         raise
     except Exception as e:
         logger.error(f"Draft topic error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Không xử lý được yêu cầu")
 
 
 @router.post("/save", response_model=CustomVocabGenerateResponse)
-def save_quiz(request: SaveQuizRequest, db: Session = Depends(get_db)):
+def save_quiz(request: SaveQuizRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Luu bo cau hoi (da xem truoc) vao DB + tao LearningSession de hoc lai sau."""
-    user_id = "local-user"
+    user_id = user.id
     try:
         generated_questions = []
         target_words = []
@@ -380,7 +395,7 @@ def save_quiz(request: SaveQuizRequest, db: Session = Depends(get_db)):
                 quiz_type=q_type,
                 prompt=dq.prompt,
                 options=dq.options,
-                correct_index=dq.correct_index,
+                correct_index=_safe_correct_index(dq.correct_index),
                 explanation=dq.explanation,
                 audio_text=(dq.word.hanzi if dq.word and dq.word.hanzi else ""),
                 metadata_json={
@@ -418,4 +433,4 @@ def save_quiz(request: SaveQuizRequest, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"Save quiz error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Không xử lý được yêu cầu")

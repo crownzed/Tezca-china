@@ -150,6 +150,10 @@ class SessionService:
             "limit": config["limit"],
             "due_count": due_count,
             "weak_count": weak_count,
+            # due_count/weak_count là TỔNG đến hạn/yếu (dùng cho thống kê). Số từ
+            # thật sự đưa vào phiên chỉ là len(focus_words) (cap [:6]) — tách riêng
+            # để UI hiển thị đúng số giao thay vì con số tổng gây hiểu nhầm.
+            "focus_count": len(focus_words),
             "new_count": new_count,
             "learning_mode": learning_mode if learning_mode in ("hsk", "natural") else "hsk",
             "target_skills": [self._skill_for_quiz_type(quiz_type)],
@@ -185,7 +189,21 @@ class SessionService:
 
     def _focus_words(self, user_id: str, due_rows: list[UserProgress], weak_rows: list[UserProgress], focus_level: int, learning_mode: str = "hsk", topics: list[str] | None = None) -> list[dict]:
         progress_by_word = {row.word_id: row for row in [*due_rows, *weak_rows]}
-        word_ids = list(progress_by_word.keys())[:12]
+        # Sắp theo urgency (rẻ tiền) TRƯỚC khi cắt còn 12 candidate — nếu không,
+        # thứ tự quét DB tùy tiện quyết định 12 từ nào lọt vào, và priority_score
+        # (tính sau) chỉ xếp hạng đúng 12 từ tùy tiện đó thay vì 12 từ cấp bách
+        # nhất. next_review_at None (chưa lên lịch / quá hạn nhất) xếp trước, rồi
+        # đến hạn sớm nhất; phá hòa bằng tỉ lệ đúng thấp (từ yếu ưu tiên).
+        _EPOCH = datetime.min
+
+        def _urgency_key(wid: int) -> tuple:
+            row = progress_by_word[wid]
+            due_at = row.next_review_at or _EPOCH
+            accuracy = (row.correct or 0) / max(1, row.seen or 1)
+            return (due_at, accuracy)
+
+        ranked_ids = sorted(progress_by_word.keys(), key=_urgency_key)
+        word_ids = ranked_ids[:12]
         if not word_ids:
             return []
         words = self.db.scalars(select(Word).where(Word.id.in_(word_ids))).all()

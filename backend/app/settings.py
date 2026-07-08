@@ -1,10 +1,15 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEFAULT_JWT_SECRET = "change-me-in-production-use-env-var"
 
 
 class Settings(BaseSettings):
     app_name: str = "Chinese Learning Core"
+    # "production" bật các kiểm tra cứng khi khởi động (vd jwt_secret phải đổi).
+    env: str = "development"
     database_url: str = "sqlite:///./dev.db"
-    jwt_secret: str = "change-me-in-production-use-env-var"
+    jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_expire_hours: int = 168
     cors_origins: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"
@@ -79,6 +84,21 @@ class Settings(BaseSettings):
     @property
     def cors_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+
+    @property
+    def is_production(self) -> bool:
+        return self.env.strip().lower() in ("production", "prod")
+
+    @model_validator(mode="after")
+    def _enforce_production_secrets(self) -> "Settings":
+        # Ở production, từ chối khởi động khi jwt_secret còn giá trị mặc định —
+        # secret công khai cho phép giả mạo token của bất kỳ user nào.
+        if self.is_production and self.jwt_secret.strip() == _DEFAULT_JWT_SECRET:
+            raise ValueError(
+                "jwt_secret vẫn là giá trị mặc định ở production. "
+                "Đặt biến môi trường JWT_SECRET thành một chuỗi bí mật ngẫu nhiên."
+            )
+        return self
 
     @property
     def gemini_keys_list(self) -> list[str]:

@@ -66,9 +66,12 @@ class SRSService:
             if repetition == 0:
                 interval = 3 if quality == 5 else 1
             elif repetition == 1:
-                interval = 3
+                # Kế thừa interval rep0 (nhân ease) thay vì hardcode 3, để bonus
+                # quality-5 ở rep0 (interval=3) không bị xóa: 3→~8 thay vì 3→3.
+                # Lần đầu chưa hoàn hảo (interval=1) vẫn cho ~3, giữ cửa sổ hợp lý.
+                interval = max(3, round(interval * ease))
             elif repetition == 2:
-                interval = 7
+                interval = max(7, round(interval * ease))
             else:
                 interval = max(1, round(interval * ease))
             repetition += 1

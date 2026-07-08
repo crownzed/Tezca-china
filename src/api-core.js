@@ -8,6 +8,22 @@ export function setAuthToken(token) {
   authToken = token || null;
 }
 
+// Handler được auth-context đăng ký để dọn phiên khi token hết hạn/không hợp lệ
+// (401). Trước đây chỉ getMe() bắt 401 để logout; mọi call khác ném lỗi generic
+// nên token chết vẫn dính, user tưởng còn đăng nhập. Giờ MỌI 401 đều báo về đây.
+let onAuthExpired = null;
+
+export function setAuthExpiredHandler(handler) {
+  onAuthExpired = typeof handler === 'function' ? handler : null;
+}
+
+// Gọi handler đã đăng ký (nếu có). Bọc try/catch để lỗi trong handler không
+// làm hỏng luồng ném lỗi của request().
+function notifyUnauthorized() {
+  if (!onAuthExpired) return;
+  try { onAuthExpired(); } catch { /* ignore */ }
+}
+
 // Đánh thức backend Render free-tier ngay khi mở app, để lần bấm AI đầu tiên
 // không phải chờ cold start ~30s. Fire-and-forget: nuốt mọi lỗi vì đây chỉ là
 // tối ưu, không được chặn hay làm hỏng luồng khởi động UI.
@@ -63,6 +79,14 @@ async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
     if ((res.status === 502 || res.status === 503 || res.status === 504) && canRetry) {
       await delay(backoff());
       return request(path, options, retry - 1);
+    }
+    // 401 trên request MANG token user toàn cục → token đã hết hạn/không hợp lệ.
+    // Phát tín hiệu clear-auth tập trung để auth-context đăng xuất sạch, thay vì
+    // chỉ getMe() mới phát hiện (các call khác trước đây ném lỗi mà token chết
+    // vẫn dính). Bỏ qua khi caller tự truyền Authorization (phiên admin tách
+    // riêng) để không đăng xuất nhầm phiên học.
+    if (res.status === 401 && authToken && !(options.headers || {}).Authorization) {
+      notifyUnauthorized();
     }
     let detail = res.status >= 502 ? COLD_START_MESSAGE : `API ${res.status}`;
     try {

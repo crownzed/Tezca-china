@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..models import Example, Question, QuizType, Word
 from .distractor_policy import order_distractors_by_stage
 from .template_engine import get_template_engine
+from .viet_distractor import get_vietnamese_aware_distractors
 
 # CJK Unified Ideographs: basic + extension A + compatibility
 _CJK_RANGE = r"一-鿿㐀-䶿豈-﫿"
@@ -341,16 +342,21 @@ class QuestionGeneratorService:
                 if len(chosen) >= count:
                     break
         if len(chosen) < count:
-            remaining = [w for w in pool if w.id not in chosen_ids]
-            if word.pos:
-                same_pos = [w for w in remaining if w.pos == word.pos]
-                other = [w for w in remaining if w.pos != word.pos]
-                shuffle(same_pos)
-                shuffle(other)
-                remaining = same_pos + other
-            else:
-                shuffle(remaining)
-            chosen.extend(remaining[: count - len(chosen)])
+            # Bù phần thiếu bằng distractor "viet-aware" (nhầm lẫn đặc thù người
+            # Việt: đồng âm khác thanh, gần tự, gần nghĩa cùng chủ đề...) thay vì
+            # random thuần — cùng pool nên không thêm truy vấn, và options chỉ
+            # được ráp + tính correct_index SAU ở _options_with_words nên không
+            # ảnh hưởng chấm điểm. Thiếu pattern thì get_vietnamese_aware_distractors
+            # tự fallback random, giữ nguyên hành vi bù cũ.
+            remaining = [w for w in pool if w.id not in chosen_ids and w.id != word.id]
+            viet = get_vietnamese_aware_distractors(word, remaining, count - len(chosen))
+            for item in viet:
+                cand = item["distractor"]
+                if cand.id not in chosen_ids:
+                    chosen.append(cand)
+                    chosen_ids.add(cand.id)
+                if len(chosen) >= count:
+                    break
         return chosen[:count]
 
     def _options_for(self, word: Word, quiz_type: QuizType, seed: int | None = None) -> tuple[list[str], int]:
@@ -380,11 +386,21 @@ class QuestionGeneratorService:
         if len(pool) < 3:
             return [], 0, []
         pos_pool = _pos_filtered_pool(word, pool, quiz_type)
-        distractors = self._pick_distractors(word, pos_pool, 3)
+        # listening/dialogue/translation lọc bỏ distractor không sinh được câu
+        # (xem dưới) nên lấy dư ứng viên để vẫn đủ 3 option sau khi lọc, tránh
+        # câu bị loại chỉ vì vài distractor thiếu example.
+        _sentence_types = (QuizType.listening, QuizType.dialogue, QuizType.translation)
+        pick_count = 8 if quiz_type in _sentence_types else 3
+        distractors = self._pick_distractors(word, pos_pool, pick_count)
         if len(distractors) < 3:
             return [], 0, []
 
         # Mỗi phần tử: (text, word_id). word_id của đáp án đúng là word.id.
+        # listening/dialogue/translation: đáp án đúng là CÂU/ĐOẠN đầy đủ. Nếu
+        # distractor thiếu example mà rơi về meaning_vi NGẮN thì đáp án đúng trở
+        # thành option dài bất thường → lộ đáp án qua độ dài. Vì vậy chỉ nhận
+        # distractor cũng sinh được câu/đoạn CÙNG DẠNG; distractor không có thì
+        # BỎ QUA (không thêm option cụt). Thiếu ứng viên → dedup <4 → câu bị loại.
         if quiz_type == QuizType.listening:
             listening = self._listening_for_word(word, seed)
             if not listening:
@@ -392,8 +408,8 @@ class QuestionGeneratorService:
             pairs = [(listening["vi"], word.id)]
             for item in distractors:
                 item_listening = self._listening_for_word(item, seed)
-                text = item_listening["vi"] if item_listening else item.meaning_vi or item.meaning_en
-                pairs.append((text, item.id))
+                if item_listening:
+                    pairs.append((item_listening["vi"], item.id))
         elif quiz_type == QuizType.dialogue:
             dialogue = self._dialogue_for_word(word, seed)
             if not dialogue:
@@ -401,8 +417,8 @@ class QuestionGeneratorService:
             pairs = [(dialogue.get("option_vi", dialogue["vi"]), word.id)]
             for item in distractors:
                 item_dialogue = self._dialogue_for_word(item, seed)
-                text = item_dialogue.get("option_vi", item_dialogue["vi"]) if item_dialogue else item.meaning_vi or item.meaning_en
-                pairs.append((text, item.id))
+                if item_dialogue:
+                    pairs.append((item_dialogue.get("option_vi", item_dialogue["vi"]), item.id))
         elif quiz_type == QuizType.translation:
             paragraph = self._paragraph_for_word(word, seed)
             if not paragraph:
@@ -410,8 +426,8 @@ class QuestionGeneratorService:
             pairs = [(paragraph["vi"], word.id)]
             for item in distractors:
                 item_paragraph = self._paragraph_for_word(item, seed)
-                text = item_paragraph["vi"] if item_paragraph else item.meaning_vi or item.meaning_en
-                pairs.append((text, item.id))
+                if item_paragraph:
+                    pairs.append((item_paragraph["vi"], item.id))
         elif quiz_type == QuizType.drag_drop:
             # Vấn đề 2: drag_drop không dùng multiple-choice options.
             # UI sắp xếp token trực tiếp — chỉ cần dummy options để pass validation.
