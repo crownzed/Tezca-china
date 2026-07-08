@@ -18,6 +18,10 @@ class User(Base):
     leaderboard_opt_in: Mapped[bool] = mapped_column(Boolean, default=True)
     # Admin khóa/mở tài khoản. False = bị khóa: login bị chặn (xem AuthService.login).
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    # Heartbeat: mốc cuối cùng user gọi API có token hợp lệ (cập nhật trong
+    # get_optional_user, throttle 60s). Khác is_active (do admin bấm) — đây là
+    # tín hiệu "đang dùng app" thật. Null = chưa từng gọi API sau khi thêm cột.
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

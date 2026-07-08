@@ -5743,6 +5743,7 @@ blockquote small {
 
 .admin-stat--active strong { color: var(--jade); }
 .admin-stat--locked strong { color: var(--cinnabar); }
+.admin-stat--online strong { color: var(--gold); }
 
 /* ── User list ─────────────────────────────────────────────────────────── */
 .admin-user-list {
@@ -5859,6 +5860,48 @@ blockquote small {
   color: var(--cinnabar);
   background: var(--cinnabar-soft);
   border-color: color-mix(in srgb, var(--cinnabar) 30%, transparent);
+}
+
+/* Trực tuyến: chấm gold có nhịp thở nhẹ để phân biệt với trạng thái tĩnh.
+   prefers-reduced-motion tắt animation (xem cuối khối admin). */
+.admin-badge--online {
+  color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 32%, transparent);
+}
+
+.admin-badge--online svg {
+  animation: admin-online-pulse 2s ease-in-out infinite;
+}
+
+@keyframes admin-online-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Offline: xám, không nhấn — chỉ là thông tin phụ "thấy cuối bao lâu". */
+.admin-badge--offline {
+  color: var(--dim);
+  background: var(--control-bg);
+  border-color: var(--line);
+}
+
+.admin-badge--offline svg {
+  fill: currentColor;
+  opacity: 0.6;
+}
+
+/* Dòng hoạt động học thật (last_active_at) — tách khỏi date/badge, chữ nhỏ. */
+.admin-user-activity {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-badge--online svg { animation: none; }
 }
 
 /* ── Config form ───────────────────────────────────────────────────────── */

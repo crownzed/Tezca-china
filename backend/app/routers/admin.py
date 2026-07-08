@@ -1,9 +1,11 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select, union_all
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import User
+from ..models import LearningEvent, QuizAttempt, User
 from ..schemas import (
     AdminConfigOut,
     AdminConfigUpdateRequest,
@@ -25,7 +27,24 @@ from ..services.auth_service import AuthService
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
-def _admin_user_out(user: User) -> AdminUserOut:
+def _last_active_map(db: Session) -> dict[str, datetime]:
+    """MAX(created_at) mỗi user, gộp từ quiz_attempts + learning_events.
+
+    Một query duy nhất cho mọi user (tránh N+1). UNION ALL hai bảng rồi
+    GROUP BY user_id lấy mốc mới nhất — đây là "hoạt động học thật", khác
+    last_seen_at (chỉ cần mở app kèm token là tính).
+    """
+    activity = union_all(
+        select(QuizAttempt.user_id.label("uid"), QuizAttempt.created_at.label("ts")),
+        select(LearningEvent.user_id.label("uid"), LearningEvent.created_at.label("ts")),
+    ).subquery()
+    rows = db.execute(
+        select(activity.c.uid, func.max(activity.c.ts)).group_by(activity.c.uid)
+    ).all()
+    return {uid: ts for uid, ts in rows if uid is not None and ts is not None}
+
+
+def _admin_user_out(user: User, last_active_at: datetime | None = None) -> AdminUserOut:
     return AdminUserOut(
         id=user.id,
         username=user.username,
@@ -33,6 +52,8 @@ def _admin_user_out(user: User) -> AdminUserOut:
         display_name=user.display_name,
         is_active=user.is_active,
         created_at=user.created_at.isoformat(),
+        last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
+        last_active_at=last_active_at.isoformat() if last_active_at else None,
     )
 
 
@@ -52,7 +73,8 @@ def admin_login(payload: AdminLoginRequest):
 @router.get("/users", response_model=AdminUsersOut, dependencies=[Depends(require_admin)])
 def list_users(db: Session = Depends(get_db)):
     users = db.scalars(select(User).order_by(User.created_at.desc())).all()
-    return AdminUsersOut(users=[_admin_user_out(user) for user in users])
+    active_map = _last_active_map(db)
+    return AdminUsersOut(users=[_admin_user_out(user, active_map.get(user.id)) for user in users])
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserOut, dependencies=[Depends(require_admin)])
@@ -63,7 +85,7 @@ def set_user_active(user_id: str, payload: AdminUserUpdateRequest, db: Session =
     user.is_active = payload.is_active
     db.commit()
     db.refresh(user)
-    return _admin_user_out(user)
+    return _admin_user_out(user, _last_active_map(db).get(user.id))
 
 
 @router.delete("/users/{user_id}", dependencies=[Depends(require_admin)])
