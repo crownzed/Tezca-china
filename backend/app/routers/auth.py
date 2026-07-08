@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import User
-from ..schemas import AuthResponse, LoginRequest, ProfileOut, ProfileStatsOut, RegisterRequest, TitleOut, UpdateProfileRequest, UserOut
+from ..schemas import AuthResponse, ChangePasswordRequest, LoginRequest, ProfileOut, ProfileStatsOut, RegisterRequest, TitleOut, UpdateProfileRequest, UserOut
 from ..services.auth_service import AuthService
 from ..services.profile_service import ProfileService
 
@@ -84,9 +84,49 @@ def update_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = AuthService(db).update_profile(
-        current_user,
-        display_name=payload.display_name,
-        leaderboard_opt_in=payload.leaderboard_opt_in,
-    )
+    try:
+        user = AuthService(db).update_profile(
+            current_user,
+            display_name=payload.display_name,
+            email=payload.email,
+            leaderboard_opt_in=payload.leaderboard_opt_in,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "invalid_email":
+            raise HTTPException(status_code=400, detail="Email không hợp lệ") from exc
+        if code == "email_taken":
+            raise HTTPException(status_code=409, detail="Email đã được dùng bởi tài khoản khác") from exc
+        raise
     return _user_out(user)
+
+
+@router.post("/change-password", response_model=UserOut)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        user = AuthService(db).change_password(
+            current_user,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "wrong_password":
+            raise HTTPException(status_code=400, detail="Mật khẩu hiện tại không đúng") from exc
+        if code == "password_too_short":
+            raise HTTPException(status_code=400, detail="Mật khẩu mới phải có ít nhất 6 ký tự") from exc
+        raise
+    return _user_out(user)
+
+
+@router.delete("/me")
+def delete_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    AuthService(db).delete_account(current_user)
+    return {"ok": True}

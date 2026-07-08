@@ -1,11 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
 
+// Classify the device into a performance tier so the galaxy can scale its
+// star count, bloom passes, and the (expensive) full-viewport video layer.
+// Read once via lazy state init — cheap heuristics, no observers needed.
+function detectPerfTier() {
+  if (typeof navigator === 'undefined') return 'high';
+  const mem = navigator.deviceMemory || 4;          // GB, when exposed
+  const cores = navigator.hardwareConcurrency || 4;
+  const mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '');
+  if (mem <= 2 || cores <= 2) return 'low';
+  if (mobile || mem <= 4 || cores <= 4) return 'mid';
+  return 'high';
+}
+
+// Per-tier knobs. Everything visual reads from here so tuning stays in one place.
+const TIER_CONFIG = {
+  low:  { starCount: 140, bloom: false, twinkle: false, video: false, coreBloom: false },
+  mid:  { starCount: 260, bloom: false, twinkle: true,  video: true,  coreBloom: true },
+  high: { starCount: 400, bloom: true,  twinkle: true,  video: true,  coreBloom: true },
+};
+
 export default function SpaceVortexBackground({ active = true, cardRef = null }) {
   const canvasRef = useRef(null);
   const requestRef = useRef(null);
   const lastTimeRef = useRef(0);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [perfTier] = useState(detectPerfTier);
   const videoRef = useRef(null);
+
+  const showVideo = TIER_CONFIG[perfTier].video && !reducedMotion;
 
   // Synchronize video playback with component state and prefers-reduced-motion
   useEffect(() => {
@@ -43,6 +66,27 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Cosmic (dark, primary) vs dawn (light) palettes. On the auth gate the
+    // theme is fixed — the toggle lives in the app topbar, not here — so we can
+    // read it once at effect start instead of observing for changes. Dark is
+    // the default cosmic look; anything that isn't the dark theme gets dawn.
+    const isDawn = document.documentElement.dataset.theme !== 'dark';
+    const palette = isDawn
+      ? {
+          base: 'rgba(18, 18, 46, 0.30)',      // indigo pre-dawn wash
+          neb1: ['rgba(245, 158, 11, 0.24)', 'rgba(251, 113, 133, 0.08)'], // amber → rose
+          neb2: ['rgba(139, 92, 246, 0.20)', 'rgba(251, 191, 36, 0.05)'],  // violet → warm
+          neb3: ['rgba(56, 189, 248, 0.12)', 'rgba(245, 158, 11, 0.02)'],  // sky → amber
+          vignette: ['rgba(26, 22, 58, 0.10)', 'rgba(22, 20, 50, 0.38)', 'rgba(18, 18, 46, 0.72)'],
+        }
+      : {
+          base: 'rgba(5, 3, 10, 0.35)',
+          neb1: ['rgba(37, 99, 235, 0.28)', 'rgba(124, 58, 237, 0.08)'],   // cobalt → purple
+          neb2: ['rgba(124, 58, 237, 0.24)', 'rgba(255, 40, 160, 0.05)'],  // violet → pink
+          neb3: ['rgba(6, 182, 212, 0.14)', 'rgba(37, 99, 235, 0.02)'],    // cyan core
+          vignette: ['rgba(6, 2, 18, 0.25)', 'rgba(5, 2, 15, 0.65)', 'rgba(3, 1, 8, 0.96)'],
+        };
 
     let width = 0;
     let height = 0;
@@ -105,18 +149,22 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
     let targetMouseY = 0;
 
     const handleMouseMove = (e) => {
+      if (reducedMotion) return; // Honor prefers-reduced-motion: no cursor parallax
       targetMouseX = (e.clientX / window.innerWidth - 0.5) * 35; // Max 35px shift
       targetMouseY = (e.clientY / window.innerHeight - 0.5) * 35;
     };
 
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    if (!reducedMotion) {
+      window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    }
 
     // Initialize stars across 4 layers
     // Layer 0: Far, tiny, very slow
     // Layer 1: Mid, medium size, slow spiral
     // Layer 2: Close, larger, faster spiral
     // Layer 3: Floating cosmic dust (random floats, breaks uniform vortex)
-    const starCount = 380;
+    const tier = TIER_CONFIG[perfTier];
+    const starCount = tier.starCount;
     const stars = [];
 
     const createStar = (initAllOver = false) => {
@@ -167,6 +215,10 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
         // Floating dust drift offsets
         driftX: (Math.random() - 0.5) * 0.2,
         driftY: (Math.random() - 0.5) * 0.2,
+        // Twinkle: each star pulses opacity on its own phase + rate
+        twPhase: Math.random() * Math.PI * 2,
+        twRate: 1.5 + Math.random() * 2.5,
+        twAmp: 0.4 + Math.random() * 0.4,
       };
     };
 
@@ -204,6 +256,12 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
 
     // Nebula parameters
     let nebulaTime = 0;
+    // Absolute elapsed clock (seconds) driving star twinkle, independent of the
+    // vortex motion so twinkle keeps a gentle shimmer even in reduced-motion.
+    let elapsed = 0;
+    // Core "sun" energy: eased toward 1 while the cursor hovers near the card,
+    // back to 0 otherwise. Drives the central glow's brightness + scale.
+    let coreEnergy = 0;
 
     // Define 4 planets orbiting the login card (the central form)
     const basePlanets = [
@@ -228,14 +286,22 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
       lastTimeRef.current = time;
 
       nebulaTime += reducedMotion ? delta * 0.15 : delta;
+      elapsed += delta;
 
       // Mouse lerp for smooth parallax
       mouseX += (targetMouseX - mouseX) * 4 * delta;
       mouseY += (targetMouseY - mouseY) * 4 * delta;
 
+      // Ease core energy toward the cursor's proximity to the card center.
+      // targetMouseX/Y are in screen-shift units (±35); a small magnitude means
+      // the cursor sits near the middle where the card lives → energize the core.
+      const cursorMag = Math.hypot(targetMouseX, targetMouseY);
+      const proximity = reducedMotion ? 0 : Math.max(0, 1 - cursorMag / 26);
+      coreEnergy += (proximity - coreEnergy) * Math.min(1, delta * 3);
+
       // Clear canvas and draw a semi-transparent base for video overlay blending
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = 'rgba(5, 3, 10, 0.35)';
+      ctx.fillStyle = palette.base;
       ctx.fillRect(0, 0, width, height);
 
       // --- Draw Dynamic Nebula Background Layers (Radial Gradients) ---
@@ -246,8 +312,8 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
       const n1Y = centerY + mouseY * 0.4 + Math.cos(nebulaTime * 0.2) * 40;
       const n1R = maxRadius * (0.55 + Math.sin(nebulaTime * 0.08) * 0.05);
       const grad1 = ctx.createRadialGradient(n1X, n1Y, 0, n1X, n1Y, n1R);
-      grad1.addColorStop(0, 'rgba(37, 99, 235, 0.28)'); // #2563EB cobalt
-      grad1.addColorStop(0.5, 'rgba(124, 58, 237, 0.08)'); // #7C3AED purple
+      grad1.addColorStop(0, palette.neb1[0]);
+      grad1.addColorStop(0.5, palette.neb1[1]);
       grad1.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad1;
       ctx.beginPath();
@@ -259,8 +325,8 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
       const n2Y = centerY + mouseY * 0.6 - Math.sin(nebulaTime * 0.18) * 50;
       const n2R = maxRadius * (0.45 + Math.cos(nebulaTime * 0.05) * 0.03);
       const grad2 = ctx.createRadialGradient(n2X, n2Y, 0, n2X, n2Y, n2R);
-      grad2.addColorStop(0, 'rgba(124, 58, 237, 0.24)'); // #7C3AED
-      grad2.addColorStop(0.4, 'rgba(255, 40, 160, 0.05)'); // Soft pink
+      grad2.addColorStop(0, palette.neb2[0]);
+      grad2.addColorStop(0.4, palette.neb2[1]);
       grad2.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad2;
       ctx.beginPath();
@@ -272,13 +338,32 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
       const n3Y = centerY + mouseY * 0.2;
       const n3R = maxRadius * (0.35 + Math.sin(nebulaTime * 0.1) * 0.04);
       const grad3 = ctx.createRadialGradient(n3X, n3Y, 0, n3X, n3Y, n3R);
-      grad3.addColorStop(0, 'rgba(6, 182, 212, 0.14)'); // Cyan
-      grad3.addColorStop(0.6, 'rgba(37, 99, 235, 0.02)');
+      grad3.addColorStop(0, palette.neb3[0]);
+      grad3.addColorStop(0.6, palette.neb3[1]);
       grad3.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad3;
       ctx.beginPath();
       ctx.arc(n3X, n3Y, n3R, 0, Math.PI * 2);
       ctx.fill();
+
+      // --- Central Core "Sun" glow (behind the card) ---
+      // The card is the star the planets orbit; this soft luminous core sits
+      // directly behind it. It breathes on its own slow cycle and brightens as
+      // the cursor nears the center (coreEnergy). Gated to mid/high tiers.
+      if (tier.coreBloom) {
+        const breathe = 0.5 + Math.sin(elapsed * 0.6) * 0.5;      // 0..1 slow
+        const intensity = 0.22 + breathe * 0.12 + coreEnergy * 0.26;
+        const coreR = Math.max(cardHalfW, cardHalfH) * (2.1 + coreEnergy * 0.7);
+        const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreR);
+        const coreHue = isDawn ? '255, 214, 140' : '150, 200, 255'; // dawn gold vs cosmic ice-blue
+        coreGrad.addColorStop(0, `rgba(${coreHue}, ${intensity.toFixed(3)})`);
+        coreGrad.addColorStop(0.4, `rgba(${coreHue}, ${(intensity * 0.4).toFixed(3)})`);
+        coreGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, coreR, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       ctx.globalCompositeOperation = 'source-over';
 
@@ -318,6 +403,13 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
           displayOpacity *= (star.r / (maxRadius * 0.15));
         }
 
+        // Twinkle: gentle self-paced opacity shimmer (mid/high tiers, motion on).
+        // Sine on each star's own phase so the field never pulses in unison.
+        if (tier.twinkle && !reducedMotion) {
+          const tw = 1 - star.twAmp * (0.5 + 0.5 * Math.sin(star.twPhase + elapsed * star.twRate));
+          displayOpacity *= tw;
+        }
+
         // Reset star if it reaches the center (absorbed) or goes off-bounds
         if (star.r <= 8 || x < -50 || x > width + 50 || y < -50 || y > height + 50 || displayOpacity <= 0.01) {
           stars[idx] = createStar(false);
@@ -329,7 +421,7 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
         
         // Draw soft glowing circles for foreground particles, simple squares/dots for background
         if (star.layer >= 2 && star.r > maxRadius * 0.2) {
-          const glowRad = star.size * 2;
+          const glowRad = star.size * 2.6;
           const starGrad = ctx.createRadialGradient(x, y, 0, x, y, glowRad);
           starGrad.addColorStop(0, `${star.color}${displayOpacity.toFixed(3)})`);
           starGrad.addColorStop(0.3, `${star.color}${(displayOpacity * 0.4).toFixed(3)})`);
@@ -338,6 +430,26 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
           ctx.beginPath();
           ctx.arc(x, y, glowRad, 0, Math.PI * 2);
           ctx.fill();
+
+          // Diffraction spikes: a bright 4-point cross flare on the biggest,
+          // brightest close stars — the single detail that reads as "star" at a
+          // glance. Length pulses with the twinkle so it sparkles. High tier only.
+          if (tier.bloom && star.size > 1.9 && displayOpacity > 0.55) {
+            const spike = star.size * (6 + 4 * Math.sin(star.twPhase + elapsed * star.twRate));
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const sg = ctx.createLinearGradient(x - spike, y, x + spike, y);
+            sg.addColorStop(0, 'rgba(255,255,255,0)');
+            sg.addColorStop(0.5, `${star.color}${(displayOpacity * 0.7).toFixed(3)})`);
+            sg.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.strokeStyle = sg;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x - spike, y); ctx.lineTo(x + spike, y);
+            ctx.moveTo(x, y - spike); ctx.lineTo(x, y + spike);
+            ctx.stroke();
+            ctx.restore();
+          }
         } else {
           ctx.beginPath();
           ctx.arc(x, y, star.size, 0, Math.PI * 2);
@@ -378,7 +490,7 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
           
           ctx.restore();
         }
-      } else if (Math.random() < 0.002 && !reducedMotion) {
+      } else if (Math.random() < 0.006 && !reducedMotion) {
         spawnMeteor();
       }
 
@@ -457,6 +569,24 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
 
+        // High-tier bloom: a wide, additive outer halo that reads as light
+        // spilling past the planet. 'lighter' accumulates overlapping glows for
+        // a true bloom rather than a flat disc. Skipped on low/mid tiers.
+        if (tier.bloom) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const bloomRad = pr * 5.2;
+          const bloomGrad = ctx.createRadialGradient(px, py, 0, px, py, bloomRad);
+          bloomGrad.addColorStop(0, `${planet.color}0.34)`);
+          bloomGrad.addColorStop(0.4, `${planet.color}0.12)`);
+          bloomGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = bloomGrad;
+          ctx.beginPath();
+          ctx.arc(px, py, bloomRad, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
         // Soft glow surrounding the planet — kept modest so the form stays dominant
         const glowRad = pr * 3.0;
         const planetGrad = ctx.createRadialGradient(px, py, 0, px, py, glowRad);
@@ -469,15 +599,30 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
         ctx.arc(px, py, glowRad, 0, Math.PI * 2);
         ctx.fill();
 
-        // Planet body with an off-center highlight for a lit-sphere feel
+        // Planet body with an off-center highlight for a lit-sphere feel.
+        // Highlight faces the central core (the "sun"), so lighting is coherent.
+        const toCoreAngle = Math.atan2(centerY - py, centerX - px);
+        const hlx = px + Math.cos(toCoreAngle) * pr * 0.38;
+        const hly = py + Math.sin(toCoreAngle) * pr * 0.38;
         const bodyGrad = ctx.createRadialGradient(
-          px - pr * 0.35, py - pr * 0.35, pr * 0.1,
+          hlx, hly, pr * 0.1,
           px, py, pr,
         );
         bodyGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
         bodyGrad.addColorStop(0.35, `${planet.color}0.95)`);
         bodyGrad.addColorStop(1, `${planet.color}0.9)`);
         ctx.fillStyle = bodyGrad;
+        ctx.beginPath();
+        ctx.arc(px, py, pr, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rim light: a thin bright crescent on the core-facing edge — the
+        // classic depth cue that separates the sphere from its own glow.
+        const rimGrad = ctx.createRadialGradient(hlx, hly, pr * 0.6, px, py, pr);
+        rimGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        rimGrad.addColorStop(0.82, 'rgba(255, 255, 255, 0)');
+        rimGrad.addColorStop(1, 'rgba(255, 255, 255, 0.55)');
+        ctx.fillStyle = rimGrad;
         ctx.beginPath();
         ctx.arc(px, py, pr, 0, Math.PI * 2);
         ctx.fill();
@@ -497,9 +642,9 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
 
       // --- Vignette Overlay for perfect readability ---
       const vignGrad = ctx.createRadialGradient(centerX, centerY, width * 0.15, centerX, centerY, maxRadius * 0.9);
-      vignGrad.addColorStop(0, 'rgba(6, 2, 18, 0.25)');
-      vignGrad.addColorStop(0.5, 'rgba(5, 2, 15, 0.65)');
-      vignGrad.addColorStop(1, 'rgba(3, 1, 8, 0.96)');
+      vignGrad.addColorStop(0, palette.vignette[0]);
+      vignGrad.addColorStop(0.5, palette.vignette[1]);
+      vignGrad.addColorStop(1, palette.vignette[2]);
       
       ctx.fillStyle = vignGrad;
       ctx.fillRect(0, 0, width, height);
@@ -533,25 +678,28 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
         background: '#040208',
       }}
     >
-      <video
-        ref={videoRef}
-        src="/grok-video.mp4"
-        autoPlay
-        loop
-        muted
-        playsInline
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          zIndex: -1,
-          opacity: 0.65,
-          pointerEvents: 'none',
-        }}
-      />
+      {showVideo && (
+        <video
+          ref={videoRef}
+          src="/grok-video.mp4"
+          aria-hidden="true"
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            zIndex: -1,
+            opacity: 0.65,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       <canvas
         ref={canvasRef}
         style={{

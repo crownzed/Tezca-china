@@ -752,8 +752,8 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     return () => window.clearTimeout(timer);
   }, [autoStartKey, loadQuiz]);
 
-  const questionAudioText = resolveQuestionAudioText(question);
-  const showAudioPanel = Boolean(questionAudioText) || isListeningMode;
+  // Chỉ Nghe/Hội thoại mới cần audio; các task khác (vocab/cloze/reading...) ẩn nút Nghe.
+  const showAudioPanel = isListeningMode;
 
   const playAudio = useCallback((rate = 0.82, speechMode = null) => {
     const audioText = resolveQuestionAudioText(question);
@@ -1563,8 +1563,8 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     };
   }, [loadSession]);
 
-  const questionAudioText = resolveQuestionAudioText(question);
-  const showAudioPanel = Boolean(questionAudioText) || isListeningMode;
+  // Chỉ Nghe/Hội thoại mới cần audio; các task khác (vocab/cloze/reading...) ẩn nút Nghe.
+  const showAudioPanel = isListeningMode;
 
   const playAudio = useCallback((rate = 0.82, speechMode = null) => {
     const audioText = resolveQuestionAudioText(question);
@@ -2036,8 +2036,8 @@ function GeneralCheck({ level, onExit, onComplete }) {
   const question = questions[index];
   const questionType = QUIZ_TYPES.find(type => type.id === question?.quiz_type);
   const isListeningMode = question?.quiz_type === 'listening' || question?.quiz_type === 'dialogue';
-  const questionAudioText = resolveQuestionAudioText(question);
-  const showAudioPanel = Boolean(questionAudioText) || isListeningMode;
+  // Chỉ Nghe/Hội thoại mới cần audio; các task khác (vocab/cloze/reading...) ẩn nút Nghe.
+  const showAudioPanel = isListeningMode;
   const progress = questions.length ? Math.round(((index + 1) / questions.length) * 100) : 0;
 
   const loadGeneralCheck = useCallback(async () => {
@@ -2989,7 +2989,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    const t1 = setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 50);
+    const t2 = setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 150);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [activeTab]);
 
   useEffect(() => {

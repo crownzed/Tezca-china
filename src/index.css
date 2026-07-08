@@ -3726,6 +3726,38 @@ blockquote small {
   display: grid;
   place-items: center;
   padding: 24px 16px;
+
+  /* Login-scoped cosmic tokens — namespaced (--u-*) so they never leak into
+     the app's jade/gold system. Dark is primary; dawn overrides live below. */
+  --u-void: #040208;
+  --u-card-bg: rgba(8, 5, 20, 0.68);
+  --u-card-border: rgba(139, 92, 246, 0.32);        /* violet */
+  --u-card-border-active: rgba(6, 182, 212, 0.40);  /* cyan (pulse peak) */
+  --u-violet: #7C3AED;
+  --u-cobalt: #2563EB;
+  --u-cyan: #06B6D4;
+  --u-cyan-hi: #00E5FF;
+  --u-magenta: #EC4899;
+  --u-gold: #FFC24B;
+  --u-text: #F1F5F9;
+  --u-text-soft: rgba(200, 220, 255, 0.85);
+  --u-label: rgba(192, 219, 255, 0.95);
+  --u-danger: #FF8FA3;  /* AA-safe red on the dark card */
+}
+
+/* Dawn reinterpretation for light theme: cosmic void becomes indigo pre-dawn,
+   accents warm toward amber/rose. Canvas nebulae shift in JS (theme-keyed
+   palette); these tokens re-skin the card + form to match. */
+:root:not([data-theme='dark']) .auth-gate {
+  --u-void: #12122E;
+  --u-card-bg: rgba(30, 27, 58, 0.72);
+  --u-card-border: rgba(139, 92, 246, 0.34);
+  --u-card-border-active: rgba(56, 189, 248, 0.42);
+  --u-violet: #8B5CF6;
+  --u-cobalt: #F59E0B;   /* CTA warms toward amber */
+  --u-cyan: #38BDF8;
+  --u-cyan-hi: #38BDF8;
+  --u-magenta: #FB7185;  /* rose */
 }
 
 /* Make background image clearly visible on the login screen and change it to the cosmic sky dome */
@@ -3766,17 +3798,17 @@ blockquote small {
   padding: 32px 28px;
   display: grid;
   gap: 22px;
-  background: rgba(8, 5, 20, 0.68) !important;
+  background: var(--u-card-bg) !important;
   backdrop-filter: blur(25px) saturate(1.8) !important;
   -webkit-backdrop-filter: blur(25px) saturate(1.8) !important;
-  border: 1px solid rgba(139, 92, 246, 0.32) !important;
+  border: 1px solid var(--u-card-border) !important;
   border-radius: 20px !important;
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.8),
     0 0 40px rgba(124, 58, 237, 0.16),
     0 0 80px rgba(37, 99, 235, 0.08),
     inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
-  color: #f1f5f9 !important;
+  color: var(--u-text) !important;
   animation: glassGlowPulse 8s ease-in-out infinite;
 }
 
@@ -3787,11 +3819,11 @@ blockquote small {
 }
 
 .auth-gate__card--glass .auth-gate__brand p {
-  color: rgba(200, 220, 255, 0.85) !important;
+  color: var(--u-text-soft) !important;
 }
 
 .auth-gate__card--glass .auth-form label {
-  color: rgba(192, 219, 255, 0.95) !important;
+  color: var(--u-label) !important;
   font-size: 0.82rem !important;
   font-weight: 700 !important;
   text-transform: uppercase !important;
@@ -3813,17 +3845,27 @@ blockquote small {
 }
 
 .auth-gate__card--glass .auth-form input:focus {
-  outline: none !important;
-  border-color: rgba(6, 182, 212, 0.75) !important;
-  box-shadow: 
+  border-color: var(--u-cyan) !important;
+  box-shadow:
     0 0 15px rgba(6, 182, 212, 0.3),
     inset 0 2px 4px rgba(0, 0, 0, 0.4) !important;
   background: rgba(6, 4, 15, 0.7) !important;
   transform: translateY(-1px);
 }
 
+/* Drop the native outline only for pointer focus; keyboard users keep a
+   visible focus-visible ring (added below). */
+.auth-gate__card--glass .auth-form input:focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+.auth-gate__card--glass .auth-form input:focus-visible {
+  outline: 2px solid var(--u-cyan-hi) !important;
+  outline-offset: 2px !important;
+}
+
 .auth-gate__card--glass .auth-form__submit {
-  background: linear-gradient(135deg, #7C3AED, #2563EB) !important;
+  background: linear-gradient(135deg, var(--u-violet), var(--u-cobalt)) !important;
   border: none !important;
   color: #ffffff !important;
   border-radius: 12px !important;
@@ -3866,7 +3908,7 @@ blockquote small {
 }
 
 .auth-gate__card--glass .auth-modal__switch button {
-  color: #00e5ff !important;
+  color: var(--u-cyan-hi) !important;
   font-weight: 700 !important;
   background: none !important;
   border: none !important;
@@ -3879,6 +3921,14 @@ blockquote small {
 .auth-gate__card--glass .auth-modal__switch button:hover {
   color: #ffffff !important;
   text-shadow: 0 0 8px rgba(0, 229, 255, 0.7) !important;
+}
+
+/* Keyboard focus rings — the submit and switch link had no distinct focus
+   indicator (inputs only got a glow). Cyan outline meets AA non-color cue. */
+.auth-gate__card--glass .auth-form__submit:focus-visible,
+.auth-gate__card--glass .auth-modal__switch button:focus-visible {
+  outline: 2px solid var(--u-cyan-hi) !important;
+  outline-offset: 3px !important;
 }
 
 /* Cosmic vignette to seamlessly blend outer limits into the dark void */
@@ -3901,11 +3951,19 @@ blockquote small {
   }
   50% {
     border-color: rgba(6, 182, 212, 0.4) !important;
-    box-shadow: 
+    box-shadow:
       0 24px 60px rgba(0, 0, 0, 0.8),
       0 0 45px rgba(6, 182, 212, 0.18),
       0 0 80px rgba(124, 58, 237, 0.08),
       inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  }
+}
+
+/* Explicitly halt the card glow pulse for reduced-motion (the global rule
+   neutralizes it via near-zero duration; this states the intent directly). */
+@media (prefers-reduced-motion: reduce) {
+  .auth-gate__card--glass {
+    animation: none !important;
   }
 }
 
@@ -4014,6 +4072,12 @@ blockquote small {
   margin: 0;
   color: var(--danger-text);
   font-size: 0.88rem;
+}
+
+/* App's --danger-text (#b3261e) fails AA on the dark cosmic card (~3:1).
+   Override to the AA-safe cosmic red inside the glass gate. */
+.auth-gate__card--glass .auth-form__error {
+  color: var(--u-danger) !important;
 }
 
 .auth-form__submit {
@@ -4389,6 +4453,139 @@ blockquote small {
 
 .title-card--locked {
   opacity: 0.72;
+}
+
+.account-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  margin-top: 12px;
+}
+
+.account-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-section__header h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-section__edit {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
+.account-info {
+  display: grid;
+  gap: 8px;
+}
+
+.account-info__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.account-info__row span {
+  color: var(--muted);
+}
+
+.account-form {
+  display: grid;
+  gap: 12px;
+}
+
+.account-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.account-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.account-form__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.account-form__error {
+  margin: 0;
+  color: var(--danger-text);
+  font-size: 0.88rem;
+}
+
+.account-form__success {
+  margin: 0;
+  color: var(--jade);
+  font-size: 0.88rem;
+}
+
+.account-section--danger {
+  border: 1px solid color-mix(in srgb, var(--danger-text) 32%, var(--line));
+}
+
+.account-danger__intro {
+  display: grid;
+  gap: 10px;
+}
+
+.account-danger__intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.account-danger__warning {
+  margin: 0;
+  color: var(--danger-text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.btn-danger {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius);
+  padding: 0 16px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 800;
+  color: #fff;
+  background: var(--danger-text);
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--danger-text) 30%, transparent);
+}
+
+.btn-danger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
 }
 
 @media (max-width: 760px) {

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/generate-audio.mjs && node scripts/generate-hanzi-data.mjs && node scripts/validate-grammar.mjs && vite build",
+    "audio": "node scripts/generate-audio.mjs",
+    "build": "node scripts/generate-hanzi-data.mjs && node scripts/validate-grammar.mjs && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "vercel --prod"
@@ -25,6 +26,7 @@
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "ffmpeg-static": "^5.3.0",
     "globals": "^17.6.0",
     "hanzi-writer-data": "^2.0.1",
     "sharp": "^0.33.5",
