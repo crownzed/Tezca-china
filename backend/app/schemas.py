@@ -632,8 +632,14 @@ class AdminUserOut(BaseModel):
     username: str
     email: str
     display_name: str
-    is_active: bool
+    is_active: bool  # trạng thái khoá/mở do admin điều khiển — KHÔNG phải "đang dùng"
     created_at: str
+    # Heartbeat: mốc cuối cùng user gọi API có token (throttle 60s). None = chưa
+    # từng thấy online kể từ khi thêm cột. Admin suy ra "đang trực tuyến" từ đây.
+    last_seen_at: str | None = None
+    # Hoạt động học thật: MAX(created_at) gộp từ quiz_attempts + learning_events.
+    # None = chưa từng học. Phân biệt với last_seen_at (chỉ cần mở app là tính).
+    last_active_at: str | None = None
 
 
 class AdminUsersOut(BaseModel):

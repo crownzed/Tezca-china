@@ -113,22 +113,28 @@ def _ensure_sqlite_word_columns() -> None:
                 conn.execute(text(f"ALTER TABLE words ADD COLUMN {name} {ddl}"))
 
 def _ensure_user_columns() -> None:
-    """Thêm cột ``is_active`` vào bảng ``users`` đã tồn tại.
+    """Thêm cột ``is_active`` và ``last_seen_at`` vào bảng ``users`` đã tồn tại.
 
     ``create_all`` không ALTER bảng cũ, nên user đã đăng ký trước khi có cột này
-    sẽ thiếu ``is_active`` -> mọi query User vỡ. SQLite/libSQL không hỗ trợ
+    sẽ thiếu cột -> mọi query User vỡ. SQLite/libSQL không hỗ trợ
     ``ADD COLUMN IF NOT EXISTS`` nên phải kiểm tra qua PRAGMA; Postgres hỗ trợ
-    trực tiếp. Mặc định 1 (true) để user hiện có vẫn đăng nhập được sau migrate.
+    trực tiếp. ``is_active`` mặc định 1 (true) để user hiện có vẫn đăng nhập được
+    sau migrate; ``last_seen_at`` để NULL (chưa từng thấy online sau khi thêm cột).
     """
     if settings.database_url.startswith("sqlite") or _is_turso(settings.database_url):
         with engine.begin() as conn:
             existing = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
             if "is_active" not in existing:
                 conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+            if "last_seen_at" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME"))
     else:
         with engine.begin() as conn:
             conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"
+            ))
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP"
             ))
 
 
