@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Mic, Square, RotateCcw, X } from 'lucide-react';
+import { Headphones, Mic, Square, RotateCcw, X, Volume2 } from 'lucide-react';
 import { getPracticeSentence, scorePronunciation } from '../api-core';
-import { speak, stopSpeech } from '../speech.jsx';
+import { speak, speakFeedback, stopSpeech } from '../speech.jsx';
 import { isRecordingSupported, startRecording } from '../speech-ai.js';
 import LevelButton from './Pronunciation/LevelButton.jsx';
 import Waveform from './Pronunciation/Waveform.jsx';
 import ScoreRing from './Pronunciation/ScoreRing.jsx';
 
 const LEVELS = [1, 2, 3, 4, 5, 6];
+
+// Gộp phản hồi âm học (DSP) + gợi ý sửa lỗi thành một câu để đọc lên.
+function feedbackSpeech(result) {
+  return [result?.detailed_feedback, result?.tip].filter(Boolean).join('. ');
+}
 
 // Feature 1 — Pronunciation practice (shadowing + scoring).
 // Flow: AI plays a model reading via the existing speak() TTS, the user records
@@ -86,6 +91,10 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
         target_pinyin: target.pinyin || '',
       });
       setResult(scored);
+      // Tự động đọc phản hồi. Cú bấm "Dừng & chấm" là user gesture đã mở khóa
+      // audio nên autoplay không bị trình duyệt chặn.
+      const speech = feedbackSpeech(scored);
+      if (speech) speakFeedback(speech);
     } catch (e) {
       setError(e.message || 'Không chấm được phát âm.');
     } finally {
@@ -186,8 +195,19 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
               <div className="pron-result-body">
                 <p className="pron-line"><b>Bạn đọc:</b> {result.actual_hanzi || '—'} <i>{result.actual_pinyin}</i></p>
                 <p className="pron-line"><b>Mục tiêu:</b> {result.target_hanzi} <i>{result.target_pinyin}</i></p>
-                {result.detailed_feedback && <p className="pron-tip pron-tip--dsp">{result.detailed_feedback}</p>}
-                {result.tip && <p className="pron-tip">{result.tip}</p>}
+                {(result.detailed_feedback || result.tip) && (
+                  <div className="pron-tip-block">
+                    {result.detailed_feedback && <p className="pron-tip pron-tip--dsp">{result.detailed_feedback}</p>}
+                    {result.tip && <p className="pron-tip">{result.tip}</p>}
+                    <button
+                      type="button"
+                      className="btn-secondary pron-tip-speak"
+                      onClick={() => speakFeedback(feedbackSpeech(result))}
+                    >
+                      <Volume2 size={16} /> Nghe phản hồi
+                    </button>
+                  </div>
+                )}
                 {(result.fluency || result.prosody) && (
                   <div className="pron-macro">
                     {result.fluency && (

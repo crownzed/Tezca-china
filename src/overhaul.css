@@ -1827,8 +1827,13 @@ h3 {
   }
 
   .core-sidebar button span {
-    font-size: 0.65rem !important;
+    display: block !important;
+    font-size: 0.62rem !important;
     font-weight: 700 !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+    max-width: 100% !important;
   }
 
   .core-sidebar button.active {
@@ -2322,7 +2327,9 @@ main.core-page {
   }
   
   .vocab-hsk-tabs {
-    overflow-x: auto;
+    display: flex !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
     white-space: nowrap;
     justify-content: flex-start !important;
     padding: 6px !important;
@@ -2337,8 +2344,92 @@ main.core-page {
   }
 
   .vocab-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 12px !important;
+  }
+
+  .vocab-card {
+    min-width: 0 !important;
+  }
+
+  /* Level selection optimization for mobile */
+  .level-grid,
+  .mini-level-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .level-card {
+    min-height: 64px !important;
+    padding: 8px !important;
+    text-align: center !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .level-card span {
+    font-size: 0.65rem !important;
+  }
+
+  .level-card strong {
+    font-size: 1.5rem !important;
+    margin-top: 2px !important;
+  }
+
+  /* Quiz types selection optimization for mobile */
+  .quiz-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .quiz-type-card {
+    min-height: 84px !important;
+    padding: 12px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+
+  .quiz-type-card strong {
+    font-size: 0.92rem !important;
+  }
+
+  /* Quiz strategy selection optimization for mobile */
+  .quiz-strategy-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .quiz-strategy-card {
+    padding: 10px 8px !important;
+    text-align: center !important;
+    justify-content: center !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .quiz-strategy-card span {
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Statistics results panel optimization for mobile */
+  .session-result-grid,
+  .session-pill-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .session-result-grid span,
+  .session-pill-grid span {
+    min-height: 72px !important;
+    padding: 8px 10px !important;
   }
 }
 

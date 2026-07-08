@@ -694,6 +694,14 @@ export async function updateProfile(payload) {
   return request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) });
 }
 
+export async function changePassword(payload) {
+  return request('/api/auth/change-password', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteAccount() {
+  return request('/api/auth/me', { method: 'DELETE' });
+}
+
 export async function getLeaderboard(period = 'all_time') {
   return request(`/api/leaderboard?period=${encodeURIComponent(period)}&limit=50`);
 }

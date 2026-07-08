@@ -45,3 +45,7 @@ backend/.env
 .env.production.local
 
 backend/fly.secrets
+
+# Local pipeline artifacts + large media
+backend/data/
+public/grok-video.mp4

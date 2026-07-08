@@ -166,26 +166,32 @@ def _call_provider(url: str, api_key: str, model: str, payload: dict, retries: i
 
 
 def _call_api(prompt_text: str, retries: int = MAX_RETRIES) -> dict:
-    """Call LLM API with primary (DeepSeek) first, fallback to Gemini keys."""
+    """Call LLM API with Gemini first (ưu tiên chất lượng), DeepSeek dự phòng."""
 
+    # Gemini primary: xoay vòng qua mọi key vilao. Đặt trước DeepSeek để ưu tiên
+    # chất lượng theo yêu cầu — DeepSeek chỉ nhận việc khi mọi key Gemini fail.
     providers = [
-        # Primary
         {
-            "url": DEEPSEEK_API_URL,
-            "key": settings.deepseek_api_key,
-            "model": "deepseek-v4-flash",
-            "json_mode": True,
-        }
-    ]
-
-    # Fallback Gemini keys
-    for gemini_key in settings.gemini_keys_list:
-        providers.append({
             "url": settings.gemini_api_url,
             "key": gemini_key,
             "model": settings.gemini_model,
             "json_mode": False,
-        })
+            # Relay vilao trả chậm với prompt lớn (8 từ, max_tokens 8000): cần
+            # timeout rộng để nó kịp trả thay vì rơi xuống DeepSeek. Ưu tiên chất
+            # lượng nên chấp nhận chờ lâu.
+            "timeout": 240,
+        }
+        for gemini_key in settings.gemini_keys_list
+    ]
+
+    # DeepSeek dự phòng
+    providers.append({
+        "url": DEEPSEEK_API_URL,
+        "key": settings.deepseek_api_key,
+        "model": "deepseek-v4-flash",
+        "json_mode": True,
+        "timeout": 90,
+    })
 
     payload_template = {
         "messages": [
@@ -222,7 +228,7 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES) -> dict:
                 model=provider["model"],
                 payload=payload,
                 retries=min(retries, 2) if i > 0 else retries,  # fewer retries for fallback
-                timeout=90,
+                timeout=provider.get("timeout", 90),
             )
         except Exception as e:
             err_msg = f"Provider {provider['model']}: {str(e)}"

@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     gemini_native_url: str = "https://generativelanguage.googleapis.com/v1beta"
     gemini_native_model: str = "gemini-2.5-flash"
 
+    # ElevenLabs TTS — fallback khi mọi key Gemini cạn quota. Trả MP3 sẵn nên
+    # không cần encode. Voice mặc định là giọng đa ngôn ngữ đọc được tiếng Trung.
+    # Nhiều key comma-separated: xoay vòng khi key cạn quota ký tự tháng.
+    elevenlabs_api_keys: str = ""
+    elevenlabs_model: str = "eleven_multilingual_v2"
+    elevenlabs_voice_id: str = "JBFqnCBsd6RMkjVDRZzb"
+    # Giọng riêng đọc phản hồi tiếng Việt (/tts/feedback). Tách khỏi voice_id
+    # trên (dùng cho fallback đọc tiếng Trung) để chọn giọng Việt tự nhiên hơn.
+    elevenlabs_feedback_voice_id: str = "BlZK9tHPU6XXjwOSIiYA"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property
@@ -42,6 +52,10 @@ class Settings(BaseSettings):
     @property
     def gemini_native_keys_list(self) -> list[str]:
         return [k.strip() for k in self.gemini_native_api_keys.split(",") if k.strip()]
+
+    @property
+    def elevenlabs_keys_list(self) -> list[str]:
+        return [k.strip() for k in self.elevenlabs_api_keys.split(",") if k.strip()]
 
 
 settings = Settings()

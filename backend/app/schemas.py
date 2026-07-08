@@ -375,7 +375,13 @@ class AuthResponse(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, min_length=5, max_length=128)
     leaderboard_opt_in: bool | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=6, max_length=128)
+    new_password: str = Field(min_length=6, max_length=128)
 
 
 class LeaderboardEntryOut(BaseModel):

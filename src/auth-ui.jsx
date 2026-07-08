@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { Award, Flame, Loader2, LogIn, LogOut, Medal, Trophy, User, UserPlus, X } from 'lucide-react';
-import { getLeaderboard, getUserProfile, updateProfile } from './api-core';
+import { Award, Flame, KeyRound, Loader2, LogIn, LogOut, Medal, Pencil, Save, Trash2, Trophy, User, UserPlus, X } from 'lucide-react';
+import { changePassword, deleteAccount, getLeaderboard, getUserProfile, updateProfile } from './api-core';
 import { useAuth } from './auth-core';
+import { scopedKey } from './user-scope';
 import SpaceVortexBackground from './components/SpaceVortexBackground.jsx';
 
 function AuthForm({ mode, setMode }) {
@@ -290,6 +291,238 @@ function StreakCard({ icon: Icon, label, value, tone = 'jade' }) {
   );
 }
 
+function EditProfileSection() {
+  const { user, updateLocalUser } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [displayName, setDisplayName] = useState(user?.display_name ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const startEdit = () => {
+    setDisplayName(user?.display_name ?? '');
+    setEmail(user?.email ?? '');
+    setError('');
+    setSuccess('');
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setError('');
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const patch = {};
+      const nextName = displayName.trim();
+      const nextEmail = email.trim();
+      if (nextName && nextName !== user.display_name) patch.display_name = nextName;
+      if (nextEmail && nextEmail !== user.email) patch.email = nextEmail;
+      if (!Object.keys(patch).length) {
+        setEditing(false);
+        return;
+      }
+      const updated = await updateProfile(patch);
+      updateLocalUser(updated);
+      setSuccess('Đã lưu hồ sơ.');
+      setEditing(false);
+    } catch (err) {
+      setError(err.message || 'Không lưu được hồ sơ.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="account-section core-card">
+      <div className="account-section__header">
+        <h4><Pencil size={18} /> Thông tin cá nhân</h4>
+        {!editing && (
+          <button type="button" className="btn-secondary account-section__edit" onClick={startEdit}>
+            <Pencil size={14} /> Sửa
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <form className="account-form" onSubmit={handleSubmit}>
+          <label>
+            Tên hiển thị
+            <input value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={64} required />
+          </label>
+          <label>
+            Email
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" />
+          </label>
+          {error && <p className="account-form__error">{error}</p>}
+          <div className="account-form__actions">
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Lưu
+            </button>
+            <button type="button" className="btn-secondary" onClick={cancelEdit} disabled={saving}>Huỷ</button>
+          </div>
+        </form>
+      ) : (
+        <div className="account-info">
+          <div className="account-info__row"><span>Tên hiển thị</span><strong>{user?.display_name}</strong></div>
+          <div className="account-info__row"><span>Tên đăng nhập</span><strong>@{user?.username}</strong></div>
+          <div className="account-info__row"><span>Email</span><strong>{user?.email}</strong></div>
+          {success && <p className="account-form__success">{success}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ChangePasswordSection() {
+  const [open, setOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const reset = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setError('');
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
+    if (newPassword.length < 6) {
+      setError('Mật khẩu mới phải có ít nhất 6 ký tự.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Xác nhận mật khẩu không khớp.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await changePassword({ current_password: currentPassword, new_password: newPassword });
+      setSuccess('Đã đổi mật khẩu.');
+      reset();
+      setOpen(false);
+    } catch (err) {
+      setError(err.message || 'Không đổi được mật khẩu.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="account-section core-card">
+      <div className="account-section__header">
+        <h4><KeyRound size={18} /> Mật khẩu</h4>
+        {!open && (
+          <button type="button" className="btn-secondary account-section__edit" onClick={() => { reset(); setSuccess(''); setOpen(true); }}>
+            Đổi mật khẩu
+          </button>
+        )}
+      </div>
+
+      {open ? (
+        <form className="account-form" onSubmit={handleSubmit}>
+          <label>
+            Mật khẩu hiện tại
+            <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required minLength={6} autoComplete="current-password" />
+          </label>
+          <label>
+            Mật khẩu mới
+            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
+          </label>
+          <label>
+            Xác nhận mật khẩu mới
+            <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
+          </label>
+          {error && <p className="account-form__error">{error}</p>}
+          <div className="account-form__actions">
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Lưu mật khẩu
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => { reset(); setOpen(false); }} disabled={saving}>Huỷ</button>
+          </div>
+        </form>
+      ) : (
+        success && <p className="account-form__success">{success}</p>
+      )}
+    </section>
+  );
+}
+
+function DeleteAccountSection() {
+  const { user, logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDelete = async (event) => {
+    event.preventDefault();
+    setError('');
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      // Dọn dữ liệu học cục bộ đã scope theo user TRƯỚC khi logout — sau logout
+      // currentUserId về null nên scopedKey mất hậu tố, không trỏ đúng khóa nữa.
+      ['coreStats', 'coreHistory', 'learningSessionSummaries'].forEach(key => {
+        localStorage.removeItem(scopedKey(key));
+      });
+      logout();
+    } catch (err) {
+      setError(err.message || 'Không xoá được tài khoản.');
+      setDeleting(false);
+    }
+  };
+
+  const canDelete = confirmText.trim().toLowerCase() === (user?.username ?? '').toLowerCase();
+
+  return (
+    <section className="account-section account-section--danger core-card">
+      <div className="account-section__header">
+        <h4><Trash2 size={18} /> Xoá tài khoản</h4>
+      </div>
+      {open ? (
+        <form className="account-form" onSubmit={handleDelete}>
+          <p className="account-danger__warning">
+            Hành động này không thể hoàn tác. Toàn bộ tài khoản sẽ bị xoá vĩnh viễn.
+            Gõ lại tên đăng nhập <strong>{user?.username}</strong> để xác nhận.
+          </p>
+          <label>
+            Tên đăng nhập
+            <input value={confirmText} onChange={e => setConfirmText(e.target.value)} autoComplete="off" />
+          </label>
+          {error && <p className="account-form__error">{error}</p>}
+          <div className="account-form__actions">
+            <button type="submit" className="btn-danger" disabled={!canDelete || deleting}>
+              {deleting ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />} Xoá vĩnh viễn
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => { setConfirmText(''); setError(''); setOpen(false); }} disabled={deleting}>Huỷ</button>
+          </div>
+        </form>
+      ) : (
+        <div className="account-danger__intro">
+          <p>Xoá tài khoản và mọi dữ liệu đăng nhập khỏi hệ thống.</p>
+          <button type="button" className="btn-danger" onClick={() => { setError(''); setOpen(true); }}>
+            <Trash2 size={16} /> Xoá tài khoản
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ProfilePanel() {
   const { isAuthenticated, user, openLogin, openRegister } = useAuth();
   const [profile, setProfile] = useState(null);
@@ -399,6 +632,15 @@ export function ProfilePanel() {
             )}
           </section>
         </>
+      )}
+
+      {isAuthenticated && (
+        <section className="profile-account">
+          <h4><User size={18} /> Quản lý tài khoản</h4>
+          <EditProfileSection />
+          <ChangePasswordSection />
+          <DeleteAccountSection />
+        </section>
       )}
     </div>
   );

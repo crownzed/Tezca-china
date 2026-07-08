@@ -163,17 +163,12 @@ const TTS_API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? ''
 function geminiTtsUrl(text) {
   return `${TTS_API_BASE}/tts?text=${encodeURIComponent(text)}`;
 }
-function youdaoTtsUrl(text) {
-  return `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&type=2`;
-}
-function googleTtsUrl(text) {
-  return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=${encodeURIComponent(text)}`;
-}
-
 function tryPlayUrl(url, rate, runId, onDone, fallback) {
   const audio = new Audio(url);
   audio.preload = 'auto';
-  audio.playbackRate = Math.max(0.6, Math.min(1.1, rate));
+  audio.volume = 1;
+  // Clip đã ghi sẵn: kéo dưới 0.85 làm nhòe/méo âm mà không giúp nghe rõ hơn.
+  audio.playbackRate = Math.max(0.85, Math.min(1.1, rate));
   activeAudio = audio;
 
   let resolved = false;
@@ -190,10 +185,10 @@ function tryPlayUrl(url, rate, runId, onDone, fallback) {
 
 function playOnlineTts(text, rate, runId, onDone) {
   const goBrowser = () => speakBrowser(text, rate, runId, onDone);
-  const goGoogle = () => tryPlayUrl(googleTtsUrl(text), rate, runId, onDone, goBrowser);
-  const goYoudao = () => tryPlayUrl(youdaoTtsUrl(text), rate, runId, onDone, goGoogle);
-  // Gemini TTS (giọng tự nhiên nhất) -> Youdao -> Google -> browser
-  tryPlayUrl(geminiTtsUrl(text), rate, runId, onDone, goYoudao);
+  // Gemini TTS (WAV 24kHz, same-origin, âm chuẩn) -> browser TTS.
+  // Youdao/Google đã bỏ: mono bitrate thấp, hay cắt cụt chữ, và cross-origin
+  // nên không normalize được — chính là nguồn "bóp chữ" người dùng phản ánh.
+  tryPlayUrl(geminiTtsUrl(text), rate, runId, onDone, goBrowser);
 }
 
 // Browser TTS — last resort fallback
@@ -273,7 +268,10 @@ export function speak(text, rate = 0.82, onDone) {
   }
   const audio = new Audio(src);
   audio.preload = 'auto';
-  audio.playbackRate = Math.max(0.5, Math.min(1.15, rate));
+  audio.volume = 1;
+  // Clip local đã ghi sẵn: kéo dưới 0.85 làm nhòe/méo chữ. Giữ floor cao hơn
+  // browser TTS (vốn xử lý kéo chậm tốt hơn file nén).
+  audio.playbackRate = Math.max(0.85, Math.min(1.15, rate));
   activeAudio = audio;
 
   let resolved = false;
@@ -302,6 +300,26 @@ export function speak(text, rate = 0.82, onDone) {
   });
 
   return src;
+}
+
+// Đọc phản hồi tiếng Việt qua ElevenLabs (/tts/feedback). Tách khỏi speak():
+// speak() đi qua normalizeForTts + Gemini zh-CN, không hợp cho câu tiếng Việt.
+export function speakFeedback(text, onDone) {
+  const clean = String(text || '').trim();
+  if (!clean) { onDone?.(false); return; }
+  unlockSpeech();
+  const runId = ++speechRunId;
+  stopActiveAudio();
+  if (hasSpeechSupport()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+
+  const url = `${TTS_API_BASE}/tts/feedback?text=${encodeURIComponent(clean)}`;
+  tryPlayUrl(url, 1, runId, (success) => {
+    if (runId !== speechRunId) return;
+    onDone?.(success);
+  }, () => {
+    if (runId !== speechRunId) return;
+    onDone?.(false);
+  });
 }
 
 export function getAudioHint(audioPlaying, audioPlayed, audioError) {
