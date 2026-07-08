@@ -2720,3 +2720,74 @@ main.core-page {
     justify-content: center;
   }
 }
+
+/* ============================================================
+   LOGICAL COMPONENTS TEXT COLOR SYNCHRONIZATION
+   ============================================================ */
+
+/* 1. Behavior Adaptive Nudge Cards */
+.behavior-nudge--fragile h3,
+.behavior-nudge--overloaded h3 {
+  color: var(--cinnabar) !important;
+}
+.behavior-nudge--fragile p,
+.behavior-nudge--overloaded p,
+.behavior-nudge--fragile .behavior-nudge-meta span,
+.behavior-nudge--overloaded .behavior-nudge-meta span {
+  color: color-mix(in srgb, var(--cinnabar) 80%, var(--text)) !important;
+}
+
+.behavior-nudge--returning h3,
+.behavior-nudge--ready_short h3,
+.behavior-nudge--habit_building h3 {
+  color: var(--gold) !important;
+}
+.behavior-nudge--returning p,
+.behavior-nudge--ready_short p,
+.behavior-nudge--returning .behavior-nudge-meta span,
+.behavior-nudge--ready_short .behavior-nudge-meta span,
+.behavior-nudge--habit_building p,
+.behavior-nudge--habit_building .behavior-nudge-meta span {
+  color: color-mix(in srgb, var(--gold) 80%, var(--text)) !important;
+}
+
+.behavior-nudge--ready_deep h3,
+.behavior-nudge--maintenance h3 {
+  color: var(--jade) !important;
+}
+.behavior-nudge--ready_deep p,
+.behavior-nudge--maintenance p,
+.behavior-nudge--ready_deep .behavior-nudge-meta span,
+.behavior-nudge--maintenance .behavior-nudge-meta span {
+  color: color-mix(in srgb, var(--jade) 80%, var(--text)) !important;
+}
+
+/* 2. Today's Mission Cards */
+.today-mission--gold p {
+  color: color-mix(in srgb, var(--gold) 80%, var(--text)) !important;
+}
+
+.today-mission--jade p {
+  color: color-mix(in srgb, var(--jade) 80%, var(--text)) !important;
+}
+
+.today-mission--cinnabar p {
+  color: color-mix(in srgb, var(--cinnabar) 80%, var(--text)) !important;
+}
+
+.today-mission--blue p {
+  color: color-mix(in srgb, var(--porcelain) 80%, var(--text)) !important;
+}
+
+/* 3. Skill Readiness Metric Cards */
+.readiness-cell[data-tone="steady"] strong {
+  color: var(--gold) !important;
+}
+
+.readiness-cell[data-tone="weak"] strong {
+  color: var(--cinnabar) !important;
+}
+
+.readiness-cell strong {
+  color: var(--jade) !important;
+}
