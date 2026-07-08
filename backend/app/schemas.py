@@ -384,6 +384,20 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=6, max_length=128)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=128)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    new_password: str = Field(min_length=6, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    ok: bool = True
+    message: str = ""
+
+
 class LeaderboardEntryOut(BaseModel):
     rank: int | None = None
     user_id: str
@@ -599,4 +613,44 @@ class WordOut(BaseModel):
 class WordsOut(BaseModel):
     words: list[WordOut] = Field(default_factory=list)
     counts: dict[str, int] = Field(default_factory=dict)
+
+
+# --- Admin (single admin) ----------------------------------------------------
+
+class AdminLoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=128)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class AdminLoginResponse(BaseModel):
+    token: str
+    email: str
+
+
+class AdminUserOut(BaseModel):
+    id: str
+    username: str
+    email: str
+    display_name: str
+    is_active: bool
+    created_at: str
+
+
+class AdminUsersOut(BaseModel):
+    users: list[AdminUserOut] = Field(default_factory=list)
+
+
+class AdminUserUpdateRequest(BaseModel):
+    is_active: bool
+
+
+# Config expose/patch: giá trị mỗi field là str hoặc int (các field non-secret
+# đang có trong settings). Danh sách field cho phép nằm ở admin_service, endpoint
+# lọc theo đó nên client không thể đọc/ghi secret hay bịa field mới.
+class AdminConfigOut(BaseModel):
+    config: dict[str, str | int] = Field(default_factory=dict)
+
+
+class AdminConfigUpdateRequest(BaseModel):
+    updates: dict[str, str | int] = Field(default_factory=dict)
 

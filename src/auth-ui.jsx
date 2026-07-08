@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { Award, Flame, KeyRound, Loader2, LogIn, LogOut, Medal, Pencil, Save, Trash2, Trophy, User, UserPlus, X } from 'lucide-react';
-import { changePassword, deleteAccount, getLeaderboard, getUserProfile, updateProfile } from './api-core';
+import { Award, CheckCircle2, Flame, KeyRound, Loader2, LogIn, LogOut, Medal, Pencil, Save, Trash2, Trophy, User, UserPlus, X } from 'lucide-react';
+import { changePassword, deleteAccount, forgotPassword, getLeaderboard, getUserProfile, resetPassword, updateProfile } from './api-core';
 import { useAuth } from './auth-core';
 import { scopedKey } from './user-scope';
 import SpaceVortexBackground from './components/SpaceVortexBackground.jsx';
@@ -12,8 +12,16 @@ function AuthForm({ mode, setMode }) {
   const [displayName, setDisplayName] = useState('');
   const [loginValue, setLoginValue] = useState('');
   const [password, setPassword] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const goMode = (next) => {
+    setError('');
+    setForgotSent(false);
+    setMode(next);
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -22,6 +30,9 @@ function AuthForm({ mode, setMode }) {
     try {
       if (mode === 'login') {
         await login(loginValue.trim(), password);
+      } else if (mode === 'forgot') {
+        await forgotPassword(forgotEmail.trim());
+        setForgotSent(true);
       } else {
         await register({
           username: username.trim(),
@@ -36,6 +47,38 @@ function AuthForm({ mode, setMode }) {
       setSubmitting(false);
     }
   };
+
+  if (mode === 'forgot') {
+    return (
+      <>
+        {forgotSent ? (
+          <div className="auth-form auth-form__sent">
+            <CheckCircle2 size={40} className="auth-form__sent-icon" />
+            <p>Nếu email tồn tại, chúng tôi đã gửi liên kết đặt lại mật khẩu. Hãy kiểm tra hộp thư (kể cả thư rác).</p>
+          </div>
+        ) : (
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <p className="auth-form__hint">Nhập email đã đăng ký, chúng tôi sẽ gửi liên kết đặt lại mật khẩu.</p>
+            <label>
+              Email
+              <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required autoComplete="email" />
+            </label>
+
+            {error && <p className="auth-form__error">{error}</p>}
+
+            <button className="btn-primary auth-form__submit" type="submit" disabled={submitting}>
+              {submitting ? <Loader2 size={16} className="spin" /> : <KeyRound size={16} />}
+              Gửi liên kết
+            </button>
+          </form>
+        )}
+
+        <p className="auth-modal__switch">
+          <button type="button" onClick={() => goMode('login')}>Quay lại đăng nhập</button>
+        </p>
+      </>
+    );
+  }
 
   return (
     <>
@@ -67,6 +110,12 @@ function AuthForm({ mode, setMode }) {
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         </label>
 
+        {mode === 'login' && (
+          <p className="auth-form__forgot">
+            <button type="button" onClick={() => goMode('forgot')}>Quên mật khẩu?</button>
+          </p>
+        )}
+
         {error && <p className="auth-form__error">{error}</p>}
 
         <button className="btn-primary auth-form__submit" type="submit" disabled={submitting}>
@@ -78,7 +127,7 @@ function AuthForm({ mode, setMode }) {
       <p className="auth-modal__switch">
         {mode === 'login' ? 'Chưa có tài khoản?' : 'Đã có tài khoản?'}
         {' '}
-        <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+        <button type="button" onClick={() => goMode(mode === 'login' ? 'register' : 'login')}>
           {mode === 'login' ? 'Đăng ký ngay' : 'Đăng nhập'}
         </button>
       </p>
@@ -100,6 +149,84 @@ function AuthModal() {
           </button>
         </div>
         <AuthForm mode={mode} setMode={setMode} />
+      </div>
+    </div>
+  );
+}
+
+export function ResetPasswordPage() {
+  const cardRef = useRef(null);
+  const [token] = useState(() => new URLSearchParams(window.location.search).get('token') || '');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const goHome = () => { window.location.href = '/'; };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+    if (password.length < 6) {
+      setError('Mật khẩu mới phải có ít nhất 6 ký tự.');
+      return;
+    }
+    if (password !== confirm) {
+      setError('Xác nhận mật khẩu không khớp.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await resetPassword(token, password);
+      setDone(true);
+    } catch (err) {
+      setError(err.message || 'Không đặt lại được mật khẩu.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="auth-gate" style={{ position: 'relative', overflow: 'hidden' }}>
+      <SpaceVortexBackground active={true} cardRef={cardRef} />
+      <div className="auth-gate__vignette" />
+      <div ref={cardRef} className="auth-gate__card auth-gate__card--glass" style={{ position: 'relative', zIndex: 10 }}>
+        <div className="auth-gate__brand">
+          <img src="/logo.jpg" alt="Logo" />
+          <h1>Đặt lại mật khẩu</h1>
+        </div>
+
+        {!token ? (
+          <div className="auth-form auth-form__sent">
+            <p>Liên kết không hợp lệ. Hãy yêu cầu gửi lại email đặt lại mật khẩu.</p>
+            <button type="button" className="btn-primary auth-form__submit" onClick={goHome}>Về trang đăng nhập</button>
+          </div>
+        ) : done ? (
+          <div className="auth-form auth-form__sent">
+            <CheckCircle2 size={40} className="auth-form__sent-icon" />
+            <p>Đã đặt lại mật khẩu. Bạn có thể đăng nhập bằng mật khẩu mới.</p>
+            <button type="button" className="btn-primary auth-form__submit" onClick={goHome}>Đăng nhập</button>
+          </div>
+        ) : (
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <label>
+              Mật khẩu mới
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
+            </label>
+            <label>
+              Xác nhận mật khẩu mới
+              <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password" />
+            </label>
+
+            {error && <p className="auth-form__error">{error}</p>}
+
+            <button className="btn-primary auth-form__submit" type="submit" disabled={submitting}>
+              {submitting ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+              Đặt lại mật khẩu
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

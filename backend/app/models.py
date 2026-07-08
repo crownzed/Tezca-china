@@ -16,6 +16,23 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(256))
     display_name: Mapped[str] = mapped_column(String(64))
     leaderboard_opt_in: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Admin khóa/mở tài khoản. False = bị khóa: login bị chặn (xem AuthService.login).
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # user_id là String thường (không FK) — nhất quán với các bảng học khác;
+    # dọn tay trong AuthService.delete_account.
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    # Chỉ lưu SHA-256 của token, không bao giờ lưu token thô. Link gửi qua email
+    # chứa token thô; DB chỉ giữ hash để đối chiếu, rò rỉ DB không lộ được link.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

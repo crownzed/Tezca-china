@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 
 from .db import SessionLocal, init_db
 from .models import Word
+from .routers.admin import router as admin_router
 from .routers.auth import router as auth_router
 from .routers.leaderboard import router as leaderboard_router
 from .routers.quiz import router as quiz_router
@@ -32,6 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(leaderboard_router)
 app.include_router(quiz_router)

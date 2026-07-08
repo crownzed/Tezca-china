@@ -4,9 +4,11 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import User
-from ..schemas import AuthResponse, ChangePasswordRequest, LoginRequest, ProfileOut, ProfileStatsOut, RegisterRequest, TitleOut, UpdateProfileRequest, UserOut
+from ..schemas import AuthResponse, ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, MessageResponse, ProfileOut, ProfileStatsOut, RegisterRequest, ResetPasswordRequest, TitleOut, UpdateProfileRequest, UserOut
 from ..services.auth_service import AuthService
+from ..services.email_service import EmailService
 from ..services.profile_service import ProfileService
+from ..settings import settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -53,6 +55,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     try:
         user = service.login(payload.login, payload.password)
     except ValueError as exc:
+        if str(exc) == "account_locked":
+            raise HTTPException(status_code=403, detail="Tài khoản đã bị khóa") from exc
         raise HTTPException(status_code=401, detail="Sai tên đăng nhập hoặc mật khẩu") from exc
     token = service.create_token(user.id)
     return AuthResponse(token=token, user=_user_out(user))
@@ -121,6 +125,38 @@ def change_password(
             raise HTTPException(status_code=400, detail="Mật khẩu mới phải có ít nhất 6 ký tự") from exc
         raise
     return _user_out(user)
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    # Luôn trả cùng một thông điệp bất kể email có tồn tại hay không, để không
+    # tiết lộ email nào đã đăng ký (chống enumeration). Chỉ khi tìm được user
+    # mới thực sự sinh token + gửi mail.
+    service = AuthService(db)
+    user = service.get_user_by_login(payload.email)
+    if user:
+        token = service.create_reset_token(user)
+        reset_link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
+        EmailService.send_password_reset(
+            user.email, reset_link, settings.password_reset_expire_minutes
+        )
+    return MessageResponse(
+        message="Nếu email tồn tại, chúng tôi đã gửi liên kết đặt lại mật khẩu."
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        AuthService(db).reset_password(payload.token, payload.new_password)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "invalid_token":
+            raise HTTPException(status_code=400, detail="Liên kết không hợp lệ hoặc đã hết hạn") from exc
+        if code == "password_too_short":
+            raise HTTPException(status_code=400, detail="Mật khẩu mới phải có ít nhất 6 ký tự") from exc
+        raise
+    return MessageResponse(message="Đã đặt lại mật khẩu. Bạn có thể đăng nhập ngay.")
 
 
 @router.delete("/me")
