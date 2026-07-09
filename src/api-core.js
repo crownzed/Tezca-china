@@ -1,4 +1,5 @@
 import { scopedKey } from './user-scope';
+import { recordWordReview } from './vocab-srs';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000');
 
@@ -358,6 +359,16 @@ export async function startLearningSession(payload) {
 function localLearningEvent(payload, question = null) {
   const correctIndex = question?.correct_index ?? 0;
   const correct = payload.selected_index === correctIndex;
+  // Ghi lịch ôn per-word vào kho SRS local (mirror srs_service.py). Chỉ ghi khi
+  // câu có gắn từ; item không có từ (vd reading tổng hợp) bỏ qua. nextReviewAt
+  // lấy từ record thật thay số cứng 24h/1h trước đây.
+  const srs = question?.word?.hanzi
+    ? recordWordReview(question.word, {
+        correct,
+        confidence: payload.confidence,
+        latencyMs: payload.latency_ms,
+      })
+    : null;
   return {
     event_id: null,
     question_id: payload.question_id,
@@ -365,7 +376,7 @@ function localLearningEvent(payload, question = null) {
     correct_index: correctIndex,
     explanation: question?.explanation || '',
     error_tag: correct ? '' : payload.error_tag || (question?.quiz_type === 'listening' || question?.quiz_type === 'dialogue' ? 'sound_error' : 'meaning_error'),
-    next_review_at: new Date(Date.now() + (correct ? 24 : 1) * 60 * 60 * 1000).toISOString(),
+    next_review_at: srs?.nextReviewAt || new Date(Date.now() + (correct ? 24 : 1) * 60 * 60 * 1000).toISOString(),
     offline: true,
   };
 }
@@ -885,6 +896,19 @@ export async function scorePronunciation(payload) {
 // Gửi audio (base64) + lịch sử hội thoại, nhận lời người dùng + câu trả lời CN/VI.
 export async function voiceChat(payload) {
   return request('/api/speech/chat', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// --- AI phân tích dữ liệu học tổng hợp (on-demand) ---
+
+// Nhờ AI phân tích toàn bộ dữ liệu học và trả nhận xét + lộ trình tiếng Việt.
+// Không có fallback local: tính năng chỉ dùng khi backend online (UI ẩn nút khi
+// offline). retryable để hưởng retry cold-start; lỗi ném ra cho caller hiển thị.
+export async function analyzeStudyData(userId = 'local-user') {
+  return request('/api/analysis', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+    retryable: true,
+  });
 }
 
 export async function generateCustomVocabExercises(payload) {

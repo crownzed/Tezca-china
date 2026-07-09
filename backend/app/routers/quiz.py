@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,12 +8,24 @@ from sqlalchemy.orm import Session
 from ..deps import resolve_user_id
 from ..db import get_db
 from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress, Word
-from ..schemas import AnalyticsOut, QuizOut, QuizStartRequest, QuizSubmitRequest, QuizSubmitResponse, QuestionOut, QuestionWordOut, SessionCompleteOut, SessionCompleteRequest, SessionEventOut, SessionEventRequest, SessionOutputOut, SessionOutputRequest, SessionStartOut, SessionStartRequest, StatsOut, TodaySessionOut
+from ..schemas import AnalyticsOut, QuizOut, QuizStartRequest, QuizSubmitRequest, QuizSubmitResponse, QuestionOut, QuestionWordOut, SessionCompleteOut, SessionCompleteRequest, SessionEventOut, SessionEventRequest, SessionOutputOut, SessionOutputRequest, SessionStartOut, SessionStartRequest, StatsOut, StudyAnalysisOut, TodaySessionOut
 from ..services.output_service import OutputService
 from ..services.quiz_service import QuizService
+from ..services.rate_limiter import RateLimiter
 from ..services.session_service import SessionService
+from ..services.study_analysis_service import analyze_study_data
 
 router = APIRouter(prefix="/api", tags=["quiz"])
+logger = logging.getLogger(__name__)
+
+# Phân tích AI đốt quota LLM mỗi lần gọi — giới hạn theo user (nút on-demand,
+# 6 lần/giờ là dư cho nhu cầu thật, chặn spam bấm liên tục).
+_analysis_limiter = RateLimiter(max_hits=6, window_seconds=3600)
+
+
+def _enforce(limiter: RateLimiter, key: str) -> None:
+    if not limiter.allow(key):
+        raise HTTPException(status_code=429, detail="Quá nhiều yêu cầu, vui lòng thử lại sau.")
 
 TYPE_LABELS = {
     QuizType.vocab: "Từ vựng",
@@ -382,3 +395,23 @@ def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get
             "recommended_strategy": recommended_strategy,
         },
     )
+
+
+@router.post("/analysis", response_model=StudyAnalysisOut)
+def study_analysis(user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
+    """AI phân tích dữ liệu học tổng hợp (on-demand). Gom lại chính AnalyticsOut
+    mà /api/analytics sinh ra rồi nhờ LLM viết nhận xét + lộ trình tiếng Việt.
+
+    Rate-limit theo user vì mỗi lần đốt quota LLM. Lỗi LLM -> 424 (KHÔNG dùng 502):
+    frontend gọi endpoint này với retryable=true để cầm cự cold-start, mà request()
+    lại retry mọi 502/503/504. Nếu lỗi LLM trả 502 thì 1 lần bấm hỏng sẽ retry 5 lần
+    → đốt 5 token rate-limit (chỉ có 6/giờ) + 5 lượt gọi LLM. Dùng 424 (Failed
+    Dependency) để tách lỗi LLM khỏi tập cold-start, retry không kích hoạt."""
+    _enforce(_analysis_limiter, user_id)
+    analytics_out = analytics(user_id=user_id, db=db)
+    try:
+        result = analyze_study_data(db, user_id, analytics_out.model_dump())
+        return StudyAnalysisOut(**result)
+    except RuntimeError as e:
+        logger.warning("Study analysis failed for %s: %s", user_id, e)
+        raise HTTPException(status_code=424, detail="AI phân tích tạm thời không khả dụng, thử lại sau.")
