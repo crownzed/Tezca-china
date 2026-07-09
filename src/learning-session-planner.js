@@ -1,5 +1,6 @@
 import { inferBehaviorState } from './behavior-engine';
 import { scopedKey } from './user-scope';
+import { getDueWords } from './vocab-srs';
 
 const QUIZ_TYPE_LABELS = {
   vocab: 'Từ vựng',
@@ -103,7 +104,14 @@ export function buildTodaySessionPlan({ analytics, stats, focusLevel = 1, modeId
   const weakestType = getWeakestType(analytics);
   const recommendation = analytics?.recommendation || {};
   const targetLevel = Number(recommendation.level || weakWords[0]?.level || focusLevel || 1);
-  const dueProxy = answered ? Math.max(weakWords.length, weakCount, Math.min(8, Math.ceil(answered * 0.08))) : 0;
+  // Số từ đến hạn ôn THẬT từ kho SRS local (per-word next_review_at). Chỉ khi kho
+  // còn rỗng (tài khoản cũ đã làm quiz kiểu cũ nhưng chưa có record SRS) mới rơi
+  // về proxy suy từ weakWords để không vỡ trải nghiệm buổi đầu.
+  const dueWords = getDueWords(20);
+  const realDue = dueWords.length;
+  const dueProxy = realDue > 0
+    ? realDue
+    : (answered ? Math.max(weakWords.length, weakCount, Math.min(8, Math.ceil(answered * 0.08))) : 0);
   const behaviorProbe = inferBehaviorState({ analytics, stats, selectedMode: selectedMode.id, dueCount: dueProxy, weakCount });
   const mode = behaviorProbe.forceMicro ? modeById('micro') : selectedMode;
   const behavior = inferBehaviorState({ analytics, stats, selectedMode: mode.id, dueCount: dueProxy, weakCount });
@@ -112,9 +120,19 @@ export function buildTodaySessionPlan({ analytics, stats, focusLevel = 1, modeId
   const shouldBlockNew = behavior.blockNewWords || mode.id === 'micro' || dueCount > 30;
   const newCount = shouldBlockNew ? 0 : mode.newWords;
   const targetSkill = behavior.reduceDifficulty ? 'vocab' : mode.id === 'deep' && weakestType === 'vocab' ? 'listening' : weakestType;
-  const focusWords = weakWords.length
-    ? weakWords.slice(0, 4).map(item => ({ hanzi: item.hanzi, pinyin: item.pinyin, accuracy: item.accuracy }))
-    : (recommendation.focus_words || []).slice(0, 4).map(hanzi => ({ hanzi, pinyin: '', accuracy: 0 }));
+  // Ưu tiên từ đến hạn ôn THẬT (bảo vệ trí nhớ trước), rồi bù bằng weakWords /
+  // recommendation cho đủ 4. Khử trùng theo hanzi. Shape { hanzi, pinyin, accuracy }
+  // giữ nguyên để buildChineseLearningItems (chinese-learning-items.js) không phải sửa.
+  const dueFocus = dueWords.map(record => ({
+    hanzi: record.hanzi,
+    pinyin: record.pinyin || '',
+    accuracy: record.seen ? Math.round((record.correct / record.seen) * 100) : 0,
+  })).filter(item => item.hanzi);
+  const backfill = weakWords.length
+    ? weakWords.map(item => ({ hanzi: item.hanzi, pinyin: item.pinyin, accuracy: item.accuracy }))
+    : (recommendation.focus_words || []).map(hanzi => ({ hanzi, pinyin: '', accuracy: 0 }));
+  const focusSeen = new Set(dueFocus.map(item => item.hanzi));
+  const focusWords = [...dueFocus, ...backfill.filter(item => item.hanzi && !focusSeen.has(item.hanzi))].slice(0, 4);
 
   return {
     mode,
