@@ -1,7 +1,7 @@
-# Fly.io app config cho backend FastAPI (Tezca China).
-# Deploy từ thư mục backend/ (nơi có Dockerfile). DB dùng Turso (libSQL) remote,
-# nên KHÔNG cần volume/disk. Secrets (DATABASE_URL, TURSO_AUTH_TOKEN, các API key)
-# set qua `fly secrets set`, không ghi trong file này.
+# fly.toml app configuration file generated for tezca-china on 2026-07-16T16:06:43Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
 app = "tezca-china"
 primary_region = "sin"  # Singapore — gần VN nhất
@@ -14,10 +14,11 @@ primary_region = "sin"  # Singapore — gần VN nhất
 
 [http_service]
   internal_port = 8080
-  force_https = true
-  auto_stop_machines = "stop"    # dừng máy thừa khi vắng traffic
-  auto_start_machines = true     # tự dậy khi có request
-  min_machines_running = 1       # giữ 1 máy luôn chạy → tránh cold-start mỗi lần
+  force_https = false
+  auto_stop_machines = 'stop'
+  auto_start_machines = false
+  min_machines_running = 0
+  checks = [{ grace_period = '20s', interval = '30s', method = 'GET', path = '/health', timeout = '5s' }]
 
   [[http_service.checks]]
     path = "/health"
@@ -27,5 +28,5 @@ primary_region = "sin"  # Singapore — gần VN nhất
     grace_period = "20s"
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"   # parselmouth + numpy cần bộ nhớ; nâng lên 1gb nếu OOM
+  size = 'shared-cpu-1x'
+  memory = '512mb'
