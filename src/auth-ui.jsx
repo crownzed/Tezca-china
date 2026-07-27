@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
-import { Award, CheckCircle2, Eye, EyeOff, Flame, KeyRound, Loader2, LogIn, LogOut, Medal, Pencil, Save, Trash2, Trophy, User, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Award, CheckCircle2, Eye, EyeOff, Flame, KeyRound, Loader2, LogIn, LogOut, Medal, Pencil, Save, Trash2, Trophy, User, UserPlus, X } from 'lucide-react';
 import { changePassword, deleteAccount, forgotPassword, getLeaderboard, getUserProfile, resetPassword, updateProfile } from './api-core';
 import { useAuth } from './auth-core';
 import { scopedKey } from './user-scope';
 import SpaceVortexBackground from './components/SpaceVortexBackground.jsx';
+import LandingPage from './components/LandingPage.jsx';
 
 // Ô nhập mật khẩu kèm nút hiện/ẩn (icon con mắt). Toggle type text/password cục
 // bộ; mọi prop khác (value, onChange, required, minLength, autoComplete...) chuyển
@@ -255,8 +256,16 @@ export function ResetPasswordPage() {
 
 export function AuthGate({ children }) {
   const { isAuthenticated, loading } = useAuth();
-  const [mode, setMode] = useState('login');
+  // null = đang ở landing; 'login' | 'register' = đã mở form auth. Khách vào
+  // trang lần đầu thấy landing trước, form chỉ hiện khi họ chủ động bấm CTA.
+  const [mode, setMode] = useState(null);
   const cardRef = useRef(null);
+
+  // Về đầu trang khi chuyển giữa landing và form — nếu không, người dùng cuộn
+  // sâu ở landing rồi bấm "Đăng nhập" sẽ thấy form ở giữa khung nhìn.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [mode]);
 
   if (loading) {
     return (
@@ -268,11 +277,23 @@ export function AuthGate({ children }) {
 
   if (isAuthenticated) return children;
 
+  if (mode === null) {
+    return (
+      <LandingPage
+        onLogin={() => setMode('login')}
+        onRegister={() => setMode('register')}
+      />
+    );
+  }
+
   return (
     <div className="auth-gate" style={{ position: 'relative', overflow: 'hidden' }}>
       <SpaceVortexBackground active={true} cardRef={cardRef} />
       <div className="auth-gate__vignette" />
       <div ref={cardRef} className="auth-gate__card auth-gate__card--glass" style={{ position: 'relative', zIndex: 10 }}>
+        <button type="button" className="auth-gate__back" onClick={() => setMode(null)}>
+          <ArrowLeft size={15} /> Về trang giới thiệu
+        </button>
         <div className="auth-gate__brand">
           <img src="/logo.jpg" alt="Logo" />
           <h1>Học tiếng Trung theo cách của tôi</h1>

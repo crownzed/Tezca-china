@@ -1,0 +1,1035 @@
+/* =========================================================
+   LANDING — trang giới thiệu công khai (chưa đăng nhập).
+
+   Nền là tinh hệ canvas (#040208) tái dùng từ màn đăng nhập, nên BỀ MẶT
+   landing bị khoá sang tông tối cho CẢ hai theme bằng cách ghi đè token
+   TRONG PHẠM VI .landing. Token gốc ở :root không bị sửa — app bên trong
+   (.core-app, .immersive-bg, .mythical-art-bg) giữ nguyên sáng/tối như cũ.
+   ========================================================= */
+
+/* Token của app đều khai báo !important ở :root và [data-theme='dark']
+   (overhaul.css), nên bản ghi đè phạm vi này cũng phải !important. Nhân đôi
+   selector với [data-theme='dark'] để thắng cả nhánh dark bất kể thứ tự file. */
+.landing,
+[data-theme='dark'] .landing {
+  /* Chữ: trắng ngà -> xám xanh nhạt, tương phản >= 7:1 trên nền tinh hệ */
+  --text: #f1f6fb !important;
+  --ink: #f1f6fb !important;
+  --muted: #c5d4e2 !important;
+  --dim: #a3b4c6 !important;
+
+  /* Bề mặt thẻ: kính tối. --paper dùng cho phần tử không phải .core-card. */
+  --paper: rgba(10, 14, 28, 0.58) !important;
+  /* Alpha của viền chọn theo tương phản, không theo cảm giác: rgba trắng-xanh
+     phủ lên vùng tối nhất của canvas (#040208) cần alpha >= ~0.42 mới đạt 3:1.
+     --line dùng cho viền control (nút theme) nên phải đạt ngưỡng đó; --line-soft
+     chỉ là gạch phân cách trang trí nên để nhẹ hơn. */
+  --line: rgba(198, 220, 244, 0.46) !important;
+  --line-soft: rgba(198, 220, 244, 0.24) !important;
+  --ring-track: rgba(206, 226, 248, 0.42) !important;
+  --control-bg: rgba(14, 20, 38, 0.62) !important;
+  --control-hover: rgba(30, 44, 74, 0.78) !important;
+
+  /* Màu nhấn: kéo sáng lên để đọc được trên nền tối ở CẢ light theme
+     (jade light gốc #127a5d quá tối, sẽ chìm hẳn vào tinh hệ). */
+  --jade: #4fe0b4 !important;
+  --jade-soft: rgba(79, 224, 180, 0.16) !important;
+  --jade-gradient: linear-gradient(135deg, #6ff0c8, #35c79c) !important;
+  --gold: #f0cd8a !important;
+  --gold-soft: rgba(240, 205, 138, 0.16) !important;
+  --cinnabar: #f6a58f !important;
+  --cinnabar-soft: rgba(246, 165, 143, 0.16) !important;
+  --porcelain: #93c8e4 !important;
+  --porcelain-soft: rgba(147, 200, 228, 0.16) !important;
+
+  --primary-start: #6ff0c8 !important;
+  --primary-end: #35c79c !important;
+  --primary-text: #04231b !important;
+  --focus-ring: rgba(120, 240, 205, 0.85) !important;
+
+  /* Nền dự phòng khi canvas chưa vẽ xong: tránh nháy trắng ở frame đầu. */
+  --bg-top: #050310 !important;
+  --bg-bottom: #050310 !important;
+}
+
+.landing {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-top);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* Khung chứa tinh hệ: fixed để canvas phủ khung nhìn trong khi trang cuộn
+   (component con là position:absolute inset:0 của khung này).
+   z-index 0 + isolation:isolate ở .landing giữ nó ở đáy stacking context. */
+.landing-cosmos {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Lớp video tuỳ chọn của component bị tắt trên landing: /grok-video.mp4
+   không có trong public/, và đây là lần tải đầu của khách. Canvas là đủ. */
+.landing-cosmos video {
+  display: none !important;
+}
+
+/* Ba lớp phủ dùng chung khung: đều absolute inset 0, không nhận chuột.
+   Xếp trên canvas (canvas có z-index 1 trong component) nhưng vẫn dưới nội
+   dung vì cả .landing-cosmos nằm ở z-index 0 của stacking context .landing. */
+.landing-cosmos__band,
+.landing-cosmos__veil,
+.landing-cosmos__grain {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+/* Dải Ngân Hà: một vệt sáng chéo mảnh, blur mạnh, nghiêng -18deg. Dùng
+   mix-blend-mode: screen để chỉ cộng sáng — không bao giờ làm nền tối thêm,
+   nên không ăn vào tương phản chữ đã đo. */
+.landing-cosmos__band {
+  z-index: 2;
+  background:
+    linear-gradient(
+      100deg,
+      transparent 34%,
+      rgba(120, 160, 255, 0.13) 45%,
+      rgba(196, 214, 255, 0.20) 50%,
+      rgba(168, 120, 255, 0.12) 55%,
+      transparent 66%
+    );
+  filter: blur(26px);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  transform: rotate(-18deg) scale(1.5);
+  animation: landingBandDrift 68s ease-in-out infinite alternate;
+}
+
+@keyframes landingBandDrift {
+  from { transform: rotate(-18deg) scale(1.5) translate3d(-2%, 0, 0); }
+  to { transform: rotate(-14deg) scale(1.62) translate3d(2%, -1%, 0); }
+}
+
+/* Màn tối rìa: đậm ở bốn góc, trong veo ở giữa. Đây là lớp bảo đảm tương
+   phản — nó chỉ TỐI thêm nền, nên mọi tỉ số chữ/nền đã đo đều giữ hoặc tăng. */
+.landing-cosmos__veil {
+  z-index: 3;
+  background:
+    radial-gradient(120% 85% at 50% 0%, transparent 38%, rgba(3, 5, 14, 0.55) 100%),
+    radial-gradient(100% 70% at 50% 100%, transparent 42%, rgba(3, 5, 14, 0.62) 100%),
+    linear-gradient(180deg, rgba(4, 6, 16, 0.30) 0%, transparent 22%, transparent 76%, rgba(4, 6, 16, 0.42) 100%),
+    /* Lớp phẳng rất nhẹ: chỉ để hạ đỉnh sáng của .landing-cosmos__band (nó
+       cộng sáng bằng screen ở lớp dưới). Giữ mức thấp để thiên hà còn rực —
+       phần bảo đảm tương phản chữ do scrim cục bộ dưới từng khối chữ lo. */
+    linear-gradient(rgba(4, 6, 16, 0.14), rgba(4, 6, 16, 0.14));
+}
+
+/* Hạt phim: SVG feTurbulence inline (không thêm file asset), tile 160px.
+   Rất mờ — chỉ đủ phá banding ở các vùng gradient lớn. */
+.landing-cosmos__grain {
+  z-index: 4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+}
+
+/* --- Đệm tối cục bộ sau chữ nằm TRỰC TIẾP trên tinh hệ ------------------
+   Chữ trong .core-card đã có nền kính riêng nên an toàn. Nhưng hero copy,
+   tiêu đề section và footer nằm thẳng trên nền: chỗ lõi tinh vân sáng nhất
+   (đo được RGB 102,112,157, sau khi band cộng sáng thành 173,184,224) chỉ
+   cho chữ ~3.2:1. Thay vì hạ sáng cả thiên hà, đặt một vệt tối mềm ngay
+   dưới từng khối chữ — nhìn như đám bụi tối, và chỉ tối thêm nên không có
+   nguy cơ giảm tương phản ở bất kỳ đâu. */
+.landing-hero__copy,
+.landing-section__head,
+.landing-footer p {
+  position: relative;
+}
+
+.landing-hero__copy::before,
+.landing-section__head::before,
+.landing-footer p::before {
+  content: '';
+  position: absolute;
+  inset: -26px -34px;
+  z-index: -1;
+  border-radius: 40px;
+  background:
+    /* Vệt đậm ở giữa khối chữ */
+    radial-gradient(
+      75% 100% at 34% 50%,
+      rgba(3, 5, 13, 0.62) 0%,
+      rgba(3, 5, 13, 0.40) 52%,
+      rgba(3, 5, 13, 0) 100%
+    ),
+    /* Sàn đều: radial ở trên tắt dần về 0 ở rìa, nên chữ nằm sát góc khối
+       (ví dụ .landing-assurances ở đáy hero) sẽ không còn lớp đệm nào. Lớp
+       phẳng này bảo đảm MỌI điểm trong khối đều có mức tối tối thiểu.
+       0.62 là mức đo được cần cho theme SÁNG: bảng "dawn" của canvas (hổ
+       phách + tím) sáng hơn bảng cosmic, ở 0.46 có 5 khối rơi 4.31–4.49:1. */
+    linear-gradient(rgba(3, 5, 13, 0.62), rgba(3, 5, 13, 0.62));
+  filter: blur(18px);
+}
+
+/* Nội dung nằm trên canvas. Nav đã có z-index 20 (sticky) ở khối riêng. */
+.landing > main,
+.landing-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Thẻ kính tối --------------------------------------------------------
+   .core-card bị overhaul.css gán background/border/shadow bằng !important ở
+   HAI nơi (thẻ phẳng ở đầu file, lớp glass "immersive" ở giữa file), nên ở
+   đây phải !important + selector 2 lớp mới thắng. Chỉ ăn trong .landing.
+   Nền rgba đủ đục để chữ #f1f6fb đạt >= 7:1, vẫn thấy sao phía sau. */
+.landing .core-card {
+  background-color: rgba(9, 13, 27, 0.62) !important;
+  background-image:
+    linear-gradient(160deg, rgba(150, 200, 255, 0.07), rgba(120, 90, 200, 0.04)) !important;
+  border: 1px solid rgba(198, 220, 244, 0.45) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(130%) !important;
+  backdrop-filter: blur(18px) saturate(130%) !important;
+  box-shadow:
+    0 24px 48px rgba(2, 4, 12, 0.5),
+    inset 0 1px 0 rgba(220, 236, 255, 0.10) !important;
+}
+
+.landing .core-card:hover {
+  border-color: rgba(120, 240, 205, 0.42) !important;
+  box-shadow:
+    0 28px 60px rgba(2, 4, 12, 0.6),
+    0 0 0 1px rgba(120, 240, 205, 0.12),
+    inset 0 1px 0 rgba(220, 236, 255, 0.14) !important;
+}
+
+/* --- Nút trên nền tối ---------------------------------------------------
+   .btn-secondary lấy màu chữ từ --modern-zen-text (token của app, KHÔNG bị
+   ghi đè trong phạm vi .landing vì app bên trong vẫn cần nó) — ở theme sáng
+   màu đó gần như đen, đặt trên tinh hệ sẽ mất chữ. Ép về --text đã khoá. */
+.landing .btn-secondary {
+  color: var(--text) !important;
+  background: rgba(12, 18, 34, 0.55) !important;
+  border: 1px solid rgba(198, 220, 246, 0.58) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.landing .btn-secondary:hover {
+  background: rgba(28, 42, 70, 0.72) !important;
+  border-color: rgba(120, 240, 205, 0.55) !important;
+}
+
+/* Gradient mint sáng -> chữ phải TỐI mới đủ tương phản (overhaul.css ép #fff). */
+.landing .btn-primary {
+  color: var(--primary-text) !important;
+  box-shadow: 0 6px 20px rgba(53, 199, 156, 0.34) !important;
+}
+
+.landing .btn-primary:hover {
+  box-shadow: 0 10px 30px rgba(53, 199, 156, 0.48) !important;
+}
+
+/* Vòng focus: index.css dùng var(--focus-ring) — token này đã được khoá sang
+   mint sáng ở trên nên tự thấy rõ trên tinh hệ. Thêm viền tối bọc ngoài để
+   ring không tan vào vệt sao sáng, và ép hiện trên link/nút thuần CSS. */
+.landing a:focus-visible,
+.landing button:focus-visible {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 5px rgba(4, 6, 16, 0.75) !important;
+}
+
+/* --- Reveal khi cuộn --- */
+.landing-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 620ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  height: 100%;
+}
+
+.landing-reveal.is-shown {
+  opacity: 1;
+  transform: none;
+}
+
+/* --- Thanh điều hướng --- */
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px clamp(16px, 4vw, 48px);
+  background: color-mix(in srgb, var(--bg-top) 82%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.landing-brand img {
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.landing-nav__links {
+  display: flex;
+  gap: 22px;
+  margin-inline-start: auto;
+}
+
+.landing-nav__links a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 6px 2px;
+  border-bottom: 2px solid transparent;
+  transition: color 180ms ease, border-color 180ms ease;
+}
+
+.landing-nav__links a:hover {
+  color: var(--text);
+  border-bottom-color: var(--jade);
+}
+
+.landing-nav__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing-theme-toggle {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--control-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.landing-theme-toggle:hover {
+  color: var(--text);
+  background: var(--control-hover);
+  transform: rotate(-12deg);
+}
+
+/* --- Hero --- */
+.landing-hero {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--phi-major) var(--phi-minor);
+  gap: clamp(24px, 5vw, 64px);
+  align-items: center;
+  padding: clamp(48px, 8vw, 104px) clamp(16px, 4vw, 48px) clamp(32px, 5vw, 64px);
+  max-width: 1240px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.landing-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 18px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.landing-hero__copy h1 {
+  margin: 0 0 18px;
+  font-size: clamp(2.1rem, 5.2vw, 3.6rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  background: linear-gradient(120deg, var(--text) 32%, var(--jade) 78%, var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--text);
+}
+
+.landing-lede {
+  margin: 0 0 28px;
+  max-width: 54ch;
+  font-size: clamp(1rem, 1.6vw, 1.14rem);
+  line-height: var(--line-readable);
+  color: var(--muted);
+}
+
+.landing-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.landing-cta {
+  min-height: 50px;
+  padding: 0 22px;
+  font-size: 1rem;
+}
+
+.landing-cta:hover {
+  transform: translateY(-2px);
+}
+
+.landing-assurances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-assurances li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.88rem;
+  color: var(--dim);
+}
+
+.landing-assurances svg {
+  color: var(--jade);
+  flex-shrink: 0;
+}
+
+/* --- Thẻ xem trước --- */
+.landing-preview {
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+
+.landing-preview__top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.landing-preview__top strong {
+  margin-inline-start: auto;
+  color: var(--jade);
+}
+
+.landing-preview__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--jade);
+  box-shadow: 0 0 0 4px var(--jade-soft);
+  animation: landingPulse 2.6s ease-in-out infinite;
+}
+
+@keyframes landingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.landing-preview__word {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.landing-preview__hanzi {
+  margin: 0;
+  font-family: var(--font-cn);
+  font-size: clamp(2.6rem, 7vw, 3.4rem);
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.landing-preview__pinyin {
+  margin: 6px 0 2px;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--jade);
+}
+
+.landing-preview__meaning {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.landing-preview__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.landing-chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.landing-chip--jade {
+  background: var(--jade-soft);
+  color: var(--jade);
+  border-color: color-mix(in srgb, var(--jade) 28%, transparent);
+}
+
+.landing-chip--gold {
+  background: var(--gold-soft);
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 30%, transparent);
+}
+
+.landing-preview__bars {
+  display: grid;
+  gap: 11px;
+}
+
+.landing-bar {
+  display: grid;
+  grid-template-columns: 5.6rem 1fr 2.6rem;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.landing-bar__label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.landing-bar__track {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ring-track);
+  overflow: hidden;
+}
+
+.landing-bar__fill {
+  display: block;
+  height: 100%;
+  width: var(--fill);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
+  animation: landingBarGrow 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes landingBarGrow {
+  from { width: 0; }
+  to { width: var(--fill); }
+}
+
+.landing-bar__value {
+  text-align: right;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-preview__note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.74rem;
+  color: var(--dim);
+}
+
+/* --- Số liệu --- */
+.landing-stats {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 48px) clamp(32px, 5vw, 56px);
+  width: 100%;
+}
+
+.landing-stat {
+  height: 100%;
+  padding: 20px 18px;
+  display: grid;
+  gap: 5px;
+  text-align: center;
+  align-content: start;
+}
+
+.landing-stat strong {
+  font-size: clamp(1.6rem, 3.4vw, 2.15rem);
+  font-weight: 800;
+  color: var(--jade);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-stat span {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.landing-stat small {
+  font-size: 0.76rem;
+  color: var(--dim);
+  line-height: 1.45;
+}
+
+/* --- Khung section chung --- */
+.landing-section {
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: clamp(40px, 6vw, 76px) clamp(16px, 4vw, 48px);
+  width: 100%;
+}
+
+.landing-section--tight {
+  padding-top: clamp(16px, 2vw, 26px);
+}
+
+.landing-section__head {
+  max-width: 62ch;
+  margin-bottom: clamp(22px, 3vw, 36px);
+}
+
+.landing-section__head h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.5rem, 3.2vw, 2.1rem);
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+  font-weight: 800;
+}
+
+.landing-section__head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: var(--line-readable);
+}
+
+/* --- Lưới tính năng --- */
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+  gap: 16px;
+}
+
+.landing-feature {
+  height: 100%;
+  padding: 22px 20px;
+  display: grid;
+  gap: 11px;
+  align-content: start;
+}
+
+.landing-feature:hover {
+  transform: translateY(-3px);
+}
+
+.landing-feature__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--jade-soft);
+  color: var(--jade);
+}
+
+.landing-feature--gold .landing-feature__icon {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.landing-feature--cinnabar .landing-feature__icon {
+  background: var(--cinnabar-soft);
+  color: var(--cinnabar);
+}
+
+.landing-feature--porcelain .landing-feature__icon {
+  background: var(--porcelain-soft);
+  color: var(--porcelain);
+}
+
+.landing-feature h3 {
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 800;
+}
+
+.landing-feature p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: var(--line-readable);
+  color: var(--muted);
+}
+
+/* --- Dạng bài --- */
+.landing-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 12px;
+}
+
+.landing-kind {
+  height: 100%;
+  padding: 16px 14px;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  text-align: center;
+  color: var(--jade);
+}
+
+.landing-kind strong {
+  font-size: 0.94rem;
+  color: var(--text);
+}
+
+.landing-kind span {
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+
+/* --- Ba bước --- */
+.landing-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.landing-step {
+  height: 100%;
+  padding: 24px 20px 22px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.landing-step__num {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
+  color: var(--primary-text);
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.landing-step h3 {
+  margin: 0;
+  font-size: 1.04rem;
+  font-weight: 800;
+}
+
+.landing-step p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: var(--line-readable);
+  color: var(--muted);
+}
+
+/* --- FAQ --- */
+.landing-faq {
+  display: grid;
+  gap: 10px;
+  max-width: 76ch;
+}
+
+.landing-faq__item {
+  padding: 0;
+  overflow: hidden;
+}
+
+.landing-faq__item h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.landing-faq__item button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: start;
+  cursor: pointer;
+}
+
+.landing-faq__item button:hover {
+  color: var(--jade);
+}
+
+/* Dấu +/− vẽ bằng CSS: hai gạch, gạch dọc xoay mất khi mở. */
+.landing-faq__mark {
+  position: relative;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  width: 15px;
+  height: 15px;
+}
+
+.landing-faq__mark::before,
+.landing-faq__mark::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--jade);
+  transition: transform 240ms ease;
+}
+
+.landing-faq__mark::after {
+  transform: rotate(90deg);
+}
+
+.landing-faq__item.is-open .landing-faq__mark::after {
+  transform: rotate(0deg);
+}
+
+.landing-faq__item p {
+  margin: 0;
+  padding: 0 18px 18px;
+  font-size: 0.92rem;
+  line-height: var(--line-readable);
+  color: var(--muted);
+}
+
+/* --- CTA cuối --- */
+.landing-final {
+  padding: clamp(30px, 5vw, 52px) clamp(20px, 4vw, 44px);
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+}
+
+.landing-final h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.4vw, 2.15rem);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.landing-final p {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--muted);
+  line-height: var(--line-readable);
+}
+
+.landing-final__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+/* --- Footer --- */
+.landing-footer {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  padding: 26px clamp(16px, 4vw, 48px);
+  border-top: 1px solid var(--line-soft);
+  text-align: center;
+}
+
+.landing-footer p {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--dim);
+}
+
+/* --- Responsive --- */
+@media (max-width: 1000px) {
+  .landing-hero {
+    grid-template-columns: 1fr;
+    padding-top: clamp(36px, 7vw, 64px);
+  }
+
+  .landing-hero__panel {
+    max-width: 460px;
+  }
+
+  .landing-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .landing-nav {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .landing-nav__links {
+    order: 3;
+    width: 100%;
+    margin-inline-start: 0;
+    gap: 18px;
+    overflow-x: auto;
+  }
+
+  .landing-nav__actions {
+    margin-inline-start: auto;
+  }
+
+  .landing-nav__login {
+    display: none;
+  }
+
+  .landing-hero__actions .landing-cta,
+  .landing-final__actions .landing-cta {
+    width: 100%;
+  }
+
+  .landing-bar {
+    grid-template-columns: 4.8rem 1fr 2.4rem;
+  }
+}
+
+/* Giảm tải nền trên máy nhỏ: blur 26px full-screen là phép đắt nhất ở đây.
+   Bỏ hạt phim (lớp repeat + blend overlay toàn khung) và hạ blur dải Ngân Hà.
+   Số sao/bloom đã tự giảm qua detectPerfTier() trong SpaceVortexBackground. */
+@media (max-width: 767px) {
+  .landing-cosmos__grain {
+    display: none;
+  }
+
+  .landing-cosmos__band {
+    filter: blur(16px);
+    opacity: 0.6;
+    animation: none;
+    transform: rotate(-16deg) scale(1.4);
+  }
+
+  .landing .core-card {
+    -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
+    backdrop-filter: blur(10px) saturate(120%) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .landing-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Giảm chuyển động --- */
+@media (prefers-reduced-motion: reduce) {
+  .landing-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .landing-preview__dot,
+  .landing-bar__fill {
+    animation: none;
+  }
+
+  /* Dải Ngân Hà đứng yên ở vị trí giữa keyframe (không nhảy về "from"), để bố
+     cục nền không lệch so với khi có chuyển động. */
+  .landing-cosmos__band {
+    animation: none;
+    transform: rotate(-16deg) scale(1.56);
+  }
+
+  .landing-cta:hover,
+  .landing-feature:hover,
+  .landing-theme-toggle:hover {
+    transform: none;
+  }
+}
+
+/* =========================================================
+   Nút "về trang giới thiệu" trong thẻ đăng nhập.
+
+   Thẻ này (.auth-gate__card--glass) là card tối kiểu cosmic, dùng bảng token
+   riêng --u-* khai báo trên .auth-gate — nên nút phải lấy màu từ đó thay vì
+   token jade/gold của app, nếu không chữ sẽ chìm vào nền tối.
+   ========================================================= */
+.auth-gate__back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -8px;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid var(--u-card-border);
+  border-radius: 999px;
+  background: rgba(6, 4, 15, 0.45);
+  color: var(--u-text-soft);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+
+.auth-gate__back:hover {
+  color: #fff;
+  border-color: var(--u-card-border-active);
+  background: rgba(6, 4, 15, 0.7);
+}
+
+.auth-gate__back:focus-visible {
+  outline: 2px solid var(--u-cyan-hi);
+  outline-offset: 2px;
+}

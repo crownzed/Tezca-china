@@ -2,6 +2,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './overhaul.css'
+// Sau overhaul.css: landing dùng token đã được overhaul ghi đè, và các rule
+// .landing-* cần thắng khi trùng độ đặc hiệu với rule chung.
+import './landing.css'
 import App from './App.jsx'
 import { AuthProvider } from './auth-context.jsx'
 import { AuthGate, ResetPasswordPage } from './auth-ui.jsx'

@@ -16,12 +16,13 @@ const GrammarLab = lazy(() => import('./components/GrammarLab.jsx'));
 import { notificationPermission, requestNotificationPermission, scheduleDailyReminder, cancelReminder, showNotification } from './notifications.js';
 import { resolveDecompositions } from './radicals-db.js';
 import { ClickableChineseText, TonedPinyin } from './components/chinese-text.jsx';
+// Theme dùng chung với landing page (render ngoài App khi chưa đăng nhập).
+import { applyTheme, getInitialTheme } from './theme.js';
 
 // Module-level clock helper. Kept out of component scope so React's purity
 // lint doesn't flag the (intentional) impure read inside event handlers.
 const now = () => performance.now();
 
-const THEME_PALETTE_VERSION = 'modern-zen-v1';
 const LEVELS = [1, 2, 3, 4, 5, 6];
 const QUIZ_TYPES = [
   { id: 'vocab', label: 'Từ vựng', icon: BookOpen },
@@ -64,13 +65,6 @@ const NAV = [
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
 ];
 
-function getInitialTheme() {
-  if (typeof window === 'undefined') return 'light';
-  if (window.localStorage.getItem('themePaletteVersion') !== THEME_PALETTE_VERSION) return 'light';
-  const savedTheme = window.localStorage.getItem('theme');
-  if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
-  return 'light';
-}
 function getInitialFocusLevel() {
   if (typeof window === 'undefined') return 1;
   const savedLevel = Number(window.localStorage.getItem('hskFocusLevel'));
@@ -3063,10 +3057,7 @@ export default function App() {
   }, [activeTab]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#FBF9F6' : '#0a1626');
-    window.localStorage.setItem('theme', theme);
-    window.localStorage.setItem('themePaletteVersion', THEME_PALETTE_VERSION);
+    applyTheme(theme);
   }, [theme]);
 
   // Cursor-driven parallax: write small offsets to CSS vars (--px/--py) that
