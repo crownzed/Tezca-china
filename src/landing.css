@@ -61,7 +61,13 @@
   flex-direction: column;
   background: var(--bg-top);
   color: var(--text);
-  overflow-x: hidden;
+  /* overflow-x: hidden một mình khiến trục Y tự thành `auto` (quy tắc CSS:
+     không thể clip một trục mà để trục kia `visible`). Lớp đệm chữ tràn dọc
+     -56px khi đó sinh ra vùng cuộn lồng cao 30px NGAY TRONG .landing — cuộn
+     bằng con lăn thấy giật hai tầng. Ghim Y về `visible` để trang chỉ có một
+     ngữ cảnh cuộn duy nhất là document. */
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 /* Khung chứa tinh hệ: fixed để canvas phủ khung nhìn trong khi trang cuộn
@@ -161,24 +167,51 @@
 .landing-footer p::before {
   content: '';
   position: absolute;
-  inset: -26px -34px;
+  /* Tràn ngang ra ngoài khung nhìn: mắt không bao giờ thấy cạnh trái/phải nên
+     lớp đệm đọc như một dải bụi tối của thiên hà, không phải cái hộp. Bản cũ
+     dùng inset nhỏ + border-radius + blur(18px) -> ra đúng một vệt chữ nhật
+     mờ, đó là chỗ trông rẻ tiền. .landing đã có overflow-x: hidden nên tràn
+     ngang không sinh thanh cuộn. */
+  inset: -56px -50vw;
   z-index: -1;
-  border-radius: 40px;
+  pointer-events: none;
   background:
-    /* Vệt đậm ở giữa khối chữ */
-    radial-gradient(
-      75% 100% at 34% 50%,
-      rgba(3, 5, 13, 0.62) 0%,
-      rgba(3, 5, 13, 0.40) 52%,
-      rgba(3, 5, 13, 0) 100%
-    ),
-    /* Sàn đều: radial ở trên tắt dần về 0 ở rìa, nên chữ nằm sát góc khối
-       (ví dụ .landing-assurances ở đáy hero) sẽ không còn lớp đệm nào. Lớp
-       phẳng này bảo đảm MỌI điểm trong khối đều có mức tối tối thiểu.
+    /* Đậm lệch về phía đầu dòng, cho vệt bụi có hướng thay vì đối xứng cứng */
+    radial-gradient(80% 120% at 22% 50%, rgba(3, 5, 13, 0.26) 0%, rgba(3, 5, 13, 0) 72%),
+    /* Sàn tối cho toàn bộ vùng chữ, tắt mềm theo CHIỀU DỌC. Chuyển màu nhiều
+       chặng thay cho filter: blur() — hết vệt chữ nhật, và bỏ luôn một phép
+       blur toàn khối (blur là phép đắt nhất ở đây, x3 khối chữ).
+
+       Chặng đo bằng px, KHÔNG bằng %: % tính theo chiều cao khối nên khối cao
+       (hero copy) sẽ đẩy vùng tắt dần vào giữa chữ — đo được một dòng rơi
+       xuống 4.92:1 vì nằm ở mức 0.58 thay vì 0.62. Với px, vùng tắt luôn kết
+       thúc trong 46px, tức vẫn nằm trong phần tràn 56px ở trên/dưới, nên chữ
+       luôn nằm trên sàn đầy 0.62 bất kể khối cao bao nhiêu.
+
        0.62 là mức đo được cần cho theme SÁNG: bảng "dawn" của canvas (hổ
        phách + tím) sáng hơn bảng cosmic, ở 0.46 có 5 khối rơi 4.31–4.49:1. */
-    linear-gradient(rgba(3, 5, 13, 0.62), rgba(3, 5, 13, 0.62));
-  filter: blur(18px);
+    linear-gradient(
+      180deg,
+      rgba(3, 5, 13, 0) 0,
+      rgba(3, 5, 13, 0.24) 14px,
+      rgba(3, 5, 13, 0.50) 30px,
+      rgba(3, 5, 13, 0.62) 46px,
+      rgba(3, 5, 13, 0.62) calc(100% - 46px),
+      rgba(3, 5, 13, 0.50) calc(100% - 30px),
+      rgba(3, 5, 13, 0.24) calc(100% - 14px),
+      rgba(3, 5, 13, 0) 100%
+    );
+}
+
+/* Viền chữ mềm: làm nét mép glyph trên nền sao lốm đốm. Không áp cho h1 —
+   h1 dùng background-clip: text + text-fill-color: transparent, bóng chữ sẽ
+   lộ hẳn qua thân chữ trong suốt. */
+.landing-hero__copy p,
+.landing-hero__copy li,
+.landing-section__head h2,
+.landing-section__head p,
+.landing-footer p {
+  text-shadow: 0 1px 10px rgba(3, 5, 13, 0.5);
 }
 
 /* Nội dung nằm trên canvas. Nav đã có z-index 20 (sticky) ở khối riêng. */
@@ -200,17 +233,29 @@
   border: 1px solid rgba(198, 220, 244, 0.45) !important;
   -webkit-backdrop-filter: blur(18px) saturate(130%) !important;
   backdrop-filter: blur(18px) saturate(130%) !important;
+  /* Bóng xếp 3 tầng thay cho một khối 48px duy nhất. Một bóng lớn đơn độc
+     trên nền sao đọc ra "vệt mực bẩn"; ba tầng ngắn-vừa-dài cho mép thẻ bám
+     đất mà không bôi đen vùng sao quanh nó. Thêm inset dưới: viền sáng chỉ ở
+     mép trên là ánh sáng từ một phía, có thêm mép dưới mới ra khối kính dày. */
   box-shadow:
-    0 24px 48px rgba(2, 4, 12, 0.5),
-    inset 0 1px 0 rgba(220, 236, 255, 0.10) !important;
+    0 1px 2px rgba(2, 4, 12, 0.34),
+    0 6px 14px rgba(2, 4, 12, 0.28),
+    0 18px 42px rgba(2, 4, 12, 0.34),
+    inset 0 1px 0 rgba(220, 236, 255, 0.12),
+    inset 0 -1px 0 rgba(120, 160, 220, 0.06) !important;
 }
 
 .landing .core-card:hover {
   border-color: rgba(120, 240, 205, 0.42) !important;
+  /* Hover: bóng nâng lên và thêm một tầng hắt màu mint rất loãng — thẻ trông
+     như được tinh hệ chiếu vào, thay vì chỉ to bóng ra. */
   box-shadow:
-    0 28px 60px rgba(2, 4, 12, 0.6),
-    0 0 0 1px rgba(120, 240, 205, 0.12),
-    inset 0 1px 0 rgba(220, 236, 255, 0.14) !important;
+    0 1px 2px rgba(2, 4, 12, 0.36),
+    0 10px 22px rgba(2, 4, 12, 0.32),
+    0 26px 56px rgba(2, 4, 12, 0.40),
+    0 12px 40px rgba(53, 199, 156, 0.10),
+    inset 0 1px 0 rgba(220, 236, 255, 0.16),
+    inset 0 -1px 0 rgba(120, 240, 205, 0.10) !important;
 }
 
 /* --- Nút trên nền tối ---------------------------------------------------
@@ -223,21 +268,43 @@
   border: 1px solid rgba(198, 220, 246, 0.58) !important;
   -webkit-backdrop-filter: blur(10px) !important;
   backdrop-filter: blur(10px) !important;
+  /* Trước đây nút này KHÔNG có bóng nào, trong khi btn-primary cạnh nó có
+     glow mint -> hai nút đứng cạnh mà như ở hai mặt phẳng khác nhau. Cho nó
+     bóng tối cùng nhịp với primary để cặp CTA nằm đúng một tầng. */
+  box-shadow:
+    0 1px 2px rgba(2, 4, 12, 0.30),
+    0 8px 20px rgba(2, 4, 12, 0.26),
+    inset 0 1px 0 rgba(220, 236, 255, 0.10) !important;
 }
 
 .landing .btn-secondary:hover {
   background: rgba(28, 42, 70, 0.72) !important;
   border-color: rgba(120, 240, 205, 0.55) !important;
+  box-shadow:
+    0 1px 2px rgba(2, 4, 12, 0.32),
+    0 12px 26px rgba(2, 4, 12, 0.32),
+    inset 0 1px 0 rgba(220, 236, 255, 0.14) !important;
 }
 
 /* Gradient mint sáng -> chữ phải TỐI mới đủ tương phản (overhaul.css ép #fff). */
 .landing .btn-primary {
   color: var(--primary-text) !important;
-  box-shadow: 0 6px 20px rgba(53, 199, 156, 0.34) !important;
+  /* Bóng nút = 1 tầng tối để bám nền + 1 tầng mint loãng làm ánh hắt, cộng
+     inset trên cho mép gradient trông có độ dày. Bản cũ chỉ có đúng một
+     glow mint 20px: nút như dán phẳng lên nền, không có điểm tiếp đất. */
+  box-shadow:
+    0 1px 2px rgba(2, 12, 9, 0.40),
+    0 8px 18px rgba(2, 12, 9, 0.30),
+    0 10px 30px rgba(53, 199, 156, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34) !important;
 }
 
 .landing .btn-primary:hover {
-  box-shadow: 0 10px 30px rgba(53, 199, 156, 0.48) !important;
+  box-shadow:
+    0 1px 2px rgba(2, 12, 9, 0.42),
+    0 12px 24px rgba(2, 12, 9, 0.34),
+    0 16px 44px rgba(53, 199, 156, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42) !important;
 }
 
 /* Vòng focus: index.css dùng var(--focus-ring) — token này đã được khoá sang
