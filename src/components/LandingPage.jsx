@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Award, BarChart3, Blocks, BookOpen, CheckCircle2, Headphones, Languages,
-  LineChart, LogIn, Mic, Moon, PenTool, Play, ScrollText, Sparkles, Sun,
-  UserPlus, WifiOff,
+  LineChart, LogIn, Mic, Moon, PenTool, Play, RefreshCw, ScrollText, Sparkles,
+  Sun, UserPlus, WifiOff,
 } from 'lucide-react';
 import { applyTheme, getInitialTheme } from '../theme.js';
 import SpaceVortexBackground from './SpaceVortexBackground.jsx';
@@ -66,6 +66,62 @@ const FEATURES = [
   },
 ];
 
+// Từ cho thẻ "Phiên học hôm nay". TẤT CẢ lấy nguyên từ vocab-bank.js (chữ,
+// pinyin, nghĩa, cấp HSK đúng như trong bank) — không tự bịa từ hay nghĩa.
+// Cột cuối là số dòng trong vocab-bank.js để đối chiếu khi dữ liệu đổi.
+const PREVIEW_WORDS = [
+  { hanzi: '复习', pinyin: 'fùxí', meaning: 'Ôn tập', level: 3 },      // :518
+  { hanzi: '练习', pinyin: 'liànxí', meaning: 'Luyện tập', level: 3 }, // :517
+  { hanzi: '努力', pinyin: 'nǔlì', meaning: 'Cố gắng', level: 3 },     // :408
+  { hanzi: '习惯', pinyin: 'xíguàn', meaning: 'Thói quen', level: 3 }, // :642
+  { hanzi: '认真', pinyin: 'rènzhēn', meaning: 'Nghiêm túc', level: 3 }, // :409
+  { hanzi: '提高', pinyin: 'tígāo', meaning: 'Nâng cao', level: 3 },   // :400
+  { hanzi: '完成', pinyin: 'wánchéng', meaning: 'Hoàn thành', level: 3 }, // :405
+  { hanzi: '简单', pinyin: 'jiǎndān', meaning: 'Đơn giản', level: 2 }, // :223
+  { hanzi: '重要', pinyin: 'zhòngyào', meaning: 'Quan trọng', level: 2 }, // :222
+  { hanzi: '发音', pinyin: 'fāyīn', meaning: 'Phát âm', level: 3 },    // :513
+  { hanzi: '声调', pinyin: 'shēngdiào', meaning: 'Thanh điệu', level: 3 }, // :514
+  { hanzi: '帮助', pinyin: 'bāngzhù', meaning: 'Giúp đỡ', level: 1 },  // :132
+  { hanzi: '计划', pinyin: 'jìhuà', meaning: 'Kế hoạch', level: 4 },   // :813
+  { hanzi: '决定', pinyin: 'juédìng', meaning: 'Quyết định', level: 3 }, // :391
+];
+
+// Dấu thanh -> số thanh. Suy ra từ chính pinyin thay vì chép tay số thanh vào
+// bảng trên: bớt một chỗ có thể lệch khi ai đó sửa dữ liệu.
+const TONE_MARKS = [
+  'āēīōūǖ', // thanh 1
+  'áéíóúǘ', // thanh 2
+  'ǎěǐǒǔǚ', // thanh 3
+  'àèìòùǜ', // thanh 4
+];
+
+// Quét TRỰC TIẾP các nguyên âm có dấu thanh, mỗi dấu = một âm tiết mang thanh.
+// Không tách âm tiết theo phụ âm đầu: 'n' vừa là phụ âm đầu vừa là âm cuối, nên
+// cách đó cắt 'bāngzhù' thành 'bā|ng|zhù' -> ra [1,5,4] thay vì [1,4]. Mọi từ
+// trong PREVIEW_WORDS đều có dấu ở mỗi âm tiết, nên đếm dấu là đủ và đúng.
+function toneNumbers(pinyin) {
+  const tones = [];
+  for (const char of pinyin) {
+    const index = TONE_MARKS.findIndex(marks => marks.includes(char));
+    if (index !== -1) tones.push(index + 1);
+  }
+  return tones;
+}
+
+// Số liệu minh hoạ, suy ra ổn định từ chính chữ Hán (cùng một từ luôn cho cùng
+// một bộ số) nên thẻ không "nhảy số" ngẫu nhiên mỗi lần render lại.
+function previewMetrics(hanzi) {
+  const seed = [...hanzi].reduce((sum, char) => sum + char.codePointAt(0), 0);
+  return {
+    days: 2 + (seed % 5),
+    bars: [
+      { label: 'Trí nhớ bền', value: 62 + (seed % 33) },
+      { label: 'Nghe', value: 48 + (seed % 41) },
+      { label: 'Ngữ cảnh', value: 40 + (seed % 45) },
+    ],
+  };
+}
+
 const QUIZ_KINDS = [
   { icon: BookOpen, label: 'Từ vựng', hint: 'Nghĩa và chữ' },
   { icon: Headphones, label: 'Nghe', hint: 'Nghe câu chọn nghĩa' },
@@ -108,6 +164,90 @@ const FAQ = [
     a: 'Chỉ cần micro và trình duyệt cho phép ghi âm. Bản thu được phân tích để đối chiếu thanh điệu, không dùng cho mục đích nào khác.',
   },
 ];
+
+// Thẻ "Phiên học hôm nay": mỗi lần tải trang bắt đầu ở một từ ngẫu nhiên, mỗi
+// lần bấm sang từ kế tiếp. Là <button> thật (không phải div + onClick) nên bàn
+// phím và trình đọc màn hình dùng được ngay, không cần thêm role/tabIndex.
+function PreviewCard() {
+  // Random NGAY lúc khởi tạo state, không phải trong effect: tránh nhá từ đầu
+  // bảng rồi mới đổi. Chỉ chạy ở client nên không lệch hydrate (app dựng bằng
+  // Vite, không SSR).
+  // `changed` phân biệt từ đầu tiên (random lúc tải) với các từ do người dùng bấm:
+  // vùng aria-live chỉ đọc khi người dùng đã bấm, tránh việc vừa mở trang trình
+  // đọc màn hình đã xướng lên một từ chẳng ai yêu cầu.
+  const [{ index, changed }, setWordState] = useState(() => ({
+    index: Math.floor(Math.random() * PREVIEW_WORDS.length),
+    changed: false,
+  }));
+  const word = PREVIEW_WORDS[index % PREVIEW_WORDS.length];
+  const { days, bars } = previewMetrics(word.hanzi);
+  const tones = toneNumbers(word.pinyin);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="core-card landing-preview"
+        onClick={() => setWordState(current => ({
+          index: (current.index + 1) % PREVIEW_WORDS.length,
+          changed: true,
+        }))}
+        // Mô tả cả nội dung hiện tại và việc bấm sẽ làm gì, vì bản thân thẻ là nút.
+        aria-label={`Xem trước phiên học: ${word.hanzi} (${word.pinyin}) — bấm để xem từ khác`}
+      >
+        <span className="landing-preview__top">
+          <span className="landing-preview__dot" aria-hidden="true" />
+          <span>Phiên học hôm nay</span>
+          <strong>HSK {word.level}</strong>
+        </span>
+
+        {/* key={word.hanzi} cho React dựng lại nhánh này khi đổi từ, nhờ vậy
+            animation hiện chữ chạy lại từ đầu mỗi lần bấm. */}
+        <span className="landing-preview__word" key={word.hanzi}>
+          <span className="landing-preview__hanzi" lang="zh-CN">{word.hanzi}</span>
+          <span className="landing-preview__pinyin">{word.pinyin}</span>
+          <span className="landing-preview__meaning">{word.meaning}</span>
+        </span>
+
+        <span className="landing-preview__meta">
+          <span className="landing-chip landing-chip--jade">Ôn lại sau {days} ngày</span>
+          <span className="landing-chip landing-chip--gold">
+            {tones.map(tone => `Thanh ${tone}`).join(' · ')}
+          </span>
+        </span>
+
+        <span className="landing-preview__bars">
+          {bars.map(bar => (
+            <span key={bar.label} className="landing-bar">
+              <span className="landing-bar__label">{bar.label}</span>
+              <span className="landing-bar__track">
+                {/* key gắn theo từ: thanh chạy lại từ 0 mỗi lần đổi từ */}
+                <span
+                  key={`${word.hanzi}-${bar.label}`}
+                  className="landing-bar__fill"
+                  style={{ '--fill': `${bar.value}%` }}
+                />
+              </span>
+              <span className="landing-bar__value">{bar.value}%</span>
+            </span>
+          ))}
+        </span>
+
+        <span className="landing-preview__note">
+          <RefreshCw size={12} aria-hidden="true" />
+          Số liệu minh hoạ · bấm để xem từ khác
+        </span>
+      </button>
+
+      {/* Đổi aria-label của chính nút đang được focus thì trình đọc màn hình
+          thường không xướng lại. Vùng aria-live riêng bên ngoài nút mới là chỗ
+          thông báo từ mới đáng tin cậy. Chỉ có nội dung sau lần bấm đầu tiên. */}
+      <span className="landing-sr-only" role="status" aria-live="polite">
+        {changed ? `${word.hanzi} — ${word.pinyin} — ${word.meaning}` : ''}
+      </span>
+    </>
+  );
+}
 
 function ThemeToggle({ theme, onToggle }) {
   const isDark = theme === 'dark';
@@ -236,41 +376,7 @@ export default function LandingPage({ onLogin, onRegister }) {
           </Reveal>
 
           <Reveal className="landing-hero__panel" delay={120}>
-            <article className="core-card landing-preview" aria-label="Xem trước phiên học">
-              <header className="landing-preview__top">
-                <span className="landing-preview__dot" aria-hidden="true" />
-                <span>Phiên học hôm nay</span>
-                <strong>HSK 2</strong>
-              </header>
-
-              <div className="landing-preview__word">
-                <p className="landing-preview__hanzi" lang="zh-CN">复习</p>
-                <p className="landing-preview__pinyin">fùxí</p>
-                <p className="landing-preview__meaning">ôn tập, xem lại</p>
-              </div>
-
-              <div className="landing-preview__meta">
-                <span className="landing-chip landing-chip--jade">Ôn lại sau 3 ngày</span>
-                <span className="landing-chip landing-chip--gold">Thanh 4 · Thanh 2</span>
-              </div>
-
-              <div className="landing-preview__bars">
-                {[
-                  { label: 'Trí nhớ bền', value: 78 },
-                  { label: 'Nghe', value: 64 },
-                  { label: 'Ngữ cảnh', value: 52 },
-                ].map(bar => (
-                  <div key={bar.label} className="landing-bar">
-                    <span className="landing-bar__label">{bar.label}</span>
-                    <span className="landing-bar__track">
-                      <span className="landing-bar__fill" style={{ '--fill': `${bar.value}%` }} />
-                    </span>
-                    <span className="landing-bar__value">{bar.value}%</span>
-                  </div>
-                ))}
-              </div>
-              <p className="landing-preview__note">Số liệu minh hoạ giao diện.</p>
-            </article>
+            <PreviewCard />
           </Reveal>
         </section>
 
