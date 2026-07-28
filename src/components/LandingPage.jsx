@@ -249,16 +249,31 @@ function PreviewCard() {
   );
 }
 
+// Nút này KHÔNG đổi màu trang giới thiệu, và nhãn phải nói đúng như vậy.
+// Landing bị khoá cứng ở bảng màu tối: selector `.landing, [data-theme='dark']
+// .landing` trong landing.css áp token tối cho CẢ hai theme, vì nền tinh hệ chỉ
+// đọc được trên nền tối — chữ sáng trên dải sao là điều kiện để mọi cấp chữ đạt
+// 4.5:1. Nên bấm nút ở đây đổi data-theme, đổi localStorage và meta theme-color,
+// nhưng không một màu nào trên trang này nhúc nhích.
+//
+// Bản cũ dùng nhãn "Chuyển sang chế độ tối" khi theme đang là light. Trên một
+// trang đã tối om thì đó là câu nói dối: người dùng bấm, không thấy gì đổi, và
+// nhãn lật sang "Chuyển sang chế độ sáng" — cũng lại không đúng. Trình đọc màn
+// hình thì xướng một hành động không hề xảy ra.
+//
+// Nhãn mới mô tả việc nút thật sự làm: chọn giao diện cho phần học sau khi đăng
+// nhập. Giữ icon mặt trời/mặt trăng vì nó vẫn chỉ đúng lựa chọn hiện tại.
 function ThemeToggle({ theme, onToggle }) {
   const isDark = theme === 'dark';
+  const dich = isDark ? 'sáng' : 'tối';
 
   return (
     <button
       type="button"
       className="landing-theme-toggle"
       onClick={onToggle}
-      aria-label={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
-      title={isDark ? 'Chế độ sáng' : 'Chế độ tối'}
+      aria-label={`Giao diện phần học: đang ${isDark ? 'tối' : 'sáng'} — bấm để chuyển sang ${dich}`}
+      title={`Giao diện phần học: chuyển sang ${dich}`}
     >
       {isDark ? <Sun size={18} /> : <Moon size={18} />}
     </button>
