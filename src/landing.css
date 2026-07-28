@@ -102,6 +102,39 @@
   --primary-text: #071431 !important;
   --focus-ring: rgba(150, 186, 255, 0.85) !important;
 
+  /* --- Thang chữ: 5 bậc thân + 4 cỡ tiêu đề, tỉ lệ 1.125 ----------------
+     Trước đây landing dùng 23 cỡ chữ rời rạc, trong đó 0.9/0.92/0.94/0.95
+     và 1.02/1.04/1.05/1.06 không phân biệt nổi bằng mắt — dấu hiệu chọn số
+     theo cảm giác ở từng chỗ thay vì theo một thang. Năm bậc dưới đây cách
+     nhau đúng 1.125 lần (major second): đủ gần để giao diện dày chữ không
+     bị nhảy cấp, đủ xa để mỗi bậc thật sự khác bậc kề.
+     Neo ở 1rem = cỡ chữ thân, rồi nhân/chia lên xuống. */
+  --fs-3xs: 0.7rem;    /* nhãn nhỏ nhất: chú thích dưới số liệu */
+  --fs-2xs: 0.79rem;   /* chip, eyebrow, nhãn phụ */
+  --fs-xs: 0.889rem;   /* chữ phụ: mô tả feature, link nav */
+  --fs-sm: 1rem;       /* thân chữ chuẩn */
+  --fs-md: 1.125rem;   /* tiêu đề nhỏ: h3 feature, pinyin, lede */
+  /* Ba cỡ tiêu đề dùng clamp vì phải co theo khung nhìn. Bản cũ có ba clamp
+     gần trùng nhau (1.5-2.1 / 1.5-2.15 / 1.6-2.15) cho ba vai trò khác nhau;
+     gộp về MỘT cỡ h2 duy nhất, và số liệu lớn dùng riêng một cỡ rõ rệt hơn. */
+  --fs-h2: clamp(1.5rem, 3.2vw, 2.1rem);
+  --fs-stat: clamp(1.75rem, 3.6vw, 2.37rem);
+  --fs-h1: clamp(2.1rem, 5.2vw, 3.56rem);
+  --fs-hanzi: clamp(2.6rem, 7vw, 3.56rem);
+
+  /* --- Thang khoảng cách: bội số của 4px --------------------------------
+     Bản cũ dùng gần như mọi số nguyên từ 4 đến 22px (4,5,6,7,8,9,10,11,12,
+     14,16,18,20,22) — cùng một kiểu chọn theo cảm giác như thang chữ, và hệ
+     quả là các khối cạnh nhau có nhịp lệch 1-2px, mắt đọc ra "hơi lộn xộn"
+     mà không chỉ ra được chỗ nào sai. Sáu bậc dưới đây đều là bội số của 4:
+     mọi khoảng cách trên trang rơi vào cùng một lưới. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
   /* Nền dự phòng khi canvas chưa vẽ xong: tránh nháy trắng ở frame đầu. */
   --bg-top: #050814 !important;
   --bg-bottom: #050814 !important;
@@ -422,8 +455,8 @@
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 14px clamp(16px, 4vw, 48px);
+  gap: var(--sp-5);
+  padding: var(--sp-4) clamp(16px, 4vw, 48px);
   background: color-mix(in srgb, var(--bg-top) 82%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -433,9 +466,9 @@
 .landing-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 800;
-  font-size: 1.05rem;
+  gap: var(--sp-3);
+  font-weight: 700;
+  font-size: var(--fs-md);
   color: var(--text);
   text-decoration: none;
   letter-spacing: 0.01em;
@@ -448,16 +481,18 @@
 
 .landing-nav__links {
   display: flex;
-  gap: 22px;
+  gap: var(--sp-6);
   margin-inline-start: auto;
 }
 
 .landing-nav__links a {
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.92rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
-  padding: 6px 2px;
+  /* 2px ngang là cố ý, không phải sót lưới 4px: link này có gạch chân
+     border-bottom, đệm ngang rộng hơn sẽ làm gạch dài hơn chữ trông lỏng. */
+  padding: var(--sp-2) 2px;
   border-bottom: 2px solid transparent;
   transition: color 180ms ease, border-color 180ms ease;
 }
@@ -470,7 +505,7 @@
 .landing-nav__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-3);
 }
 
 .landing-theme-toggle {
@@ -509,9 +544,9 @@
 .landing-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin: 0 0 18px;
-  padding: 6px 13px;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
   border-radius: 999px;
   /* Nhãn này là thông tin phụ (cấp HSK), không phải hành động — nên nó KHÔNG
      được mang màu nhấn. Trước đây nó vàng, cạnh nút CTA mint: hai điểm màu
@@ -520,7 +555,7 @@
   border: 1px solid var(--edge) !important;
   background: var(--surface-0);
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.03em;
 }
@@ -530,8 +565,8 @@
    nên tương phản không đều theo chiều ngang. Chữ đặc đọc chắc hơn, và để
    dành toàn bộ "quyền dùng màu" cho nút hành động. */
 .landing-hero__copy h1 {
-  margin: 0 0 18px;
-  font-size: clamp(2.1rem, 5.2vw, 3.6rem);
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-h1);
   line-height: 1.08;
   letter-spacing: -0.02em;
   font-weight: 800;
@@ -539,9 +574,9 @@
 }
 
 .landing-lede {
-  margin: 0 0 28px;
+  margin: 0 0 var(--sp-6);
   max-width: 54ch;
-  font-size: clamp(1rem, 1.6vw, 1.14rem);
+  font-size: var(--fs-md);
   line-height: var(--line-readable);
   color: var(--muted);
 }
@@ -549,14 +584,14 @@
 .landing-hero__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 26px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
 }
 
 .landing-cta {
   min-height: 50px;
-  padding: 0 22px;
-  font-size: 1rem;
+  padding: 0 var(--sp-6);
+  font-size: var(--fs-sm);
 }
 
 /* Nút CTA cũng không nhấc lên nữa. Bóng và độ sáng viền đã đủ báo hover;
@@ -568,7 +603,7 @@
 .landing-assurances {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 22px;
+  gap: var(--sp-2) var(--sp-6);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -577,8 +612,8 @@
 .landing-assurances li {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.88rem;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
   color: var(--dim);
 }
 
@@ -613,9 +648,9 @@
    sau trong file thì rule này mới ăn. */
 .landing .landing-preview {
   width: 100%;
-  padding: 22px;
+  padding: var(--sp-6);
   display: grid;
-  gap: 18px;
+  gap: var(--sp-4);
   font: inherit;
   color: inherit;
   text-align: start;
@@ -695,8 +730,8 @@
 .landing-preview__top {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 0.83rem;
+  gap: var(--sp-2);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   color: var(--muted);
 }
@@ -706,10 +741,10 @@
   margin-inline-start: auto;
   color: var(--muted);
   /* Viền mảnh cho nó ra dáng một nhãn thật, bù cho việc mất màu. */
-  padding: 2px 8px;
+  padding: var(--sp-1) var(--sp-2);
   border-radius: 999px;
   border: 1px solid var(--edge);
-  font-size: 0.74rem;
+  font-size: var(--fs-3xs);
 }
 
 /* Đốm nhịp: đây là chỗ hợp lý để dùng sắc phụ — nó báo "phiên đang hoạt
@@ -732,24 +767,24 @@
    lần đổi từ nhờ key={word.hanzi} ở JSX buộc React dựng lại nhánh này. */
 .landing-preview__word {
   display: grid;
-  gap: 4px;
+  gap: var(--sp-1);
   text-align: center;
-  padding: 8px 0 4px;
+  padding: var(--sp-2) 0 var(--sp-1);
   animation: landingWordIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .landing-preview__hanzi {
   margin: 0;
   font-family: var(--font-cn);
-  font-size: clamp(2.6rem, 7vw, 3.4rem);
+  font-size: var(--fs-hanzi);
   line-height: 1.1;
   font-weight: 700;
   color: var(--text);
 }
 
 .landing-preview__pinyin {
-  margin: 6px 0 2px;
-  font-size: 1.02rem;
+  margin: var(--sp-1) 0 2px;
+  font-size: var(--fs-md);
   font-weight: 700;
   /* Pinyin la thong tin hoc chinh cua the -> duoc phep mang sac nhan. */
   color: var(--accent);
@@ -757,14 +792,14 @@
 
 .landing-preview__meaning {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-xs);
   color: var(--muted);
 }
 
 .landing-preview__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-2);
   justify-content: center;
 }
 
@@ -774,9 +809,9 @@
    mắt tưởng chúng khác loại nhau trong khi chúng cùng cấp. Giữ hai class
    riêng vì JSX đang dùng, nhưng cho chúng cùng một diện mạo. */
 .landing-chip {
-  padding: 5px 11px;
+  padding: var(--sp-1) var(--sp-3);
   border-radius: 999px;
-  font-size: 0.76rem;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   background: var(--surface-0);
   color: var(--muted);
@@ -785,15 +820,15 @@
 
 .landing-preview__bars {
   display: grid;
-  gap: 11px;
+  gap: var(--sp-3);
 }
 
 .landing-bar {
   display: grid;
   grid-template-columns: 5.6rem 1fr 2.6rem;
   align-items: center;
-  gap: 10px;
-  font-size: 0.8rem;
+  gap: var(--sp-3);
+  font-size: var(--fs-2xs);
 }
 
 .landing-bar__label {
@@ -831,7 +866,7 @@
 
 .landing-bar__value {
   text-align: right;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
@@ -843,9 +878,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: var(--sp-1);
   text-align: center;
-  font-size: 0.74rem;
+  font-size: var(--fs-3xs);
   color: var(--dim);
   opacity: 0.75;
   transition: opacity 200ms ease;
@@ -857,7 +892,7 @@
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--sp-4);
   max-width: 1240px;
   margin: 0 auto;
   padding: 0 clamp(16px, 4vw, 48px) clamp(32px, 5vw, 56px);
@@ -866,9 +901,9 @@
 
 .landing-stat {
   height: 100%;
-  padding: 20px 18px;
+  padding: var(--sp-5) var(--sp-4);
   display: grid;
-  gap: 5px;
+  gap: var(--sp-1);
   text-align: center;
   align-content: start;
 }
@@ -877,7 +912,7 @@
    để sức nặng nằm ở cỡ chữ và font tabular chứ không ở màu. Bốn khối màu
    giống nhau xếp hàng ngang là chỗ dễ đọc ra "template" nhất. */
 .landing-stat strong {
-  font-size: clamp(1.6rem, 3.4vw, 2.15rem);
+  font-size: var(--fs-stat);
   font-weight: 800;
   color: var(--text);
   line-height: 1.1;
@@ -885,13 +920,13 @@
 }
 
 .landing-stat span {
-  font-size: 0.88rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text);
 }
 
 .landing-stat small {
-  font-size: 0.76rem;
+  font-size: var(--fs-2xs);
   color: var(--dim);
   line-height: 1.45;
 }
@@ -916,8 +951,8 @@
 }
 
 .landing-section__head h2 {
-  margin: 0 0 10px;
-  font-size: clamp(1.5rem, 3.2vw, 2.1rem);
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-h2);
   line-height: 1.18;
   letter-spacing: -0.015em;
   font-weight: 800;
@@ -926,7 +961,7 @@
 .landing-section__head p {
   margin: 0;
   color: var(--muted);
-  font-size: 1rem;
+  font-size: var(--fs-sm);
   line-height: var(--line-readable);
 }
 
@@ -934,14 +969,14 @@
 .landing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
-  gap: 16px;
+  gap: var(--sp-4);
 }
 
 .landing-feature {
   height: 100%;
-  padding: 22px 20px;
+  padding: var(--sp-6) var(--sp-5);
   display: grid;
-  gap: 11px;
+  gap: var(--sp-3);
   align-content: start;
 }
 
@@ -968,13 +1003,13 @@
 
 .landing-feature h3 {
   margin: 0;
-  font-size: 1.06rem;
-  font-weight: 800;
+  font-size: var(--fs-md);
+  font-weight: 700;
 }
 
 .landing-feature p {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--fs-xs);
   line-height: var(--line-readable);
   color: var(--muted);
 }
@@ -983,14 +1018,14 @@
 .landing-kinds {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .landing-kind {
   height: 100%;
-  padding: 16px 14px;
+  padding: var(--sp-4) var(--sp-4);
   display: grid;
-  gap: 5px;
+  gap: var(--sp-1);
   justify-items: center;
   text-align: center;
   /* Sau o dang bai xep hang: trung tinh, cung ly le voi icon feature. */
@@ -998,12 +1033,12 @@
 }
 
 .landing-kind strong {
-  font-size: 0.94rem;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 
 .landing-kind span {
-  font-size: 0.78rem;
+  font-size: var(--fs-2xs);
   color: var(--dim);
 }
 
@@ -1011,7 +1046,7 @@
 .landing-steps {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
-  gap: 16px;
+  gap: var(--sp-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1020,9 +1055,9 @@
 
 .landing-step {
   height: 100%;
-  padding: 24px 20px 22px;
+  padding: var(--sp-6) var(--sp-5);
   display: grid;
-  gap: 10px;
+  gap: var(--sp-3);
   align-content: start;
 }
 
@@ -1034,19 +1069,19 @@
   border-radius: 50%;
   background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
   color: var(--primary-text);
-  font-weight: 800;
-  font-size: 0.95rem;
+  font-weight: 700;
+  font-size: var(--fs-sm);
 }
 
 .landing-step h3 {
   margin: 0;
-  font-size: 1.04rem;
-  font-weight: 800;
+  font-size: var(--fs-md);
+  font-weight: 700;
 }
 
 .landing-step p {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--fs-xs);
   line-height: var(--line-readable);
   color: var(--muted);
 }
@@ -1054,7 +1089,7 @@
 /* --- FAQ --- */
 .landing-faq {
   display: grid;
-  gap: 10px;
+  gap: var(--sp-3);
   max-width: 76ch;
 }
 
@@ -1065,15 +1100,15 @@
 
 .landing-faq__item h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--fs-sm);
 }
 
 .landing-faq__item button {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-4);
   border: none;
   background: none;
   color: var(--text);
@@ -1118,8 +1153,8 @@
 
 .landing-faq__item p {
   margin: 0;
-  padding: 0 18px 18px;
-  font-size: 0.92rem;
+  padding: 0 var(--sp-4) var(--sp-4);
+  font-size: var(--fs-xs);
   line-height: var(--line-readable);
   color: var(--muted);
 }
@@ -1128,14 +1163,14 @@
 .landing-final {
   padding: clamp(30px, 5vw, 52px) clamp(20px, 4vw, 44px);
   display: grid;
-  gap: 14px;
+  gap: var(--sp-4);
   justify-items: center;
   text-align: center;
 }
 
 .landing-final h2 {
   margin: 0;
-  font-size: clamp(1.5rem, 3.4vw, 2.15rem);
+  font-size: var(--fs-h2);
   font-weight: 800;
   letter-spacing: -0.015em;
 }
@@ -1150,9 +1185,9 @@
 .landing-final__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--sp-3);
   justify-content: center;
-  margin-top: 6px;
+  margin-top: var(--sp-2);
 }
 
 /* --- Footer --- */
@@ -1160,14 +1195,14 @@
   position: relative;
   z-index: 1;
   margin-top: auto;
-  padding: 26px clamp(16px, 4vw, 48px);
+  padding: var(--sp-6) clamp(16px, 4vw, 48px);
   border-top: 1px solid var(--line-soft);
   text-align: center;
 }
 
 .landing-footer p {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: var(--fs-xs);
   color: var(--dim);
 }
 
@@ -1190,14 +1225,14 @@
 @media (max-width: 720px) {
   .landing-nav {
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .landing-nav__links {
     order: 3;
     width: 100%;
     margin-inline-start: 0;
-    gap: 18px;
+    gap: var(--sp-4);
     overflow-x: auto;
   }
 
@@ -1287,15 +1322,15 @@
   justify-self: start;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
   margin-bottom: -8px;
-  padding: 6px 12px 6px 8px;
+  padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-2);
   border: 1px solid var(--u-card-border);
   border-radius: 999px;
   background: rgba(6, 4, 15, 0.45);
   color: var(--u-text-soft);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   cursor: pointer;
   transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
