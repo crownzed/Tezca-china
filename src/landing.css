@@ -12,44 +12,99 @@
    selector với [data-theme='dark'] để thắng cả nhánh dark bất kể thứ tự file. */
 .landing,
 [data-theme='dark'] .landing {
-  /* Chữ: trắng ngà -> xám xanh nhạt, tương phản >= 7:1 trên nền tinh hệ */
-  --text: #f1f6fb !important;
-  --ink: #f1f6fb !important;
-  --muted: #c5d4e2 !important;
-  --dim: #a3b4c6 !important;
+  /* --- Trục trung tính: xanh đêm, KHÔNG phải xám ------------------------
+     Mọi bề mặt và mọi cấp chữ đều nằm trên cùng một trục sắc (hue ~222).
+     Xám trung tính đặt trên nền xanh-tím sẽ đọc ra hơi vàng bẩn vì mắt tự
+     bù sắc; giữ chung một hue thì chữ và thẻ trông như cùng một khối khí. */
+  --text: #eef3fb !important;
+  --ink: #eef3fb !important;
+  --muted: #c3d1e4 !important;
+  /* --dim là cấp chữ thấp nhất nhưng vẫn là chữ thật (chú thích dưới số liệu),
+     nên nó phải đạt 4.5:1 chứ không được coi là trang trí. Kéo sáng từ
+     #9aabc4 lên đây để vượt ngưỡng trên mặt thẻ. */
+  --dim: #aebdd2 !important;
+
+  /* --- Ba cấp bề mặt, KHÔNG phải một -----------------------------------
+     Trước đây mọi pane dùng chung một nền + một bóng, nên trang phẳng: thẻ
+     số liệu, thẻ tính năng và thẻ xem trước đều nằm cùng một tầng. Ba cấp
+     này cho phép xếp thứ bậc: surface-1 là thẻ thường, surface-2 là thẻ
+     được ưu tiên (xem trước), surface-0 là vùng lõm (thanh đo, ô mờ).
+
+     Độ đục KHÔNG chọn theo cảm giác. Nền tinh hệ có chỗ sáng tới RGB
+     173,184,224 (lõi tinh vân sau khi dải Ngân Hà cộng sáng). Ở alpha 0.60
+     thì --muted trên mặt thẻ chỉ đạt 4.48:1, --dim còn 3.16:1 — dưới ngưỡng
+     4.5. Alpha 0.78-0.86 kéo mặt thẻ đủ tối để mọi cấp chữ vượt ngưỡng ở
+     TRƯỜNG HỢP XẤU NHẤT, mà vẫn còn thấy sao phía sau vì đây là rgba chứ
+     không phải màu đặc. */
+  --surface-0: rgba(8, 12, 26, 0.82) !important;
+  --surface-1: rgba(13, 19, 38, 0.80) !important;
+  --surface-2: rgba(19, 27, 51, 0.86) !important;
+  /* Viền: hai cấp. --edge cho trạng thái nghỉ, --edge-strong cho hover/focus.
+     Alpha đo trên MẶT THẺ (không phải trên nền trần): viền nằm ở rìa thẻ nên
+     nền tham chiếu của nó là surface-1. Cần >= 3:1 ở đó. */
+  --edge: rgba(196, 216, 248, 0.60) !important;
+  --edge-strong: rgba(214, 230, 255, 0.86) !important;
+  /* Màu mực của mọi bóng đổ trên landing: xanh đêm, không phải đen thuần.
+     Bóng đen trên nền xanh-tím đọc ra "lỗ", bóng cùng hue đọc ra chiều sâu. */
+  --shade: 4, 7, 16 !important;
 
   /* Bề mặt thẻ: kính tối. --paper dùng cho phần tử không phải .core-card. */
-  --paper: rgba(10, 14, 28, 0.58) !important;
-  /* Alpha của viền chọn theo tương phản, không theo cảm giác: rgba trắng-xanh
-     phủ lên vùng tối nhất của canvas (#040208) cần alpha >= ~0.42 mới đạt 3:1.
-     --line dùng cho viền control (nút theme) nên phải đạt ngưỡng đó; --line-soft
-     chỉ là gạch phân cách trang trí nên để nhẹ hơn. */
-  --line: rgba(198, 220, 244, 0.46) !important;
-  --line-soft: rgba(198, 220, 244, 0.24) !important;
-  --ring-track: rgba(206, 226, 248, 0.42) !important;
-  --control-bg: rgba(14, 20, 38, 0.62) !important;
-  --control-hover: rgba(30, 44, 74, 0.78) !important;
+  --paper: var(--surface-1) !important;
+  /* --line là viền của control ngoài thẻ (nút đổi theme) nên nền tham chiếu
+     của nó là nền tinh hệ trần, cần alpha cao hơn --edge mới đạt 3:1.
+     --line-soft chỉ là gạch phân cách trang trí nên để nhẹ. */
+  --line: rgba(196, 216, 248, 0.62) !important;
+  --line-soft: rgba(196, 216, 248, 0.24) !important;
+  --ring-track: rgba(190, 210, 240, 0.40) !important;
+  --control-bg: rgba(16, 23, 44, 0.78) !important;
+  --control-hover: rgba(32, 46, 78, 0.86) !important;
 
-  /* Màu nhấn: kéo sáng lên để đọc được trên nền tối ở CẢ light theme
-     (jade light gốc #127a5d quá tối, sẽ chìm hẳn vào tinh hệ). */
-  --jade: #4fe0b4 !important;
-  --jade-soft: rgba(79, 224, 180, 0.16) !important;
-  --jade-gradient: linear-gradient(135deg, #6ff0c8, #35c79c) !important;
-  --gold: #f0cd8a !important;
-  --gold-soft: rgba(240, 205, 138, 0.16) !important;
-  --cinnabar: #f6a58f !important;
-  --cinnabar-soft: rgba(246, 165, 143, 0.16) !important;
-  --porcelain: #93c8e4 !important;
-  --porcelain-soft: rgba(147, 200, 228, 0.16) !important;
+  /* --- Sắc nhấn: MỘT màu chính, lấy ra từ chính lõi tinh vân -----------
+     Bảng cũ có bốn màu nhấn ngang hàng (jade/gold/cinnabar/porcelain) —
+     nhiều màu ngang cấp thì không còn cấp nào, mắt không biết nhìn đâu.
+     Giờ chỉ còn một màu xanh dương làm màu hành động duy nhất: nó là màu lõi
+     tinh vân kéo sáng lên, nên thuộc về khung cảnh chứ không dán lên. Độ sáng
+     chốt ở mức đủ cho 4.5:1 khi dùng làm CHỮ (pinyin) trên mặt thẻ.
+     --accent* là tên theo VAI TRÒ; các alias jade/gold/... bên dưới chỉ để
+     những rule cũ trong file này còn chạy trong lúc chuyển. */
+  --accent: #9dbcff !important;
+  --accent-soft: rgba(157, 188, 255, 0.14) !important;
+  --accent-line: rgba(157, 188, 255, 0.36) !important;
+  --accent-gradient: linear-gradient(135deg, #a8c4ff, #6f97ea) !important;
 
-  --primary-start: #6ff0c8 !important;
-  --primary-end: #35c79c !important;
-  --primary-text: #04231b !important;
-  --focus-ring: rgba(120, 240, 205, 0.85) !important;
+  /* Sắc nhấn phụ DUY NHẤT, chỉ cho tiến độ và trạng thái "đã thuộc".
+     Hạ bão hoà so với mint cũ (#4fe0b4) để không tranh chấp với xanh dương. */
+  --positive: #8ee6c8 !important;
+  --positive-soft: rgba(142, 230, 200, 0.13) !important;
+
+  /* Chữ và icon trung tính trên thẻ: dùng cho toàn bộ icon feature/kind,
+     thay cho bốn màu cũ. Icon là hình đồ hoạ nên ngưỡng là 3:1, nhưng
+     .landing-kind dùng đúng màu này cho CHỮ nữa, nên phải đạt 4.5:1. */
+  --on-surface-icon: #becfea !important;
+  --on-surface-icon-bg: rgba(140, 168, 216, 0.14) !important;
+
+  /* Alias cho các rule cũ. Jade/porcelain/gold không còn là bốn màu riêng:
+     jade -> sắc nhấn chính, gold -> trung tính (không còn vàng trên landing),
+     cinnabar giữ đỏ nhưng CHỈ dành cho lỗi thật, không dùng trang trí. */
+  --jade: var(--accent) !important;
+  --jade-soft: var(--accent-soft) !important;
+  --jade-gradient: var(--accent-gradient) !important;
+  --gold: var(--on-surface-icon) !important;
+  --gold-soft: var(--on-surface-icon-bg) !important;
+  --porcelain: var(--on-surface-icon) !important;
+  --porcelain-soft: var(--on-surface-icon-bg) !important;
+  --cinnabar: #f0a091 !important;
+  --cinnabar-soft: rgba(240, 160, 145, 0.14) !important;
+
+  --primary-start: #a8c4ff !important;
+  --primary-end: #6f97ea !important;
+  /* Gradient xanh sáng -> chữ nút phải là xanh đêm rất tối mới đủ tương phản. */
+  --primary-text: #071431 !important;
+  --focus-ring: rgba(150, 186, 255, 0.85) !important;
 
   /* Nền dự phòng khi canvas chưa vẽ xong: tránh nháy trắng ở frame đầu. */
-  --bg-top: #050310 !important;
-  --bg-bottom: #050310 !important;
+  --bg-top: #050814 !important;
+  --bg-bottom: #050814 !important;
 }
 
 .landing {
@@ -203,9 +258,12 @@
     );
 }
 
-/* Viền chữ mềm: làm nét mép glyph trên nền sao lốm đốm. Không áp cho h1 —
-   h1 dùng background-clip: text + text-fill-color: transparent, bóng chữ sẽ
-   lộ hẳn qua thân chữ trong suốt. */
+/* Viền chữ mềm: làm nét mép glyph trên nền sao lốm đốm. h1 giờ CÓ trong danh
+   sách này — trước đây nó bị loại vì dùng background-clip: text +
+   text-fill-color: transparent (bóng chữ sẽ lộ qua thân chữ trong suốt).
+   Nay h1 là chữ đặc nên nhận bóng bình thường, và nó là khối chữ lớn nhất
+   nằm trực tiếp trên sao nên cần nhất. */
+.landing-hero__copy h1,
 .landing-hero__copy p,
 .landing-hero__copy li,
 .landing-section__head h2,
@@ -227,84 +285,110 @@
    đây phải !important + selector 2 lớp mới thắng. Chỉ ăn trong .landing.
    Nền rgba đủ đục để chữ #f1f6fb đạt >= 7:1, vẫn thấy sao phía sau. */
 .landing .core-card {
-  background-color: rgba(9, 13, 27, 0.62) !important;
+  background-color: var(--surface-1) !important;
+  /* Một hướng sáng duy nhất cho cả trang: sáng ở mép trên-trái, tối dần xuống
+     dưới-phải. Trước đây gradient trộn xanh + tím (hai nguồn sáng khác nhau
+     trên cùng một bề mặt) nên thẻ không đọc ra vật thể có khối. */
   background-image:
-    linear-gradient(160deg, rgba(150, 200, 255, 0.07), rgba(120, 90, 200, 0.04)) !important;
-  border: 1px solid rgba(198, 220, 244, 0.45) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(130%) !important;
-  backdrop-filter: blur(18px) saturate(130%) !important;
-  /* Bóng xếp 3 tầng thay cho một khối 48px duy nhất. Một bóng lớn đơn độc
-     trên nền sao đọc ra "vệt mực bẩn"; ba tầng ngắn-vừa-dài cho mép thẻ bám
-     đất mà không bôi đen vùng sao quanh nó. Thêm inset dưới: viền sáng chỉ ở
-     mép trên là ánh sáng từ một phía, có thêm mép dưới mới ra khối kính dày. */
+    linear-gradient(157deg, rgba(168, 196, 240, 0.055), rgba(168, 196, 240, 0) 62%) !important;
+  border: 1px solid var(--edge) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(112%) !important;
+  backdrop-filter: blur(18px) saturate(112%) !important;
+  /* Bóng ba tầng cùng một màu mực xanh đêm (--shade), cùng một hướng đổ xuống.
+     Tầng 1px là điểm tiếp đất, 14px là bóng thân, 42px là bóng môi trường.
+     inset trên = ánh sáng chiếu tới; inset dưới = ánh phản từ nền lên đáy
+     kính. Không có tầng nào mang màu nhấn: bề mặt trung tính thì màu nhấn ở
+     nội dung mới nổi. */
   box-shadow:
-    0 1px 2px rgba(2, 4, 12, 0.34),
-    0 6px 14px rgba(2, 4, 12, 0.28),
-    0 18px 42px rgba(2, 4, 12, 0.34),
-    inset 0 1px 0 rgba(220, 236, 255, 0.12),
-    inset 0 -1px 0 rgba(120, 160, 220, 0.06) !important;
+    0 1px 2px rgba(4, 7, 16, 0.36),
+    0 6px 14px rgba(4, 7, 16, 0.28),
+    0 18px 42px rgba(4, 7, 16, 0.34),
+    inset 0 1px 0 rgba(210, 226, 252, 0.11),
+    inset 0 -1px 0 rgba(126, 168, 255, 0.05) !important;
+  /* Chỉ chuyển động hai thuộc tính ánh sáng, mỗi cái 200ms ease-out không
+     vượt biên. Token --transition-bounce của app (cubic-bezier vượt 56%) bị
+     ghi đè ở đây: bóng đổ nảy lên rồi lùi lại là chuyển động không tồn tại
+     ở bề mặt vật lý. Không để `all` — nó sẽ kéo theo cả transform. */
+  transition:
+    border-color 200ms cubic-bezier(0.33, 1, 0.68, 1),
+    box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1) !important;
 }
 
 .landing .core-card:hover {
-  border-color: rgba(120, 240, 205, 0.42) !important;
-  /* Hover: bóng nâng lên và thêm một tầng hắt màu mint rất loãng — thẻ trông
-     như được tinh hệ chiếu vào, thay vì chỉ to bóng ra. */
+  transform: none !important;
+  border-color: var(--edge-strong) !important;
   box-shadow:
-    0 1px 2px rgba(2, 4, 12, 0.36),
-    0 10px 22px rgba(2, 4, 12, 0.32),
-    0 26px 56px rgba(2, 4, 12, 0.40),
-    0 12px 40px rgba(53, 199, 156, 0.10),
-    inset 0 1px 0 rgba(220, 236, 255, 0.16),
-    inset 0 -1px 0 rgba(120, 240, 205, 0.10) !important;
+    0 1px 2px rgba(4, 7, 16, 0.38),
+    0 10px 22px rgba(4, 7, 16, 0.32),
+    0 26px 56px rgba(4, 7, 16, 0.42),
+    inset 0 1px 0 rgba(210, 226, 252, 0.16),
+    inset 0 -1px 0 rgba(126, 168, 255, 0.07) !important;
+}
+
+.landing .core-card:active {
+  transform: none !important;
 }
 
 /* --- Nút trên nền tối ---------------------------------------------------
    .btn-secondary lấy màu chữ từ --modern-zen-text (token của app, KHÔNG bị
    ghi đè trong phạm vi .landing vì app bên trong vẫn cần nó) — ở theme sáng
    màu đó gần như đen, đặt trên tinh hệ sẽ mất chữ. Ép về --text đã khoá. */
+/* Nút phụ: bề mặt lõm hơn thẻ (surface-0) để cặp CTA có thứ bậc rõ — nút
+   chính là mặt sáng đặc, nút phụ là mặt kính chìm. */
 .landing .btn-secondary {
   color: var(--text) !important;
-  background: rgba(12, 18, 34, 0.55) !important;
-  border: 1px solid rgba(198, 220, 246, 0.58) !important;
+  background: var(--surface-0) !important;
+  border: 1px solid var(--edge-strong) !important;
   -webkit-backdrop-filter: blur(10px) !important;
   backdrop-filter: blur(10px) !important;
-  /* Trước đây nút này KHÔNG có bóng nào, trong khi btn-primary cạnh nó có
-     glow mint -> hai nút đứng cạnh mà như ở hai mặt phẳng khác nhau. Cho nó
-     bóng tối cùng nhịp với primary để cặp CTA nằm đúng một tầng. */
+  transition:
+    background-color 200ms cubic-bezier(0.33, 1, 0.68, 1),
+    border-color 200ms cubic-bezier(0.33, 1, 0.68, 1),
+    box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1) !important;
+  /* Cùng ba tầng, cùng màu mực với thẻ, chỉ thấp hơn một bậc: nút nằm TRÊN
+     nền chứ không nổi bằng thẻ. */
   box-shadow:
-    0 1px 2px rgba(2, 4, 12, 0.30),
-    0 8px 20px rgba(2, 4, 12, 0.26),
-    inset 0 1px 0 rgba(220, 236, 255, 0.10) !important;
+    0 1px 2px rgba(4, 7, 16, 0.32),
+    0 6px 16px rgba(4, 7, 16, 0.26),
+    inset 0 1px 0 rgba(210, 226, 252, 0.10) !important;
 }
 
 .landing .btn-secondary:hover {
-  background: rgba(28, 42, 70, 0.72) !important;
-  border-color: rgba(120, 240, 205, 0.55) !important;
+  transform: none !important;
+  background: var(--surface-2) !important;
+  border-color: var(--accent) !important;
   box-shadow:
-    0 1px 2px rgba(2, 4, 12, 0.32),
-    0 12px 26px rgba(2, 4, 12, 0.32),
-    inset 0 1px 0 rgba(220, 236, 255, 0.14) !important;
+    0 1px 2px rgba(4, 7, 16, 0.34),
+    0 10px 22px rgba(4, 7, 16, 0.30),
+    inset 0 1px 0 rgba(210, 226, 252, 0.14) !important;
 }
 
-/* Gradient mint sáng -> chữ phải TỐI mới đủ tương phản (overhaul.css ép #fff). */
+/* Gradient xanh sáng -> chữ phải TỐI mới đủ tương phản (overhaul.css ép #fff). */
 .landing .btn-primary {
   color: var(--primary-text) !important;
-  /* Bóng nút = 1 tầng tối để bám nền + 1 tầng mint loãng làm ánh hắt, cộng
-     inset trên cho mép gradient trông có độ dày. Bản cũ chỉ có đúng một
-     glow mint 20px: nút như dán phẳng lên nền, không có điểm tiếp đất. */
+  transition:
+    box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1),
+    filter 200ms cubic-bezier(0.33, 1, 0.68, 1) !important;
+  /* Hai tầng bóng tối để bám nền + MỘT tầng hắt màu nhấn rất loãng. Tầng hắt
+     giữ ở 0.18: đây là nút duy nhất trên trang được phát sáng, nên nó không
+     cần mạnh mới nổi — cả trang còn lại đã trung tính. */
   box-shadow:
-    0 1px 2px rgba(2, 12, 9, 0.40),
-    0 8px 18px rgba(2, 12, 9, 0.30),
-    0 10px 30px rgba(53, 199, 156, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34) !important;
+    0 1px 2px rgba(4, 7, 16, 0.42),
+    0 8px 18px rgba(4, 7, 16, 0.32),
+    0 10px 28px rgba(111, 151, 234, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
 }
 
 .landing .btn-primary:hover {
+  transform: none !important;
+  /* Sáng lên bằng filter thay vì to bóng ra: nút phát sáng mạnh hơn, đúng
+     hành vi của vật tự phát sáng khi được nhấn mạnh. */
+  filter: brightness(1.06) !important;
   box-shadow:
-    0 1px 2px rgba(2, 12, 9, 0.42),
-    0 12px 24px rgba(2, 12, 9, 0.34),
-    0 16px 44px rgba(53, 199, 156, 0.40),
-    inset 0 1px 0 rgba(255, 255, 255, 0.42) !important;
+    0 1px 2px rgba(4, 7, 16, 0.44),
+    0 12px 24px rgba(4, 7, 16, 0.36),
+    0 14px 38px rgba(111, 151, 234, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38) !important;
 }
 
 /* Vòng focus: index.css dùng var(--focus-ring) — token này đã được khoá sang
@@ -380,7 +464,7 @@
 
 .landing-nav__links a:hover {
   color: var(--text);
-  border-bottom-color: var(--jade);
+  border-bottom-color: var(--accent);
 }
 
 .landing-nav__actions {
@@ -429,24 +513,28 @@
   margin: 0 0 18px;
   padding: 6px 13px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent);
-  background: var(--gold-soft);
-  color: var(--gold);
+  /* Nhãn này là thông tin phụ (cấp HSK), không phải hành động — nên nó KHÔNG
+     được mang màu nhấn. Trước đây nó vàng, cạnh nút CTA mint: hai điểm màu
+     tranh nhau ngay ở vùng mắt nhìn đầu tiên. Giờ là viền + chữ trung tính,
+     mắt đi thẳng xuống tiêu đề rồi tới nút. */
+  border: 1px solid var(--edge) !important;
+  background: var(--surface-0);
+  color: var(--muted);
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.03em;
 }
 
+/* Tiêu đề là chữ đặc một màu. Gradient cũ chạy trắng -> mint -> vàng ngang
+   qua dòng chữ: ba màu trong một câu, và chữ cuối dòng luôn nhạt hơn chữ đầu
+   nên tương phản không đều theo chiều ngang. Chữ đặc đọc chắc hơn, và để
+   dành toàn bộ "quyền dùng màu" cho nút hành động. */
 .landing-hero__copy h1 {
   margin: 0 0 18px;
   font-size: clamp(2.1rem, 5.2vw, 3.6rem);
   line-height: 1.08;
   letter-spacing: -0.02em;
   font-weight: 800;
-  background: linear-gradient(120deg, var(--text) 32%, var(--jade) 78%, var(--gold));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
   color: var(--text);
 }
 
@@ -471,8 +559,10 @@
   font-size: 1rem;
 }
 
+/* Nút CTA cũng không nhấc lên nữa. Bóng và độ sáng viền đã đủ báo hover;
+   dịch chuyển vị trí làm mắt phải bám lại mục tiêu đang định bấm. */
 .landing-cta:hover {
-  transform: translateY(-2px);
+  transform: none;
 }
 
 .landing-assurances {
@@ -493,7 +583,8 @@
 }
 
 .landing-assurances svg {
-  color: var(--jade);
+  /* Ba dong nay la loi cam ket tich cuc -> sac phu. */
+  color: var(--positive);
   flex-shrink: 0;
 }
 
@@ -516,7 +607,11 @@
 /* Thẻ này là <button> thật (bấm để đổi từ), nên phải huỷ style mặc định của
    nút: nút không kế thừa font, tự căn giữa chữ và có width tự co. Nền/viền do
    .core-card lo (đã !important ở khối kính tối phía trên). */
-.landing-preview {
+/* Selector phải là .landing .landing-preview, KHÔNG phải .landing-preview:
+   khối kính ở trên dùng `.landing .core-card` (hai class = specificity 0,2,0),
+   nên một class đơn không thắng được dù cũng !important. Cùng 0,2,0 và nằm
+   sau trong file thì rule này mới ăn. */
+.landing .landing-preview {
   width: 100%;
   padding: 22px;
   display: grid;
@@ -527,6 +622,31 @@
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
+  /* Thẻ này là pane CHÍNH của hero (bên phải tiêu đề), nên nó phải nổi cao
+     hơn các thẻ số liệu và thẻ tính năng. Trước đây mọi pane cùng một nền,
+     trang đọc ra phẳng lì. Đây là cấp 2 trong ba cấp bề mặt. */
+  background-color: var(--surface-2) !important;
+  border-color: var(--edge-strong) !important;
+  box-shadow:
+    0 1px 2px rgba(var(--shade), 0.38),
+    0 8px 18px rgba(var(--shade), 0.30),
+    0 26px 60px rgba(var(--shade), 0.40),
+    inset 0 1px 0 rgba(210, 226, 252, 0.14),
+    inset 0 -1px 0 rgba(126, 168, 255, 0.06) !important;
+}
+
+/* Thẻ này CẦN rule hover riêng. Nếu không, `.landing .core-card:hover` (cùng
+   specificity 0,2,0 nhưng đứng trước trong file) sẽ không thắng nổi rule nghỉ
+   ở trên — nghĩa là hover vào thẻ chính lại KHÔNG đổi gì. Bóng hover ở đây
+   phải sâu hơn cả bóng nghỉ của chính nó, chứ không phải bằng thẻ thường. */
+.landing .landing-preview:hover {
+  border-color: #d6e6ff !important;
+  box-shadow:
+    0 1px 2px rgba(var(--shade), 0.40),
+    0 12px 26px rgba(var(--shade), 0.34),
+    0 34px 76px rgba(var(--shade), 0.46),
+    inset 0 1px 0 rgba(210, 226, 252, 0.20),
+    inset 0 -1px 0 rgba(126, 168, 255, 0.09) !important;
 }
 
 /* Con của thẻ đổi từ <p> sang <span> (button không được chứa <p>: HTML chỉ cho
@@ -554,14 +674,22 @@
 
 .landing-preview__note svg {
   flex-shrink: 0;
-  color: var(--jade);
+  color: var(--accent);
   transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Bấm xuống: thẻ lún nhẹ. .core-card:hover đã có translateY(-4px) từ
-   overhaul.css nên chỉ cần ghi đè lúc :active. */
-.landing-preview:active {
-  transform: translateY(-1px) scale(0.995) !important;
+/* Bấm xuống: bề mặt không lún và không co, chỉ bóng xẹp lại một bậc — đúng
+   như một tấm kính bị ấn sát xuống nền. scale() trên thẻ có chữ Hán 3.4rem
+   làm glyph bị lấy mẫu lại nên nét chữ rung, đây là lý do kỹ thuật để bỏ nó
+   chứ không chỉ là chuyện thẩm mỹ.
+   Selector phải hai class để thắng .landing .landing-preview:hover ở trên
+   (:active và :hover cùng đúng lúc đang bấm). */
+.landing .landing-preview:active {
+  transform: none !important;
+  box-shadow:
+    0 1px 2px rgba(var(--shade), 0.40),
+    0 3px 8px rgba(var(--shade), 0.26),
+    inset 0 1px 0 rgba(210, 226, 252, 0.10) !important;
 }
 
 .landing-preview__top {
@@ -573,17 +701,25 @@
   color: var(--muted);
 }
 
+/* Cấp HSK là dữ liệu phân loại, không phải hành động -> trung tính. */
 .landing-preview__top strong {
   margin-inline-start: auto;
-  color: var(--jade);
+  color: var(--muted);
+  /* Viền mảnh cho nó ra dáng một nhãn thật, bù cho việc mất màu. */
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font-size: 0.74rem;
 }
 
+/* Đốm nhịp: đây là chỗ hợp lý để dùng sắc phụ — nó báo "phiên đang hoạt
+   động", tức trạng thái tích cực, cùng họ nghĩa với thanh tiến độ. */
 .landing-preview__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--jade);
-  box-shadow: 0 0 0 4px var(--jade-soft);
+  background: var(--positive);
+  box-shadow: 0 0 0 4px var(--positive-soft);
   animation: landingPulse 2.6s ease-in-out infinite;
 }
 
@@ -615,7 +751,8 @@
   margin: 6px 0 2px;
   font-size: 1.02rem;
   font-weight: 700;
-  color: var(--jade);
+  /* Pinyin la thong tin hoc chinh cua the -> duoc phep mang sac nhan. */
+  color: var(--accent);
 }
 
 .landing-preview__meaning {
@@ -631,24 +768,19 @@
   justify-content: center;
 }
 
+/* Hai chip trên thẻ xem trước đều là DỮ LIỆU MÔ TẢ ("Ôn lại sau 3 ngày",
+   "Thanh 4 · Thanh 2") — không phải hành động, không phải trạng thái tốt/xấu.
+   Nên cả hai đều trung tính. Bản cũ tô một chip mint một chip vàng, khiến
+   mắt tưởng chúng khác loại nhau trong khi chúng cùng cấp. Giữ hai class
+   riêng vì JSX đang dùng, nhưng cho chúng cùng một diện mạo. */
 .landing-chip {
   padding: 5px 11px;
   border-radius: 999px;
   font-size: 0.76rem;
   font-weight: 700;
-  border: 1px solid transparent;
-}
-
-.landing-chip--jade {
-  background: var(--jade-soft);
-  color: var(--jade);
-  border-color: color-mix(in srgb, var(--jade) 28%, transparent);
-}
-
-.landing-chip--gold {
-  background: var(--gold-soft);
-  color: var(--gold);
-  border-color: color-mix(in srgb, var(--gold) 30%, transparent);
+  background: var(--surface-0);
+  color: var(--muted);
+  border: 1px solid var(--edge);
 }
 
 .landing-preview__bars {
@@ -669,19 +801,26 @@
   font-weight: 600;
 }
 
+/* Đường ray là vùng LÕM: dùng surface-0 (tối hơn mặt thẻ) chứ không phải một
+   màu xám sáng nổi lên. Thêm inset shadow cho ray thật sự trông như khe rãnh
+   khắc vào mặt kính, thanh đo nằm trong đó. */
 .landing-bar__track {
   height: 7px;
   border-radius: 999px;
-  background: var(--ring-track);
+  background: rgba(var(--shade), 0.55);
+  box-shadow: inset 0 1px 2px rgba(var(--shade), 0.5);
   overflow: hidden;
 }
 
+/* Tiến độ là chỗ DUY NHẤT dùng sắc phụ mint. Nó mang nghĩa "đã thuộc / đã
+   tiến bộ" — khác nghĩa với xanh dương (hành động bấm được). Hai sắc không
+   bao giờ xuất hiện cùng vai trò, nên chúng không tranh nhau. */
 .landing-bar__fill {
   display: block;
   height: 100%;
   width: var(--fill);
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--positive) 76%, #5f9fd0), var(--positive));
   animation: landingBarGrow 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -734,10 +873,13 @@
   align-content: start;
 }
 
+/* Bốn con số thống kê là DỮ LIỆU, không phải hành động -> chữ trung tính,
+   để sức nặng nằm ở cỡ chữ và font tabular chứ không ở màu. Bốn khối màu
+   giống nhau xếp hàng ngang là chỗ dễ đọc ra "template" nhất. */
 .landing-stat strong {
   font-size: clamp(1.6rem, 3.4vw, 2.15rem);
   font-weight: 800;
-  color: var(--jade);
+  color: var(--text);
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -803,33 +945,25 @@
   align-content: start;
 }
 
-.landing-feature:hover {
-  transform: translateY(-3px);
-}
-
+/* Sáu icon tính năng dùng CHUNG một màu trung tính.
+   Bản cũ tô mỗi thẻ một màu theo `tone` (jade/cinnabar/porcelain/gold) —
+   sáu ô sáu màu thì màu không còn mang thông tin gì, chỉ còn là tiếng ồn, và
+   đó là dấu hiệu rõ nhất của bảng màu máy sinh. Nay màu chỉ xuất hiện ở nơi
+   có nghĩa: nút hành động (--accent) và số liệu tiến độ (--positive).
+   Các class .landing-feature--<tone> vẫn được JSX sinh ra nhưng không còn
+   rule nào bám vào, cứ để vậy: chúng là dữ liệu ngữ nghĩa của FEATURES, xoá
+   thì phải sửa cả JSX mà không được gì thêm. */
 .landing-feature__icon {
   width: 42px;
   height: 42px;
   display: grid;
   place-items: center;
   border-radius: 12px;
-  background: var(--jade-soft);
-  color: var(--jade);
-}
-
-.landing-feature--gold .landing-feature__icon {
-  background: var(--gold-soft);
-  color: var(--gold);
-}
-
-.landing-feature--cinnabar .landing-feature__icon {
-  background: var(--cinnabar-soft);
-  color: var(--cinnabar);
-}
-
-.landing-feature--porcelain .landing-feature__icon {
-  background: var(--porcelain-soft);
-  color: var(--porcelain);
+  background: var(--on-surface-icon-bg);
+  color: var(--on-surface-icon);
+  /* Viền mảnh thay cho khối màu đặc: ô icon vẫn tách khỏi mặt thẻ mà không
+     cần đến độ bão hoà. */
+  border: 1px solid rgba(168, 196, 240, 0.16);
 }
 
 .landing-feature h3 {
@@ -859,7 +993,8 @@
   gap: 5px;
   justify-items: center;
   text-align: center;
-  color: var(--jade);
+  /* Sau o dang bai xep hang: trung tinh, cung ly le voi icon feature. */
+  color: var(--on-surface-icon);
 }
 
 .landing-kind strong {
@@ -949,7 +1084,7 @@
 }
 
 .landing-faq__item button:hover {
-  color: var(--jade);
+  color: var(--accent);
 }
 
 /* Dấu +/− vẽ bằng CSS: hai gạch, gạch dọc xoay mất khi mở. */
@@ -969,7 +1104,7 @@
   top: 50%;
   height: 2px;
   border-radius: 2px;
-  background: var(--jade);
+  background: var(--accent);
   transition: transform 240ms ease;
 }
 
@@ -1099,9 +1234,12 @@
     transform: rotate(-16deg) scale(1.4);
   }
 
+  /* Giảm bán kính blur để bớt tải GPU. saturate giữ đúng 112% như bản
+     desktop — trước đây để 120% ở đây, tức mobile lại bão hoà HƠN desktop,
+     ngược với ý định giảm tải và làm màu thẻ lệch giữa hai kích thước. */
   .landing .core-card {
-    -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
-    backdrop-filter: blur(10px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(112%) !important;
+    backdrop-filter: blur(10px) saturate(112%) !important;
   }
 }
 
