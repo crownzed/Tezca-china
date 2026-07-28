@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, Clock3, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, XCircle } from 'lucide-react';
 import { analyzeStudyData, completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -13,9 +13,15 @@ const CustomVocabInput = lazy(() => import('./components/CustomVocabInput.jsx'))
 const PronunciationPractice = lazy(() => import('./components/PronunciationPractice.jsx'));
 const VoiceChat = lazy(() => import('./components/VoiceChat.jsx'));
 const GrammarLab = lazy(() => import('./components/GrammarLab.jsx'));
+const VocabTypingMode = lazy(() => import('./components/VocabTypingMode.jsx'));
+const FlashcardMode = lazy(() => import('./components/FlashcardMode.jsx'));
+const ConfusablePairs = lazy(() => import('./components/ConfusablePairs.jsx'));
 import { notificationPermission, requestNotificationPermission, scheduleDailyReminder, cancelReminder, showNotification } from './notifications.js';
 import { resolveDecompositions } from './radicals-db.js';
+import { loadAllFlashcards } from './vocab-loader';
 import { ClickableChineseText, TonedPinyin } from './components/chinese-text.jsx';
+import HskLevelPicker from './components/HskLevelPicker.jsx';
+import { primaryLevel, normalizeLevels, levelMatches, levelsLabel, readStoredLevels } from './hsk-levels.js';
 
 // Module-level clock helper. Kept out of component scope so React's purity
 // lint doesn't flag the (intentional) impure read inside event handlers.
@@ -42,8 +48,9 @@ function quizTypeDescription(typeId) {
   if (typeId === 'vocab') return 'Nghĩa và chữ';
   if (typeId === 'listening') return 'Nghe câu chọn nghĩa';
   if (typeId === 'translation') return 'Dịch đoạn nói';
-  if (typeId === 'cloze') return 'Chọn từ còn thiếu';
+  if (typeId === 'cloze') return 'Điền từ vào đoạn';
   if (typeId === 'drag_drop') return 'Sắp xếp từ thành câu';
+  if (typeId === 'reading') return 'Đọc hiểu đoạn văn';
   return 'Câu và ngữ cảnh';
 }
 
@@ -53,16 +60,170 @@ function isPassagePrompt(quizType) {
   return quizType === 'reading' || quizType === 'translation';
 }
 
+// ── Prompt dùng chung cho 3 màn trắc nghiệm (Quiz, LearningSession,
+// GeneralCheck). Trước đây JSX được lặp 3 lần và phải sửa đồng bộ tay; gom
+// vào 2 component để đổi một chỗ là cả 3 màn theo.
+
+// 选词填空: đoạn văn có đúng MỘT `____` (chỗ đang hỏi), các chỗ còn lại đã được
+// exam-items.js đổi thành （2）（3）… `filled` chỉ có ở màn cho xem đáp án đã chọn.
+function ClozePrompt({ prompt, filledText = null, isPassage = false }) {
+  return (
+    <h2 className={`cloze-prompt${isPassage ? ' cloze-prompt--passage' : ''}`}>
+      {String(prompt).split(/_{2,}/).map((part, i, arr) => (
+        <Fragment key={i}>
+          {part}
+          {i < arr.length - 1 && (
+            <span className={`cloze-blank ${filledText ? 'filled' : ''}`}>{filledText || ''}</span>
+          )}
+        </Fragment>
+      ))}
+    </h2>
+  );
+}
+
+// 阅读理解: khi có metadata_json.stem thì tách đoạn văn (bấm được từng chữ) và
+// câu hỏi tiếng Trung ra 2 khối. Không có stem → giữ hành vi cũ (prompt thuần).
+function QuestionPrompt({ question, quizType, clickable = true }) {
+  const type = quizType || question.quiz_type;
+  const passage = question.metadata_json?.passage;
+  const stem = question.metadata_json?.stem;
+  if (type === 'reading' && passage && stem) {
+    return (
+      <>
+        <h2 className="prompt--passage">
+          {clickable ? <ClickableChineseText text={passage} /> : passage}
+        </h2>
+        <p className="reading-stem">{clickable ? <ClickableChineseText text={stem} /> : stem}</p>
+      </>
+    );
+  }
+  const asPassage = isPassagePrompt(type);
+  return (
+    <h2 className={asPassage ? 'prompt--passage' : ''}>
+      {asPassage && clickable ? <ClickableChineseText text={question.prompt} /> : question.prompt}
+    </h2>
+  );
+}
+
+// Nav 2 cấp: mục standalone (không có `items`) + nhóm luồng giá trị (có `items`).
+// `id` của từng view giữ nguyên như bản phẳng cũ vì setActiveTab dùng trực tiếp.
 const NAV = [
   { id: 'dashboard', label: 'Trang chính', icon: BarChart3 },
-  { id: 'quiz', label: 'Luyện tập', icon: Play },
-  { id: 'grammar', label: 'Ngữ pháp', icon: Blocks },
-  { id: 'vocab', label: 'Từ vựng', icon: Search },
-  { id: 'custom', label: 'Tự tạo', icon: PenTool },
-  { id: 'speak', label: 'Phát âm', icon: Mic },
-  // { id: 'voicechat', label: 'Hội thoại', icon: MessageCircle }, // tạm ẩn
+  {
+    id: 'group-hsk',
+    label: 'Luyện thi HSK',
+    icon: Play,
+    items: [
+      { id: 'quiz', label: 'Luyện tập', icon: Play },
+      { id: 'grammar', label: 'Ngữ pháp', icon: Blocks },
+    ],
+  },
+  {
+    id: 'group-speak',
+    label: 'Phát âm AI',
+    icon: Mic,
+    items: [
+      { id: 'speak', label: 'Phát âm', icon: Mic },
+      { id: 'voicechat', label: 'Hội thoại', icon: MessageCircle },
+    ],
+  },
+  {
+    id: 'group-vocab',
+    label: 'Từ vựng',
+    icon: Search,
+    items: [
+      { id: 'vocab', label: 'Từ vựng', icon: Search },
+      { id: 'flashcard', label: 'Thẻ lật', icon: Layers },
+      { id: 'vocab-typing', label: 'Gõ từ vựng', icon: Keyboard },
+      { id: 'confusable', label: 'Dễ nhầm', icon: GitCompare },
+      { id: 'custom', label: 'Tự tạo', icon: PenTool },
+    ],
+  },
   { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
 ];
+
+// Danh sách phẳng để tra cứu label theo view id (tiêu đề topbar).
+const NAV_VIEWS = NAV.flatMap(entry => (entry.items ? entry.items : [entry]));
+
+// view id -> label nhóm cha, dùng cho dòng eyebrow trên topbar (view lẻ thì null).
+const NAV_PARENT_LABEL = NAV.reduce((acc, entry) => {
+  if (entry.items) entry.items.forEach(item => { acc[item.id] = entry.label; });
+  return acc;
+}, {});
+
+function SidebarNav({ activeTab, onSelect }) {
+  // Chỉ lưu lựa chọn mở/đóng do người dùng bấm tay. Trạng thái mặc định được
+  // suy ra từ activeTab (nhóm chứa view active thì tự mở), nên không cần effect
+  // đồng bộ khi view đổi từ nơi khác: startQuizFlow, dashboard shortcut...
+  const [groupOverrides, setGroupOverrides] = useState({});
+
+  const toggleGroup = (groupId, currentlyExpanded) => {
+    setGroupOverrides(prev => ({ ...prev, [groupId]: !currentlyExpanded }));
+  };
+
+  return (
+    <nav className="sh-nav" aria-label="Điều hướng chính">
+      {NAV.map(entry => {
+        const Icon = entry.icon;
+
+        if (!entry.items) {
+          return (
+            <button key={entry.id} type="button" className={`sh-item${activeTab === entry.id ? ' is-active' : ''}`} onClick={() => onSelect(entry.id)} title={entry.label}>
+              <Icon size={18} strokeWidth={1.5} />
+              <span>{entry.label}</span>
+            </button>
+          );
+        }
+
+        // Nhóm chỉ có 1 view => hành xử như mục thường, không có submenu.
+        if (entry.items.length === 1) {
+          const only = entry.items[0];
+          return (
+            <button key={entry.id} type="button" className={`sh-item${activeTab === only.id ? ' is-active' : ''}`} onClick={() => onSelect(only.id)} title={entry.label}>
+              <Icon size={18} strokeWidth={1.5} />
+              <span>{entry.label}</span>
+            </button>
+          );
+        }
+
+        const hasActiveChild = entry.items.some(item => item.id === activeTab);
+        const override = groupOverrides[entry.id];
+        const expanded = override === undefined ? hasActiveChild : override;
+        const submenuId = `nav-submenu-${entry.id}`;
+
+        return (
+          <div key={entry.id} className="sh-group">
+            <button
+              type="button"
+              className={`sh-item sh-group-toggle${hasActiveChild ? ' is-active' : ''}`}
+              aria-expanded={expanded}
+              aria-controls={submenuId}
+              onClick={() => toggleGroup(entry.id, expanded)}
+              title={entry.label}
+            >
+              <Icon size={18} strokeWidth={1.5} />
+              <span>{entry.label}</span>
+              {/* Số mục con là dữ liệu thật, dùng mono để cột chữ số không nhảy. */}
+              <span className="sh-count" aria-hidden="true">{String(entry.items.length).padStart(2, '0')}</span>
+              <ChevronDown size={14} strokeWidth={1.5} className={`sh-chevron${expanded ? ' is-open' : ''}`} aria-hidden="true" />
+            </button>
+            <div className="sh-sub" id={submenuId} role="group" aria-label={entry.label} hidden={!expanded}>
+              {entry.items.map(item => {
+                const ItemIcon = item.icon;
+                return (
+                  <button key={item.id} type="button" className={`sh-item sh-subitem${activeTab === item.id ? ' is-active' : ''}`} onClick={() => onSelect(item.id)} title={item.label}>
+                    <ItemIcon size={16} strokeWidth={1.5} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
 
 function getInitialTheme() {
   if (typeof window === 'undefined') return 'light';
@@ -71,10 +232,13 @@ function getInitialTheme() {
   if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
   return 'light';
 }
-function getInitialFocusLevel() {
-  if (typeof window === 'undefined') return 1;
-  const savedLevel = Number(window.localStorage.getItem('hskFocusLevel'));
-  return FOCUS_LEVELS.includes(savedLevel) ? savedLevel : 1;
+// Selection HSK dùng chung toàn app = MẢNG số. Đọc localStorage chấp nhận cả
+// định dạng cũ (số đơn "2") lẫn mảng JSON mới ([2,3]) qua readStoredLevels.
+// Rỗng => fallback [1] để luôn có ít nhất một cấp.
+function getInitialFocusLevels() {
+  if (typeof window === 'undefined') return [1];
+  const stored = readStoredLevels(window.localStorage.getItem('hskFocusLevel'));
+  return stored.length ? stored : [1];
 }
 
 function getInitialGeneralCheckState() {
@@ -272,118 +436,113 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
   ];
 
   return (
-    <section className="analytics-panel page-enter" aria-label="Phân tích dữ liệu người học">
-      <div className="analytics-head">
-        <div className="daily-progress-ring">
+    // Khu thống kê: không bọc thẻ nữa, phân tách bằng kẻ 1px và khoảng trắng.
+    // Vòng tiến độ + tiêu đề neo trái, KPI dồn phải để trục lệch.
+    <section className="dash-stats" aria-label="Phân tích dữ liệu người học">
+      <div className="dash-stats-head">
+        <div className="dash-ring" aria-hidden="true">
           <svg width="64" height="64" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(var(--shadow-color), 0.1)" strokeWidth="6" />
-            <circle cx="32" cy="32" r="28" fill="none" stroke="var(--modern-zen-primary)" strokeWidth="6" strokeDasharray="175" strokeDashoffset={175 - (175 * Math.min(100, (eventCount / 50) * 100) / 100)} transform="rotate(-90 32 32)" strokeLinecap="round" />
-            <text x="32" cy="36" textAnchor="middle" fill="var(--ink)" fontSize="14" fontWeight="800">{Math.round(Math.min(100, (eventCount / 50) * 100))}%</text>
+            <circle cx="32" cy="32" r="28" fill="none" stroke="var(--dash-hair)" strokeWidth="5" />
+            <circle cx="32" cy="32" r="28" fill="none" stroke="var(--jade)" strokeWidth="5" strokeDasharray="175" strokeDashoffset={175 - (175 * Math.min(100, (eventCount / 50) * 100) / 100)} transform="rotate(-90 32 32)" strokeLinecap="round" />
           </svg>
+          <b>{Math.round(Math.min(100, (eventCount / 50) * 100))}<i>%</i></b>
         </div>
-        <div>
+        <div className="dash-stats-title">
+          <span className="dash-eyebrow">Phong độ</span>
           <h2>Nhìn lại phong độ của bạn</h2>
-          <p className="hide-mobile">Hôm nay: Đã hoàn thành {eventCount}/50 thử thách.</p>
+          <p className="hide-mobile">Hôm nay đã hoàn thành {eventCount}/50 thử thách.</p>
         </div>
-        <div className="analytics-kpis">
-          <span><strong>{analytics?.accuracy || 0}%</strong>Đúng</span>
-          <span><strong>{dueCount}</strong>Ôn</span>
-          <span className="hide-mobile"><strong>{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</strong>Tự tin</span>
-          <span className="hide-mobile"><strong>{eventCount || analytics?.attempts || 0}</strong>Lượt</span>
-        </div>
+        <dl className="dash-kpis">
+          <div><dt>Đúng</dt><dd className="dash-figure">{analytics?.accuracy || 0}<i>%</i></dd></div>
+          <div><dt>Ôn</dt><dd className="dash-figure">{dueCount}</dd></div>
+          <div className="hide-mobile"><dt>Tự tin</dt><dd className="dash-figure">{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</dd></div>
+          <div className="hide-mobile"><dt>Lượt</dt><dd className="dash-figure">{eventCount || analytics?.attempts || 0}</dd></div>
+        </dl>
       </div>
 
-      <div className="readiness-strip" aria-label="Độ sẵn sàng theo kỹ năng">
+      <div className="dash-readiness" aria-label="Độ sẵn sàng theo kỹ năng">
         {readinessRows.map(item => (
-          <div key={item.key} className="readiness-cell" data-tone={skillTone(item.value)}>
+          <div key={item.key} className="dash-readiness-cell" data-tone={skillTone(item.value)}>
             <span>{item.label}</span>
-            <strong>{hasData ? `${item.value}%` : '-'}</strong>
-            <div className="readiness-meter"><span style={{ width: `${item.value}%` }} /></div>
+            <strong className="dash-figure">{hasData ? `${item.value}%` : '-'}</strong>
+            <div className="dash-meter"><span style={{ width: `${hasData ? item.value : 0}%` }} /></div>
           </div>
         ))}
       </div>
 
-      <div className="analytics-grid">
-        <div className="analytics-main-chart">
-          <div className="chart-title-row">
+      {/* Hai cột lệch 3:2 thay vì lưới đều — cột trái là bảng kỹ năng, cột phải
+          xếp dọc xu hướng và phổ HSK. */}
+      <div className="dash-grid">
+        <div className="dash-skills">
+          <div className="dash-block-head">
             <div>
-              <span className="core-eyebrow">Skill Map</span>
+              <span className="dash-eyebrow">Skill Map</span>
               <h3>Hiệu suất theo dạng bài</h3>
             </div>
-            <span className="metric-badge metric-badge--strong">{bestType ? `Điểm mạnh: Phản xạ ${bestType.label}` : 'Đang đo'}</span>
+            <span className="dash-tag dash-tag--strong">{bestType ? `Điểm mạnh: Phản xạ ${bestType.label}` : 'Đang đo'}</span>
           </div>
-          <div className="skill-bars">
+          <div className="dash-skill-list">
             {typeRows.map(item => {
               const value = clampPercent(item.accuracy);
               return (
-                <div className="skill-row" key={item.quiz_type}>
-                  <div>
+                <div className="dash-skill-row" key={item.quiz_type} data-tone={skillTone(value)}>
+                  <div className="dash-skill-name">
                     <strong>{item.label}</strong>
                     <span>{item.answered ? `${item.answered} câu` : 'Chưa luyện'}</span>
                   </div>
-                  <div className="skill-meter" data-tone={skillTone(value)}>
-                    <span style={{ width: `${value}%` }} />
+                  <div className="dash-meter">
+                    <span style={{ width: `${item.answered ? value : 0}%` }} />
                   </div>
-                  <b>{item.answered ? `${value}%` : '-'}</b>
+                  <b className="dash-figure">{item.answered ? `${value}%` : '-'}</b>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="analytics-side-stack">
-          <div className="trend-box">
-            <div className="chart-title-row">
+        <div className="dash-side">
+          <div className="dash-trend">
+            <div className="dash-block-head">
               <div>
-                <span className="core-eyebrow">Trend</span>
+                <span className="dash-eyebrow">Trend</span>
                 <h3>8 phiên gần nhất</h3>
               </div>
-              <span className="metric-badge metric-badge--weak">{weakType ? `Cần chú ý: ${weakType.label} (chưa vững ngữ cảnh)` : 'Chưa có'}</span>
+              <span className="dash-tag dash-tag--weak">{weakType ? `Cần chú ý: ${weakType.label} (chưa vững ngữ cảnh)` : 'Chưa có'}</span>
             </div>
-            <svg className="trend-chart" viewBox="0 0 200 100" role="img" aria-label="Xu hướng độ chính xác">
+            <svg className="dash-trend-chart" viewBox="0 0 200 100" preserveAspectRatio="none" role="img" aria-label="Xu hướng độ chính xác">
               <defs>
-                <linearGradient id="trendAreaGradient" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="var(--jade)" stopOpacity="0.25" />
+                <linearGradient id="dashTrendArea" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="var(--jade)" stopOpacity="0.18" />
                   <stop offset="100%" stopColor="var(--jade)" stopOpacity="0" />
                 </linearGradient>
-                <filter id="glowFilter" x="-10%" y="-10%" width="120%" height="120%">
-                  <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="var(--jade)" floodOpacity="0.4" />
-                </filter>
               </defs>
-              {/* Lưới tọa độ đẹp mắt dạng chấm mảnh */}
-              <line x1="12" y1="18" x2="188" y2="18" stroke="rgba(var(--shadow-color, 0,0,0), 0.06)" strokeDasharray="3 3" />
-              <line x1="12" y1="54" x2="188" y2="54" stroke="rgba(var(--shadow-color, 0,0,0), 0.06)" strokeDasharray="3 3" />
-              <line x1="12" y1="90" x2="188" y2="90" stroke="rgba(var(--shadow-color, 0,0,0), 0.15)" strokeWidth="1.2" />
-              
-              {/* Vùng màu Gradient dưới đường cong */}
-              {trendAreaPath && <path className="trend-area" d={trendAreaPath} />}
-              
-              {/* Đường cong xu hướng mượt mà có hiệu ứng phát sáng */}
-              {trendPath && <path className="trend-line" d={trendPath} filter="url(#glowFilter)" fill="none" stroke="var(--jade)" strokeWidth="3.2" strokeLinecap="round" />}
-              
-              {/* Các điểm nút dữ liệu tương tác */}
+              {/* Lưới mảnh 1px: chỉ đủ để đọc mốc, không cạnh tranh với đường dữ liệu */}
+              <line x1="12" y1="18" x2="188" y2="18" className="dash-trend-grid" strokeDasharray="2 4" />
+              <line x1="12" y1="54" x2="188" y2="54" className="dash-trend-grid" strokeDasharray="2 4" />
+              <line x1="12" y1="90" x2="188" y2="90" className="dash-trend-axis" />
+              {trendAreaPath && <path className="dash-trend-fill" d={trendAreaPath} />}
+              {trendPath && <path className="dash-trend-line" d={trendPath} />}
               {trendPointsList.map((item, index) => (
-                <g key={`${item.label}-${index}`} className="trend-dot-group">
-                  <circle cx={item.x} cy={item.y} r="8" className="trend-dot-ring" />
-                  <circle cx={item.x} cy={item.y} r="3.8" className="trend-dot" />
-                </g>
+                <circle key={`${item.label}-${index}`} cx={item.x} cy={item.y} r="2.6" className="dash-trend-dot" />
               ))}
             </svg>
-            <div className="trend-labels">
-              {chartRows.slice(-4).map((item, index) => <span key={`${item.label}-${index}`}>{item.label}: {item.accuracy}%</span>)}
+            <div className="dash-trend-labels">
+              {chartRows.slice(-4).map((item, index) => (
+                <span key={`${item.label}-${index}`}>{item.label}<b className="dash-figure">{item.accuracy}%</b></span>
+              ))}
             </div>
           </div>
 
-          <div className="level-box">
-            <span className="core-eyebrow">HSK Focus</span>
-            <div className="level-bars-mini">
+          <div className="dash-levels">
+            <span className="dash-eyebrow">HSK Focus</span>
+            <div className="dash-level-bars">
               {levelRows.map(item => {
                 const value = clampPercent(item.accuracy);
                 return (
                   <div key={item.level}>
-                    <span>HSK {item.level}</span>
-                    <strong data-empty={item.answered ? 'false' : 'true'} style={{ height: `${Math.max(8, value)}%` }} />
-                    <em>{item.answered ? `${value}%` : '-'}</em>
+                    <em className="dash-figure">{item.answered ? `${value}%` : '-'}</em>
+                    <strong data-empty={item.answered ? 'false' : 'true'} style={{ height: `${item.answered ? Math.max(6, value) : 3}%` }} />
+                    <span>{item.level}</span>
                   </div>
                 );
               })}
@@ -393,97 +552,116 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
       </div>
 
       {aiAvailable && (
-        <div className="ai-analysis-box">
-          <div className="ai-analysis-head">
+        <div className="dash-ai">
+          <div className="dash-block-head">
             <div>
-              <span className="core-eyebrow">Cố vấn AI</span>
+              <span className="dash-eyebrow">Cố vấn AI</span>
               <h3>Phân tích toàn diện dữ liệu học của bạn</h3>
             </div>
             <button className="btn-primary" type="button" onClick={runAiAnalysis} disabled={aiLoading || !hasData}>
-              {aiLoading ? <><Loader2 className="spin" size={16} /> Đang phân tích</> : <><Sparkles size={16} /> Phân tích với AI</>}
+              {aiLoading ? <><Loader2 className="spin" size={16} strokeWidth={1.5} /> Đang phân tích</> : <><Sparkles size={16} strokeWidth={1.5} /> Phân tích với AI</>}
             </button>
           </div>
-          {!hasData && <p className="ai-analysis-hint">Hãy học vài phiên để AI có dữ liệu phân tích.</p>}
-          {aiError && <div className="speech-toast" role="alert">{aiError}</div>}
+          {!hasData && <p className="dash-ai-hint">Hãy học vài phiên để AI có dữ liệu phân tích.</p>}
+          {aiError && (
+            <p className="dash-ai-error" role="alert">
+              <AlertTriangle size={15} strokeWidth={1.5} aria-hidden="true" /> {aiError}
+            </p>
+          )}
           {aiLoading && !aiResult && (
-            <div className="skeleton"><span className="skeleton-line" /><span className="skeleton-line" /><span className="skeleton-line" /></div>
+            // Skeleton khớp đúng hình dạng kết quả thật: 1 đoạn tóm tắt + 3 nhóm gạch đầu dòng.
+            <div className="dash-ai-skeleton" aria-hidden="true">
+              <span className="dash-sk dash-sk--wide" />
+              <span className="dash-sk dash-sk--wide" />
+              <span className="dash-sk dash-sk--half" />
+            </div>
           )}
           {aiResult && (
-            <div className="ai-analysis-result">
-              {aiResult.summary && <p className="ai-analysis-summary">{aiResult.summary}</p>}
-              {aiResult.strengths?.length > 0 && (
-                <div className="ai-analysis-group">
-                  <span className="core-eyebrow">Điểm mạnh</span>
-                  <ul>{aiResult.strengths.map((item, i) => <li key={`s-${i}`}>{item}</li>)}</ul>
-                </div>
-              )}
-              {aiResult.weaknesses?.length > 0 && (
-                <div className="ai-analysis-group">
-                  <span className="core-eyebrow">Cần cải thiện</span>
-                  <ul>{aiResult.weaknesses.map((item, i) => <li key={`w-${i}`}>{item}</li>)}</ul>
-                </div>
-              )}
-              {aiResult.roadmap?.length > 0 && (
-                <div className="ai-analysis-group">
-                  <span className="core-eyebrow">Lộ trình tiếp theo</span>
-                  <ol>{aiResult.roadmap.map((item, i) => <li key={`r-${i}`}>{item}</li>)}</ol>
-                </div>
-              )}
+            <div className="dash-ai-result">
+              {aiResult.summary && <p className="dash-ai-summary">{aiResult.summary}</p>}
+              <div className="dash-ai-groups">
+                {aiResult.strengths?.length > 0 && (
+                  <div className="dash-ai-group dash-ai-group--strong">
+                    <span className="dash-eyebrow">Điểm mạnh</span>
+                    <ul>{aiResult.strengths.map((item, i) => <li key={`s-${i}`}>{item}</li>)}</ul>
+                  </div>
+                )}
+                {aiResult.weaknesses?.length > 0 && (
+                  <div className="dash-ai-group dash-ai-group--weak">
+                    <span className="dash-eyebrow">Cần cải thiện</span>
+                    <ul>{aiResult.weaknesses.map((item, i) => <li key={`w-${i}`}>{item}</li>)}</ul>
+                  </div>
+                )}
+                {aiResult.roadmap?.length > 0 && (
+                  <div className="dash-ai-group dash-ai-group--next">
+                    <span className="dash-eyebrow">Lộ trình tiếp theo</span>
+                    <ol>{aiResult.roadmap.map((item, i) => <li key={`r-${i}`}>{item}</li>)}</ol>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
       )}
 
-      <div className="analytics-bottom">
-        <div className="recommendation-box">
-          <div>
-            <span className="core-eyebrow">Đề bài phù hợp</span>
+      <div className="dash-bottom">
+        <div className="dash-reco">
+          <div className="dash-reco-copy">
+            <span className="dash-eyebrow">Đề bài phù hợp</span>
             <h3>{recommendation.title}</h3>
             <p>{recommendation.reason}</p>
-            <div className="recommendation-metrics">
+            <div className="dash-reco-meta">
               <span>{strategyLabel(recommendedStrategy)}</span>
               <span>{latencyLabel}</span>
             </div>
           </div>
-          <button className="btn-primary" onClick={() => onStartRecommended({ ...recommendation, recommended_strategy: recommendedStrategy })}><Play size={16} /> Thực chiến ngay</button>
+          <button className="btn-primary" onClick={() => onStartRecommended({ ...recommendation, recommended_strategy: recommendedStrategy })}><Play size={16} strokeWidth={1.5} /> Thực chiến ngay</button>
         </div>
-        <div className="recent-words-grid">
-          <span className="core-eyebrow">Từ vựng vừa ôn</span>
-          <div className="recent-chips">
+        <div className="dash-recent">
+          <span className="dash-eyebrow">Từ vựng vừa ôn</span>
+          <div className="dash-recent-chips">
             {(weakWords.length ? weakWords : recommendation.focus_words?.map(word => ({ hanzi: word, pinyin: '', meaning_vi: '', accuracy: 0 })) || []).slice(0, 6).map(item => (
-              <div key={`${item.hanzi}-${item.pinyin}`} className="recent-word-chip">
+              <div key={`${item.hanzi}-${item.pinyin}`} className="dash-recent-chip">
                 <strong>{item.hanzi}</strong>
                 <TonedPinyin pinyin={item.pinyin} />
               </div>
             ))}
-            {!weakWords.length && !recommendation.focus_words?.length && <span>Chưa có dữ liệu. Hãy học thêm.</span>}
+            {!weakWords.length && !recommendation.focus_words?.length && <span className="dash-recent-empty">Chưa có dữ liệu. Hãy học thêm.</span>}
           </div>
         </div>
       </div>
     </section>
   );
 }
-function LearningFocusPanel({ focusLevel, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun }) {
+function LearningFocusPanel({ focusLevel, focusLevels, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun }) {
+  const selection = normalizeLevels(focusLevels ?? focusLevel);
+  const label = levelsLabel(selection);
+  // Kiểm tra tổng quát chấm theo MỘT cấp; lấy cấp thấp nhất đã chọn.
+  const checkLevel = primaryLevel(selection, focusLevel || 1);
   return (
-    <section className={`core-card focus-panel ${showFirstRun ? 'focus-panel--first' : ''}`}>
-      <div className="focus-copy">
-        <h1>{showFirstRun ? 'Chọn cấp HSK' : `Mục tiêu hiện tại: Chinh phục HSK ${focusLevel}`}</h1>
+    // Dải mở đầu: không bọc thẻ, chỉ kẻ 1px dưới chân. Chữ neo trái, bộ chọn cấp
+    // và nút hành động dồn sang phải để trục không đối xứng.
+    <section className={`dash-focus ${showFirstRun ? 'dash-focus--first' : ''}`}>
+      <div className="dash-focus-copy">
+        <span className="dash-eyebrow">{showFirstRun ? 'Bước đầu' : 'Đang học'}</span>
+        <h1>{showFirstRun ? 'Chọn cấp HSK' : `Mục tiêu hiện tại: ${label}`}</h1>
         <p className="hide-mobile">{showFirstRun ? 'Kiểm tra nhanh để xác định trình độ.' : 'Hệ thống đang tối ưu lộ trình dựa trên tiến độ thực tế của bạn.'}</p>
       </div>
 
-      <div className="focus-controls">
-        <div className="focus-level-grid" aria-label="Chọn cấp HSK trọng tâm">
-          {FOCUS_LEVELS.map(item => (
-            <button key={item} className={focusLevel === item ? 'active' : ''} onClick={() => onSelectLevel(item)}>
-              <span>HSK</span>
-              <strong>{item}</strong>
-            </button>
-          ))}
-        </div>
+      <div className="dash-focus-controls">
+        <HskLevelPicker
+          value={selection}
+          onChange={onSelectLevel}
+          levels={FOCUS_LEVELS}
+          variant="card"
+          className="dash-focus-levels"
+          buttonClassName="dash-level"
+          ariaLabel="Chọn cấp HSK trọng tâm"
+        />
 
-        <div className="focus-actions">
-          <button className="btn-primary" onClick={() => onStartGeneralCheck(focusLevel)}><Play size={16} /> Kiểm tra tổng quát</button>
-          <button className="btn-secondary" onClick={onOpenLessons}><Play size={16} /> {`Luyện tập HSK ${focusLevel}`}</button>
+        <div className="dash-focus-actions">
+          <button className="btn-primary" onClick={() => onStartGeneralCheck(checkLevel)}><Play size={16} strokeWidth={1.5} /> Kiểm tra tổng quát</button>
+          <button className="btn-secondary" onClick={onOpenLessons}><Play size={16} strokeWidth={1.5} /> {`Luyện tập ${label}`}</button>
           {showFirstRun && <button className="btn-secondary" onClick={onSkipFirstRun}>Bỏ qua</button>}
         </div>
       </div>
@@ -525,18 +703,22 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
   };
 
   return (
-    <section className="core-card today-queue-panel" aria-label="Kế hoạch học hôm nay">
-      <div className="today-queue-head">
-        <div>
+    // Phiên hôm nay: khối chính duy nhất còn giữ nền giấy, vì đây là nơi người
+    // dùng bắt đầu hành động — cần nổi hơn phần thống kê bên dưới.
+    <section className="dash-today" aria-label="Kế hoạch học hôm nay">
+      <div className="dash-today-head">
+        <div className="dash-today-title">
+          <span className="dash-eyebrow">Hôm nay</span>
           <h2>{plan.title}</h2>
           <p className="hide-mobile">{plan.subtitle}</p>
         </div>
-        <div className="today-mode-stack" aria-label="Chọn thời lượng phiên học">
+        <div className="dash-mode-switch" role="group" aria-label="Chọn thời lượng phiên học">
           {SESSION_MODES.map(item => (
             <button
               key={item.id}
-              className={(selectedMode === item.id || (plan.forceMicro && mode.id === item.id)) ? 'active' : ''}
+              className={(selectedMode === item.id || (plan.forceMicro && mode.id === item.id)) ? 'is-active' : ''}
               type="button"
+              aria-pressed={selectedMode === item.id}
               onClick={() => onSelectMode(item.id)}
             >
               <strong>{item.pillTitle || item.label}</strong>
@@ -547,46 +729,48 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
       </div>
 
       {!nudgeMuted && plan.nudge && (
-        <div className={`behavior-nudge behavior-nudge--${plan.behaviorState || 'maintenance'}`}>
-          <div>
+        <div className={`dash-nudge dash-nudge--${plan.behaviorState || 'maintenance'}`}>
+          <span className="dash-nudge-mark" aria-hidden="true" />
+          <div className="dash-nudge-body">
             <h3>{plan.behaviorLabel || 'Duy trì'}</h3>
             <p>{plan.nudge}</p>
+            <span className="dash-nudge-reason hide-mobile">{plan.behaviorReason || plan.reason}</span>
           </div>
-          <div className="behavior-nudge-meta hide-mobile">
-            <span>{plan.behaviorReason || plan.reason}</span>
-          </div>
-          <button className="btn-secondary" type="button" onClick={muteNudge}><BellOff size={16} /> Tắt nhắc</button>
+          <button className="dash-ghost-btn" type="button" onClick={muteNudge}>
+            <BellOff size={15} strokeWidth={1.5} /> Tắt nhắc
+          </button>
         </div>
       )}
 
-      <div className="today-mission-grid">
+      {/* Chỉ số nhiệm vụ: bỏ thẻ, chỉ kẻ 1px giữa các ô, số dùng mono tabular. */}
+      <div className="dash-mission-row">
         {missions.map(item => (
-          <article key={item.key} className={`today-mission today-mission--${item.tone}`}>
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
+          <article key={item.key} className={`dash-mission dash-mission--${item.tone}`}>
+            <span className="dash-mission-label">{item.label}</span>
+            <strong className="dash-figure">{item.value}</strong>
             <p className="hide-mobile">{item.detail}</p>
           </article>
         ))}
       </div>
 
-      <div className="today-queue-bottom">
-        <div className="today-focus-words" aria-label="Từ trọng tâm">
+      <div className="dash-today-foot">
+        <div className="dash-focus-words" aria-label="Từ trọng tâm">
           {focusWords.length ? focusWords.map(item => (
             <span key={`${item.hanzi}-${item.pinyin || 'focus'}`} title={item.retrieval ? `Bậc truy hồi L${item.retrieval.level}: ${item.retrieval.label}` : undefined}>
               <strong>{item.hanzi}</strong>
               <small>{item.pinyin || 'Cần gặp lại'}</small>
               {item.acquisition && (
                 <em
-                  className={`focus-word-stage focus-word-stage--${item.acquisition.stage.toLowerCase()}`}
+                  className={`dash-word-stage dash-word-stage--${item.acquisition.stage.toLowerCase()}`}
                   title={`Mức thụ đắc: ${item.acquisition.label} (${item.acquisition.progress_to_next}% tới nấc kế)`}
                 >
                   {item.acquisition.label}
-                  <span className="focus-word-stage-bar" aria-hidden="true">
+                  <span className="dash-word-stage-bar" aria-hidden="true">
                     <span style={{ width: `${item.acquisition.progress_to_next}%` }} />
                   </span>
                 </em>
               )}
-              {item.retrieval && <em className="focus-word-rung">L{item.retrieval.level} · {item.retrieval.label}</em>}
+              {item.retrieval && <em className="dash-word-rung">L{item.retrieval.level} · {item.retrieval.label}</em>}
             </span>
           )) : (
             <span>
@@ -595,14 +779,12 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
             </span>
           )}
         </div>
-        <div className="today-actions">
-          <div className="hide-mobile">
-            <p>{mode.description}</p>
-          </div>
-          <div className="today-action-buttons">
-            <button className="btn-secondary" type="button" onClick={startDueOnly}><ShieldCheck size={16} /> Xử lý từ đến hạn</button>
-            <button className="btn-secondary" type="button" onClick={startRepairOnly}><Wrench size={16} /> Sửa lỗi ngay</button>
-            <button className="btn-primary" type="button" onClick={() => onStartToday(plan)}><Play size={16} /> Bắt đầu phiên</button>
+        <div className="dash-today-actions">
+          <p className="hide-mobile">{mode.description}</p>
+          <div className="dash-action-buttons">
+            <button className="btn-secondary" type="button" onClick={startDueOnly}><ShieldCheck size={16} strokeWidth={1.5} /> Xử lý từ đến hạn</button>
+            <button className="btn-secondary" type="button" onClick={startRepairOnly}><Wrench size={16} strokeWidth={1.5} /> Sửa lỗi ngay</button>
+            <button className="btn-primary" type="button" onClick={() => onStartToday(plan)}><Play size={16} strokeWidth={1.5} /> Bắt đầu phiên</button>
           </div>
         </div>
       </div>
@@ -610,11 +792,12 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
   );
 }
 
-function Dashboard({ analytics, focusLevel, todayPlan, selectedSessionMode, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday }) {
+function Dashboard({ analytics, focusLevel, focusLevels, todayPlan, selectedSessionMode, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday }) {
   return (
-    <main className="core-dashboard page-enter">
+    <main className="dash-page">
       <LearningFocusPanel
         focusLevel={focusLevel}
+        focusLevels={focusLevels}
         showFirstRun={showFirstRun}
         onSelectLevel={onSelectLevel}
         onOpenLessons={onOpenLessons}
@@ -707,8 +890,12 @@ function buildQuizStrategySummary(answerRows) {
   };
 }
 
-function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartKey, limit = 10, strategyHint = 'targeted' }) {
+function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStartKey, limit = 10, strategyHint = 'targeted' }) {
   const { userId } = useAuth();
+  // Đề quiz kéo từ TẤT CẢ cấp đã chọn (localQuestions nhận mảng). `level` scalar =
+  // cấp thấp nhất, chỉ dùng làm nhãn khi lưu lịch sử/analytics (buildLevelBreakdown
+  // index theo một số) để không phá thống kê cũ.
+  const level = primaryLevel(levels);
   const [session, setSession] = useState(null);
   const [quizItems, setQuizItems] = useState([]);
   const [primaryQuestions, setPrimaryQuestions] = useState([]);
@@ -779,7 +966,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
         reason: strategy.detail,
       });
       const batches = await Promise.all(quizTypes.map(async type => {
-        const data = await localQuiz({ user_id: userId, level, quiz_type: type, limit: perTypeLimit });
+        const data = await localQuiz({ user_id: userId, levels, level, quiz_type: type, limit: perTypeLimit });
         return {
           quizType: type,
           questions: (data.questions || []).map(row => ({ ...row, quiz_type: row.quiz_type || type })),
@@ -800,7 +987,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     } finally {
       if (loadIdRef.current === loadId) setLoading(false);
     }
-  }, [level, limit, quizType, strategy.detail, strategyMode]);
+  }, [levels, limit, quizType, strategy.detail, strategyMode]);
 
   // Hủy chờ tải (khi API treo): tăng loadId để bỏ response đến muộn, đưa người
   // dùng về màn chọn đề thay vì kẹt ở spinner.
@@ -1068,7 +1255,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
     const answerById = new Map(result.answers.map(row => [row.question_id, row]));
     return (
       <main className="core-page page-enter">
-        <section className="core-card result-card session-result-card">
+        <section className="qz core-card result-card session-result-card">
           <span className="core-eyebrow">Strategic Quiz Result</span>
           <h1>{result.accuracy >= 80 ? 'Nhớ chắc hơn' : result.accuracy >= 55 ? 'Đã sửa được nền' : 'Cần phiên phục hồi'}</h1>
           <ul className="result-narrative">
@@ -1121,14 +1308,13 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
             <h1>Luyện tập</h1>
           </section>
 
-          <section className="level-grid" aria-label="Chọn cấp HSK">
-            {LEVELS.map(item => (
-              <button key={item} type="button" className={`level-card ${level === item ? 'active' : ''}`} onClick={() => setLevel(item)}>
-                <span>HSK</span>
-                <strong>{item}</strong>
-              </button>
-            ))}
-          </section>
+          <HskLevelPicker
+            value={levels}
+            onChange={setLevels}
+            className="level-grid"
+            buttonClassName="level-card"
+            ariaLabel="Chọn một hoặc nhiều cấp HSK"
+          />
 
           <section className="quiz-type-grid" aria-label="Chọn dạng bài">
             {QUIZ_TYPES.map(type => {
@@ -1170,7 +1356,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
       )}
 
       {question && (
-        <section key={item.id} className={`core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
+        <section key={item.id} className={`qz core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
           <div className="question-topline">
             <button type="button" className="quiz-back" onClick={cancelLoad}><ArrowLeft size={16} /> Thoát</button>
             <span>{isRepair ? 'Ôn lại' : questionType?.label || 'Câu hỏi'}</span>
@@ -1188,24 +1374,17 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
             </div>
           )}
           {activeQuizType === 'cloze' ? (
-            <h2 className="cloze-prompt">
-              {question.prompt.split(/_{2,}/).map((part, i, arr) => (
-                <Fragment key={i}>
-                  {part}
-                  {i < arr.length - 1 && (
-                    <span className={`cloze-blank ${selected !== null ? 'filled' : ''}`}>
-                      {selected !== null ? question.options[selected] : ''}
-                    </span>
-                  )}
-                </Fragment>
-              ))}
-            </h2>
+            <ClozePrompt
+              prompt={question.prompt}
+              filledText={selected !== null ? question.options[selected] : null}
+              isPassage={question.metadata_json?.question_subtype === 'guided_cloze'}
+            />
           ) : activeQuizType === 'drag_drop' ? (
             <div className="drag-drop-prompt">
               <p className="drag-drop-label">Sắp xếp thành câu đúng</p>
             </div>
           ) : (
-            <h2 className={isPassagePrompt(question.quiz_type) ? 'prompt--passage' : ''}>{isPassagePrompt(question.quiz_type) ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
+            <QuestionPrompt question={question} quizType={question.quiz_type} />
           )}
           {showAudioPanel && (
             <QuizAudioPanel
@@ -1376,7 +1555,7 @@ function Quiz({ level, setLevel, quizType, setQuizType, refreshStats, autoStartK
                 <small>Đáp án: {
                   activeQuizType === 'drag_drop'
                     ? (question.metadata_json?.correct_order || []).join('')
-                    : (question.options[feedback.review.correct_index] || '—')
+                    : (question.options[feedback.review.correct_index] || '-')
                 }</small>
               )}
               {!feedback.review.correct && errorTagLabel(feedback.review.error_tag) && (
@@ -1816,7 +1995,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
   if (completed) {
     return (
       <main className="core-page page-enter">
-        <section className="core-card result-card session-result-card">
+        <section className="qz core-card result-card session-result-card">
           <span className="core-eyebrow">Session Result</span>
           <h1>{completed.accuracy >= 80 ? 'Bảo vệ tốt' : completed.accuracy >= 55 ? 'Đã giữ nhịp' : 'Cần phiên phục hồi'}</h1>
           <p>Phiên đã cập nhật lịch ôn, lỗi sai và độ chắc chắn.</p>
@@ -1887,7 +2066,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       )}
 
       {isPractice && (
-        <section key={item.id} className={`core-card chinese-practice-card chinese-practice-card--${item.type}`} aria-live="polite">
+        <section key={item.id} className={`qz core-card chinese-practice-card chinese-practice-card--${item.type}`} aria-live="polite">
           <div className="question-topline">
             <button type="button" className="quiz-back" onClick={onExit}><ArrowLeft size={16} /> Thoát</button>
             <span>{item.type === 'guided_output' ? 'Apply' : item.type === 'pinyin_typing' ? 'Pinyin' : item.type === 'tone_drill' ? 'Tone drill' : item.type === 'micro_reading' ? 'Micro reading' : 'Chinese layer'}</span>
@@ -1991,7 +2170,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       )}
 
       {question && (
-        <section key={item.id} className={`core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
+        <section key={item.id} className={`qz core-card question-card learning-question-card ${isRepair ? 'learning-question-card--repair' : ''}`} aria-live="polite">
           <div className="question-topline">
             <button type="button" className="quiz-back" onClick={onExit}><ArrowLeft size={16} /> Thoát</button>
             <span>{isRepair ? 'Ôn lại' : questionType?.label || 'Câu hỏi'}</span>
@@ -2005,20 +2184,13 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
             </div>
           )}
           {activeQuizType === 'cloze' ? (
-            <h2 className="cloze-prompt">
-              {question.prompt.split(/_{2,}/).map((part, i, arr) => (
-                <Fragment key={i}>
-                  {part}
-                  {i < arr.length - 1 && (
-                    <span className={`cloze-blank ${selected !== null ? 'filled' : ''}`}>
-                      {selected !== null ? question.options[selected] : ''}
-                    </span>
-                  )}
-                </Fragment>
-              ))}
-            </h2>
+            <ClozePrompt
+              prompt={question.prompt}
+              filledText={selected !== null ? question.options[selected] : null}
+              isPassage={question.metadata_json?.question_subtype === 'guided_cloze'}
+            />
           ) : (
-            <h2 className={isPassagePrompt(activeQuizType) ? 'prompt--passage' : ''}>{isPassagePrompt(activeQuizType) ? <ClickableChineseText text={question.prompt} /> : question.prompt}</h2>
+            <QuestionPrompt question={question} quizType={activeQuizType} />
           )}
           {showAudioPanel && (
             <QuizAudioPanel
@@ -2066,7 +2238,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
                 <span className="hide-mobile">{nextReviewText(feedback.review.next_review_at)}</span>
               </div>
               <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
-              {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '—'}</small>}
+              {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '-'}</small>}
               {!feedback.review.correct && errorTagLabel(feedback.review.error_tag) && (
                 <div className="feedback-error-tag">
                   <em>{errorTagLabel(feedback.review.error_tag)}</em>
@@ -2229,7 +2401,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
     const accuracy = result.total ? Math.round((result.score / result.total) * 100) : 0;
     return (
       <main className="core-page page-enter">
-        <section className="core-card result-card general-result-card">
+        <section className="qz core-card result-card general-result-card">
           <span className="core-eyebrow">General Check</span>
           <h1>{accuracy >= 80 ? 'Nền tảng tốt' : accuracy >= 55 ? 'Cần ôn có chọn lọc' : 'Cần củng cố lại'}</h1>
           <p>Kết quả đã được đưa vào dữ liệu học để hệ thống đề xuất phần cần ôn.</p>
@@ -2278,7 +2450,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
       )}
 
       {question && (
-        <section key={question.id} className={`core-card question-card ${advancing ? 'is-advancing' : ''}`} aria-live="polite">
+        <section key={question.id} className={`qz core-card question-card ${advancing ? 'is-advancing' : ''}`} aria-live="polite">
           <div className="question-topline">
             <button type="button" className="quiz-back" onClick={onExit}><ArrowLeft size={16} /> Thoát</button>
             <span>{questionType?.label || 'Đang kiểm tra'}</span>
@@ -2286,16 +2458,13 @@ function GeneralCheck({ level, onExit, onComplete }) {
           </div>
           <div className="quiz-progress"><span style={{ width: `${progress}%` }} /></div>
           {question.quiz_type === 'cloze' ? (
-            <h2 className="cloze-prompt">
-              {question.prompt.split(/_{2,}/).map((part, i, arr) => (
-                <Fragment key={i}>
-                  {part}
-                  {i < arr.length - 1 && <span className="cloze-blank" />}
-                </Fragment>
-              ))}
-            </h2>
+            <ClozePrompt
+              prompt={question.prompt}
+              filledText={null}
+              isPassage={question.metadata_json?.question_subtype === 'guided_cloze'}
+            />
           ) : (
-            <h2 className={isPassagePrompt(question.quiz_type) ? 'prompt--passage' : ''}>{question.prompt}</h2>
+            <QuestionPrompt question={question} quizType={question.quiz_type} clickable={false} />
           )}
           {showAudioPanel && (
             <QuizAudioPanel
@@ -2601,10 +2770,11 @@ function HanziWriterElement({ character, theme }) {
   );
 }
 
-function VocabLibrary({ focusLevel, theme }) {
+function VocabLibrary({ focusLevels, theme }) {
   const [cards, setCards] = useState([]);
   const [query, setQuery] = useState('');
-  const [levelFilter, setLevelFilter] = useState(focusLevel);
+  // levelFilter = MẢNG số đã chọn. Rỗng => hiện tất cả (levelMatches xử lý).
+  const [levelFilter, setLevelFilter] = useState(() => normalizeLevels(focusLevels));
   const [selectedWord, setSelectedWord] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -2616,8 +2786,8 @@ function VocabLibrary({ focusLevel, theme }) {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setLoadError(false);
-      import('./vocab-loader').then(async mod => {
-        const loaded = dedupeVocabCards((await mod.loadAllFlashcards()).map(normalizeCard).filter(isReliableVocabCard));
+      loadAllFlashcards().then(cards => {
+        const loaded = dedupeVocabCards(cards.map(normalizeCard).filter(isReliableVocabCard));
         if (!alive) return;
         if (!loaded.length) throw new Error('empty');
         setCards(loaded);
@@ -2630,12 +2800,12 @@ function VocabLibrary({ focusLevel, theme }) {
       });
     }, 0);
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [focusLevel, reloadKey]);
+  }, [reloadKey]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return cards
-      .filter(item => levelFilter === 'all' || Number(item.level) === Number(levelFilter))
+      .filter(item => levelMatches(levelFilter, item.level))
       .filter(item => !q || [item.hanzi, item.pinyin, item.meaning_vi, item.category, item.example_cn, item.example_vi, item.radicals.map(row => `${row.radical} ${row.meaning}`).join(' ')].join(' ').toLowerCase().includes(q))
       .slice(0, 80);
   }, [cards, levelFilter, query]);
@@ -2662,12 +2832,16 @@ function VocabLibrary({ focusLevel, theme }) {
           <div className="search-box">
             <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm chữ, pinyin, nghĩa..." />
           </div>
-          <div className="vocab-hsk-tabs">
-            <button type="button" className={levelFilter === 'all' ? 'active' : ''} onClick={() => setLevelFilter('all')}>Tất cả</button>
-            {LEVELS.map(item => (
-              <button key={item} type="button" className={Number(levelFilter) === item ? 'active' : ''} onClick={() => setLevelFilter(item)}>HSK {item}</button>
-            ))}
-          </div>
+          <HskLevelPicker
+            value={levelFilter}
+            onChange={setLevelFilter}
+            variant="chip"
+            showAll
+            allowEmpty
+            className="vocab-hsk-tabs"
+            buttonClassName=""
+            ariaLabel="Lọc theo cấp HSK"
+          />
         </div>
       </section>
 
@@ -2918,7 +3092,7 @@ function StudyPlan({ todayPlan }) {
   const [saved, setSaved] = useState(false);
   const [permission, setPermission] = useState(() => notificationPermission());
   const reminderText = `${plan.time}: ${todayPlan?.dueCount || 3} mục đến hạn. ${plan.minutes} phút là đủ để giữ lịch ôn.`;
-  const reminderBody = `Đến giờ học rồi. ${todayPlan?.dueCount || 3} mục đến hạn — ${plan.minutes} phút là đủ để giữ lịch ôn.`;
+  const reminderBody = `Đến giờ học rồi. ${todayPlan?.dueCount || 3} mục đến hạn, ${plan.minutes} phút là đủ để giữ lịch ôn.`;
 
   const updatePlan = (patch) => {
     setPlan(current => ({ ...current, ...patch }));
@@ -3004,7 +3178,11 @@ function StudyPlan({ todayPlan }) {
 export default function App() {
   const { userId } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [level, setLevel] = useState(getInitialFocusLevel);
+  // Selection HSK dùng chung = MẢNG số (chọn nhiều cấp). `level` scalar suy ra =
+  // cấp thấp nhất, phục vụ các consumer chỉ dùng một cấp (today-plan, tiêu đề,
+  // getTodaySession backend, LearningSession fallback).
+  const [levels, setLevels] = useState(getInitialFocusLevels);
+  const level = primaryLevel(levels);
   const [quizType, setQuizType] = useState('vocab');
   const [quizLimit, setQuizLimit] = useState(10);
   const [quizStrategyHint, setQuizStrategyHint] = useState('targeted');
@@ -3054,6 +3232,10 @@ export default function App() {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
+    const activeNavBtn = document.querySelector('.sh-sidebar .sh-item.is-active');
+    if (activeNavBtn && activeNavBtn.scrollIntoView) {
+      activeNavBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
     const t1 = setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 50);
     const t2 = setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 150);
     return () => {
@@ -3120,10 +3302,10 @@ export default function App() {
   const currentTitle = useMemo(() => {
     if (generalCheckLevel) return `Kiểm tra HSK ${generalCheckLevel}`;
     if (activeTab === 'session') return 'Học hôm nay';
-    return NAV.find(item => item.id === activeTab)?.label || 'Trang chính';
+    return NAV_VIEWS.find(item => item.id === activeTab)?.label || 'Trang chính';
   }, [activeTab, generalCheckLevel]);
   const isDark = theme === 'dark';
-  const localTodayPlan = useMemo(() => buildTodaySessionPlan({ analytics, stats, focusLevel: level, modeId: selectedSessionMode }), [analytics, stats, level, selectedSessionMode]);
+  const localTodayPlan = useMemo(() => buildTodaySessionPlan({ analytics, stats, focusLevels: levels, modeId: selectedSessionMode }), [analytics, stats, levels, selectedSessionMode]);
   const todayPlan = useMemo(() => normalizeBackendTodayPlan(backendTodayPlan, localTodayPlan), [backendTodayPlan, localTodayPlan]);
 
   useEffect(() => {
@@ -3142,12 +3324,14 @@ export default function App() {
     };
   }, [userId, level, selectedSessionMode, analytics?.answered, analytics?.attempts]);
 
-  const selectFocusLevel = (nextLevel) => {
-    const numericLevel = Number(nextLevel);
-    setLevel(numericLevel);
-    if (FOCUS_LEVELS.includes(numericLevel)) {
-      window.localStorage.setItem('hskFocusLevel', String(numericLevel));
-    }
+  // Nhận cả mảng (multi-select mới) lẫn số đơn (call cũ: startQuizFlow/recommended/
+  // generalCheck truyền recommendation.level). Chuẩn hoá về mảng, lưu JSON để
+  // getInitialFocusLevels đọc lại đúng. Rỗng => giữ [1] để luôn có một cấp.
+  const selectFocusLevel = (next) => {
+    const nextLevels = normalizeLevels(next);
+    const applied = nextLevels.length ? nextLevels : [1];
+    setLevels(applied);
+    window.localStorage.setItem('hskFocusLevel', JSON.stringify(applied));
   };
 
   const openFocusedLessons = () => {
@@ -3194,7 +3378,7 @@ export default function App() {
       id: null,
       source: 'custom',
       title: meta.title || 'Bài quiz tùy chỉnh',
-      reason: 'Phiên tự tạo — chấm điểm ngay, không lưu.',
+      reason: 'Phiên tự tạo: chấm điểm ngay, không lưu.',
       mode: { id: 'standard' },
       action: { quizType: 'vocab' },
       preloadedQuestions: questions,
@@ -3229,7 +3413,7 @@ export default function App() {
   };
 
   return (
-    <div className="core-app">
+    <div className="sh-app">
       <div className="immersive-bg" aria-hidden="true">
         <span className="orb orb-1" />
         <span className="orb orb-2" />
@@ -3242,48 +3426,62 @@ export default function App() {
         {/* Dragon & Phoenix Watermark Backdrop - Scroll Parallax */}
         <div className="mythical-art-bg" />
       </div>
-      <aside className="core-sidebar">
-        <div className="core-logo"><img src="/logo.jpg" alt="Logo" /></div>
-        {NAV.map(item => {
-          const Icon = item.icon;
-          return (
-            <button key={item.id} className={activeTab === item.id ? 'active' : ''} onClick={() => setActiveTab(item.id)} title={item.label}>
-              <Icon size={19} />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+      <aside className="sh-sidebar">
+        {/* Thương hiệu: ảnh nhỏ + chữ, không dùng khối gradient to để bớt ồn. */}
+        <div className="sh-brand">
+          <span className="sh-brand-mark"><img src="/logo.jpg" alt="Tezca" /></span>
+          <span className="sh-brand-text">
+            <b>Tezca</b>
+            <i>Luyện thi HSK</i>
+          </span>
+        </div>
+        <SidebarNav activeTab={activeTab} onSelect={setActiveTab} />
       </aside>
 
-      <section className="core-shell">
-        <header className="core-topbar">
-          <div>
+      <section className="sh-shell">
+        <header className="sh-topbar">
+          <div className="sh-topbar-title">
+            {/* Eyebrow = tên nhóm cha, giúp biết đang ở nhánh nào của nav 2 cấp. */}
+            {NAV_PARENT_LABEL[activeTab] && <span className="sh-eyebrow">{NAV_PARENT_LABEL[activeTab]}</span>}
             <h2>{currentTitle}</h2>
           </div>
-          <div className="topbar-actions">
+          <div className="sh-topbar-actions">
             <AuthControls />
             <button
-              className="theme-toggle"
+              className="sh-theme-toggle"
               type="button"
               onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
               aria-label={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
               title={isDark ? 'Chế độ sáng' : 'Chế độ tối'}
             >
-              {isDark ? <Sun size={18} /> : <Moon size={18} />}
+              {isDark ? <Sun size={17} strokeWidth={1.5} /> : <Moon size={17} strokeWidth={1.5} />}
             </button>
           </div>
         </header>
 
         <ErrorBoundary key={generalCheckLevel ? 'general' : activeTab}>
-          <Suspense fallback={<div className="tab-loading"><Loader2 className="spin" size={28} /></div>}>
+          {/* Fallback dựng đúng khung nội dung (không phải spinner) để tránh giật layout. */}
+          <Suspense fallback={(
+            <div className="sh-tab-loading" role="status" aria-label="Đang tải nội dung">
+              <span className="sh-sk sh-sk-line" style={{ width: '32%' }} />
+              <span className="sh-sk sh-sk-block" />
+              <div className="sh-sk-row">
+                <span className="sh-sk sh-sk-tile" />
+                <span className="sh-sk sh-sk-tile" />
+              </div>
+            </div>
+          )}>
           {generalCheckLevel && <GeneralCheck level={generalCheckLevel} onExit={closeGeneralCheck} onComplete={completeGeneralCheck} />}
-          {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
-          {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} level={level} setLevel={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
-          {!generalCheckLevel && activeTab === 'grammar' && <GrammarLab focusLevel={level} />}
-          {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevel={level} theme={theme} />}
+          {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} focusLevels={levels} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
+          {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} levels={levels} setLevels={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
+          {!generalCheckLevel && activeTab === 'grammar' && <GrammarLab focusLevels={levels} />}
+          {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevels={levels} theme={theme} />}
+          {!generalCheckLevel && activeTab === 'vocab-typing' && <VocabTypingMode focusLevels={levels} />}
+          {!generalCheckLevel && activeTab === 'flashcard' && <FlashcardMode focusLevels={levels} />}
+          {!generalCheckLevel && activeTab === 'confusable' && <ConfusablePairs focusLevels={levels} />}
           {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
-          {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevel={level} />}
-          {/* {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />} */}
+          {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevels={levels} />}
+          {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat focusLevels={levels} />}
           {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
           {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
           </Suspense>

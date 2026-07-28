@@ -1,13 +1,11 @@
-"""Generate complete HSK vocabulary lists using DeepSeek v4 Flash.
+"""Generate complete HSK vocabulary lists using the configured LLM.
 
 The AI knows the official HSK word lists. We ask it to output
 all words for a given level with pinyin, meaning, and example sentences.
 """
 from __future__ import annotations
 
-import json
 import time
-import urllib.request
 from pathlib import Path
 import sys
 
@@ -15,10 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.db import SessionLocal
 from app.models import Example, Word
+from app.services.llm_generator_service import _call_api
 from app.settings import settings
 from sqlalchemy import func, select
-
-API_URL = "https://api.ai-box.vn/v1/chat/completions"
 
 # Official HSK 2.0 word counts
 HSK_TARGETS = {1: 150, 2: 150, 3: 300, 4: 600, 5: 1300, 6: 2500}
@@ -27,27 +24,10 @@ WORDS_PER_CALL = 50
 
 
 def _call_llm(prompt: str) -> dict:
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {settings.deepseek_api_key}"
-    }
-    data = {
-        "model": "deepseek-v4-pro",
-        "messages": [
-            {"role": "system", "content": "You are a Chinese language database. Output ONLY valid JSON objects, no markdown, no explanation."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.5,
-        "max_tokens": 8000,
-        "response_format": {"type": "json_object"}
-    }
-    req = urllib.request.Request(API_URL, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
-        content = result["choices"][0]["message"]["content"].strip()
-        if content.startswith("```"): content = content.split("\n", 1)[1]
-        if content.endswith("```"): content = content[:-3]
-        return json.loads(content)
+    # Dùng chung _call_api (relay vilao.ai) thay vì gọi thẳng ai-box/DeepSeek:
+    # provider đó đã bị bỏ khỏi cấu hình, và _call_api lo sẵn xoay vòng key,
+    # retry, bóc markdown fence.
+    return _call_api(prompt)
 
 
 def generate_hsk_words(level: int, start_index: int, count: int) -> list[dict]:
@@ -146,8 +126,8 @@ def fill_level(level: int) -> int:
 
 
 def main():
-    if not settings.deepseek_api_key:
-        print("ERROR: DEEPSEEK_API_KEY not set")
+    if not settings.llm_keys_list:
+        print("ERROR: GEMINI_API_KEYS not set")
         return
 
     # Check current state

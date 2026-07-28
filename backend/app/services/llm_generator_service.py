@@ -4,13 +4,80 @@ import urllib.error
 import re
 import time
 import logging
+import random
 from typing import List, Dict, Any, Tuple
 from ..settings import settings
 
 logger = logging.getLogger(__name__)
 
-DEEPSEEK_API_URL = "https://api.ai-box.vn/v1/chat/completions"
 MAX_RETRIES = 3
+
+API_QUIZ_TYPES = {"vocab", "listening", "reading", "translation", "cloze", "drag_drop"}
+
+# Đặc tả hai dạng theo chuẩn đề thi (选词填空 / 阅读理解). Dùng CHUNG cho mọi
+# prompt LLM trong file để câu AI sinh ra khớp cùng một khuôn với ngân hàng
+# đoạn văn viết tay ở ``app/data/exam_passages.json``.
+#
+# Ràng buộc kỹ thuật quan trọng: prompt cloze phải có ĐÚNG MỘT ``____`` vì
+# renderer frontend tách prompt bằng ``split(/_{2,}/)`` để chạy hiệu ứng điền.
+# Các chỗ trống khác trong cùng đoạn phải ghi dạng （2）, （3）...
+_CLOZE_SPEC = (
+    "选词填空: prompt là ĐOẠN 2-4 câu tiếng Trung liền mạch, KHÔNG phải câu rời. "
+    "BẮT BUỘC (câu không đạt sẽ bị loại tự động): đoạn phải có TỐI THIỂU 2 dấu kết "
+    "câu 。！？ và TỐI THIỂU 17 chữ Hán. Viết đủ 2-3 câu kể một tình huống nhỏ "
+    "(đi chợ, ở lớp, thời tiết, gia đình), đừng chỉ viết một câu ngắn rồi thêm ____. "
+    "Đoạn chứa 2-4 chỗ trống; chỗ ĐANG HỎI ghi bằng đúng một ____ , các chỗ còn "
+    "lại ghi （2）,（3）… theo số thứ tự. 4 options là từ tiếng Trung dùng chung cho "
+    "cả đoạn (word bank), cùng một bộ cho mọi chỗ trống của đoạn đó. "
+    "Ưu tiên kiểm tra: từ loại đúng vị trí, cặp liên từ (虽然…但是/因为…所以/只要…就/"
+    "只有…才/即使…也/不仅…而且/与其…不如), và cụm cố định. "
+    "explanation bằng tiếng Việt, nêu rõ căn cứ ngữ pháp chọn đáp án. "
+    "Mẫu đúng: 我家旁边新开了一个大超市。____里面的东西很便宜，（2）去那里买东西的人非常多。"
+)
+_READING_SPEC = (
+    "阅读理解: prompt gồm ĐOẠN VĂN tiếng Trung, rồi một dòng trống, rồi CÂU HỎI "
+    "bằng tiếng Trung (ví dụ 这段话主要说什么？ / 根据这段话，下面哪个正确？). "
+    "BẮT BUỘC (câu không đạt sẽ bị loại tự động): phần đoạn văn phải có TỐI THIỂU "
+    "2 dấu kết câu 。！？ và TỐI THIỂU 17 chữ Hán — tức ít nhất 2 câu kể, không "
+    "phải một câu đơn rồi hỏi luôn. "
+    "4 options đều bằng tiếng Trung (KHÔNG dùng tiếng Việt), độ dài tương đương. "
+    "Mỗi đoạn nên có một câu hỏi chi tiết (tìm thông tin trực tiếp) và một câu hỏi "
+    "ý chính. explanation bằng tiếng Việt, chỉ ra câu nào trong đoạn là căn cứ. "
+    "Mẫu đúng: 小王每天六点起床。他先跑步半个小时，然后吃早饭。\\n\\n小王每天先做什么？"
+)
+
+
+# Một "chỗ trống" là chuỗi 2+ dấu gạch dưới — khớp với split(/_{2,}/) của
+# renderer frontend, nên đếm ở đây phản ánh đúng số ô người học nhìn thấy.
+_BLANK_RUN_RE = re.compile(r"_{2,}")
+
+# CJK Unified Ideographs: basic + extension A + compatibility (đồng bộ với
+# ``question_generator._CJK_RANGE``).
+_CJK_RE = re.compile(r"[一-鿿㐀-䶿豈-﫿]")
+
+
+def _has_cjk(text: str) -> bool:
+    return bool(_CJK_RE.search(str(text or "")))
+
+
+# Dấu kết câu tiếng Trung. Dùng để phân biệt ĐOẠN (选词填空/阅读理解 chuẩn đề
+# thi) với CÂU RỜI (dạng cloze/reading kiểu cũ) — chỉ đếm CJK là không đủ vì
+# một câu dài cũng vượt ngưỡng ký tự.
+_CN_SENTENCE_END_RE = re.compile(r"[。！？；…]")
+
+# Ngưỡng hiệu chuẩn theo ngân hàng viết tay ở app/data/exam_passages.json:
+# đoạn ngắn nhất có 17 ký tự CJK và 2 dấu kết câu.
+_MIN_PASSAGE_CJK = 16
+_MIN_PASSAGE_SENTENCES = 2
+
+
+def _is_passage(text: str) -> bool:
+    """Prompt có phải một ĐOẠN nhiều câu tiếng Trung (không phải câu rời)."""
+    value = str(text or "")
+    return (
+        len(_CJK_RE.findall(value)) >= _MIN_PASSAGE_CJK
+        and len(_CN_SENTENCE_END_RE.findall(value)) >= _MIN_PASSAGE_SENTENCES
+    )
 
 
 def _clean_json_response(content: str) -> str:
@@ -33,7 +100,9 @@ def _validate_question(q_data: dict, word_hanzi: str) -> Tuple[bool, str]:
             return False, f"Missing field: {field}"
 
     # Check quiz_type is valid
-    valid_types = {"vocab", "cloze", "translation", "listening", "reading"}
+    # Bộ luyện này chủ động không sinh listening; nghe dùng audio/template
+    # riêng để tránh LLM tạo transcript hoặc đáp án không khớp audio.
+    valid_types = {"vocab", "cloze", "translation", "reading"}
     if q_data["quiz_type"] not in valid_types:
         return False, f"Invalid quiz_type: {q_data['quiz_type']}"
 
@@ -58,8 +127,30 @@ def _validate_question(q_data: dict, word_hanzi: str) -> Tuple[bool, str]:
     prompt = str(q_data.get("prompt", ""))
     if len(prompt) < 5:
         return False, "Prompt too short"
-    if q_data["quiz_type"] == "cloze" and "____" not in prompt:
-        return False, "Cloze question missing ____"
+    # cloze/reading đi qua ĐÚNG các ràng buộc của ngân hàng đoạn văn chuẩn đề
+    # thi, vì quiz_service._ai_subtype_for gắn cho chúng guided_cloze /
+    # reading_comp_mc — cùng nhãn với row viết tay. Không siết ở đây thì câu
+    # kiểu cũ (một câu rời, options tiếng Việt) sẽ lọt vào bank dưới nhãn đề thi.
+    if q_data["quiz_type"] == "cloze":
+        blanks = len(_BLANK_RUN_RE.findall(prompt))
+        if blanks == 0:
+            return False, "Cloze question missing ____"
+        # Renderer frontend split(/_{2,}/) chỉ điền một ô, nên nhiều ____ hiện sai.
+        if blanks > 1:
+            return False, f"Cloze must have exactly one blank, got {blanks}"
+        if not _has_cjk(prompt):
+            return False, "Cloze prompt must be Chinese"
+        if not _is_passage(prompt):
+            return False, "Cloze prompt must be a multi-sentence passage"
+        if not all(_has_cjk(value) for value in cleaned):
+            return False, "Cloze options must be Chinese"
+    if q_data["quiz_type"] == "reading":
+        if not _has_cjk(prompt):
+            return False, "Reading prompt must be Chinese"
+        if not _is_passage(prompt):
+            return False, "Reading prompt must be a multi-sentence passage"
+        if not all(_has_cjk(value) for value in cleaned):
+            return False, "Reading options must be Chinese"
 
     # Check explanation is meaningful
     explanation = str(q_data.get("explanation", ""))
@@ -96,7 +187,7 @@ def _extract_content(result_json: dict):
     ({choices:[{message:{content}}]}) and native Gemini-style
     ({candidates:[{content:{parts:[{text}]}}]}) response shapes. Returns the
     string, or None if neither shape is present."""
-    # OpenAI / DeepSeek / OpenAI-compatible proxies
+    # OpenAI-compatible shape (relay vilao.ai trả về dạng này)
     try:
         content = result_json["choices"][0]["message"]["content"]
         if content:
@@ -116,9 +207,13 @@ def _extract_content(result_json: dict):
 
 def _call_provider(url: str, api_key: str, model: str, payload: dict, retries: int = MAX_RETRIES, timeout: int = 90) -> dict:
     """Call a single LLM provider with retry logic."""
+    # User-Agent khai báo đúng client thật (không giả lập trình duyệt) để log phía
+    # provider/relay truy được nguồn gọi. urllib mặc định gửi "Python-urllib/x.y",
+    # một số relay chặn UA đó nên đặt tên ứng dụng tường minh thay vì UA Chrome giả.
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+        "Authorization": f"Bearer {api_key}",
+        "User-Agent": "tezca-china-backend/1.0 (+llm_generator_service)",
     }
 
     last_error = None
@@ -161,86 +256,80 @@ def _call_provider(url: str, api_key: str, model: str, payload: dict, retries: i
 
 
 def _call_api(prompt_text: str, retries: int = MAX_RETRIES) -> dict:
-    """Call LLM API with Gemini first (ưu tiên chất lượng), DeepSeek dự phòng."""
+    """Gọi relay LLM (OpenAI-compatible), xoay vòng qua từng key cấu hình.
 
-    # Gemini primary: xoay vòng qua mọi key vilao. Đặt trước DeepSeek để ưu tiên
-    # chất lượng theo yêu cầu — DeepSeek chỉ nhận việc khi mọi key Gemini fail.
-    providers = [
-        {
-            "url": settings.gemini_api_url,
-            "key": gemini_key,
-            "model": settings.gemini_model,
-            "json_mode": False,
-            # Relay vilao trả chậm với prompt lớn (8 từ, max_tokens 8000): cần
-            # timeout rộng để nó kịp trả thay vì rơi xuống DeepSeek. Ưu tiên chất
-            # lượng nên chấp nhận chờ lâu.
-            "timeout": 240,
-        }
-        for gemini_key in settings.gemini_keys_list
-    ]
-
-    # DeepSeek dự phòng
-    providers.append({
-        "url": DEEPSEEK_API_URL,
-        "key": settings.deepseek_api_key,
-        "model": "deepseek-v4-flash",
-        "json_mode": True,
-        "timeout": 90,
-    })
+    URL/model/key lấy từ ``settings.llm_*_effective`` nên đổi provider chỉ cần
+    đổi biến môi trường ``LLM_API_URL`` / ``LLM_API_KEYS`` / ``LLM_MODEL``, không
+    phải sửa code. Mỗi key là một "lượt" riêng — key cạn quota thì thử key tiếp
+    theo. Hết key thì raise RuntimeError kèm lỗi của từng key.
+    """
+    keys = settings.llm_keys_list
+    if not keys:
+        raise RuntimeError(
+            "Chưa cấu hình LLM_API_KEYS (hoặc GEMINI_API_KEYS) — không có provider LLM nào khả dụng."
+        )
+    url = settings.llm_api_url_effective
+    model = settings.llm_model_effective
 
     payload_template = {
         "messages": [
             {"role": "system", "content": "You are an expert Chinese language teacher who outputs ONLY valid JSON. Never include markdown fences or explanations outside the JSON."},
             {"role": "user", "content": prompt_text}
         ],
-        # deepseek-v4-pro là reasoning model: nó đốt token vào chain-of-thought
-        # (reasoning_content) TRƯỚC khi xuất JSON vào content. Với 4000, reasoning
-        # ăn sạch budget -> finish_reason=length, content rỗng -> parse fail.
-        # 8000 để reasoning xong vẫn còn chỗ cho JSON.
-        "max_tokens": 8000,
+        # Relay chạy model reasoning: token bị đốt vào chain-of-thought TRƯỚC khi
+        # xuất JSON. Budget thấp (vd 4000) làm finish_reason=length, content rỗng
+        # -> parse fail. Giữ mức cao để reasoning xong vẫn còn chỗ cho JSON.
+        "max_tokens": settings.llm_max_tokens,
     }
+    # response_format chỉ gửi khi relay hỗ trợ (LLM_JSON_MODE=true). Relay vilao
+    # không hỗ trợ nên mặc định tắt và JSON được ép bằng system prompt +
+    # _clean_json_response.
+    if settings.llm_json_mode:
+        payload_template["response_format"] = {"type": "json_object"}
+    # Hạ ngân sách reasoning khi provider hỗ trợ: đây là đòn duy nhất có tác dụng
+    # với trần gateway ~121s. Cắt kích thước prompt thì không — đo được 5 từ/3 câu
+    # vẫn fail ở 122s trong khi 15 từ/6 câu xong ở 110s, tức thời gian đi theo số
+    # token model sinh ra chứ không theo prompt. Dùng dạng lồng ``reasoning.effort``
+    # (dạng phẳng ``reasoning_effort`` chỉ hạ 103s -> 28s, dạng lồng xuống 13s).
+    effort = settings.llm_reasoning_effort.strip()
+    if effort:
+        payload_template["reasoning"] = {"effort": effort}
 
     errors = []
-    for i, provider in enumerate(providers):
-        if not provider["key"]:
-            errors.append(f"Provider {i} ({provider['model']}): no API key configured")
-            continue
-
-        label = "primary" if i == 0 else f"fallback-{i}"
-        logger.info(f"Trying {label}: {provider['model']}")
-
-        payload = {**payload_template, "model": provider["model"]}
-        # Only request strict JSON mode where the provider supports it
-        if provider.get("json_mode"):
-            payload["response_format"] = {"type": "json_object"}
-        # Slightly vary temperature for diversity
-        payload["temperature"] = 0.7 + (i * 0.05)
-
+    for i, api_key in enumerate(keys):
+        logger.info("Trying LLM key #%s: %s", i + 1, model)
+        payload = {
+            **payload_template,
+            "model": model,
+            # Lệch nhẹ temperature giữa các lượt để lần thử lại không lặp y nguyên
+            # output đã fail validate.
+            "temperature": 0.7 + (i * 0.05),
+        }
         try:
             return _call_provider(
-                url=provider["url"],
-                api_key=provider["key"],
-                model=provider["model"],
+                url=url,
+                api_key=api_key,
+                model=model,
                 payload=payload,
-                retries=min(retries, 2) if i > 0 else retries,  # fewer retries for fallback
-                timeout=provider.get("timeout", 90),
+                retries=retries,
+                timeout=240,
             )
         except Exception as e:
-            err_msg = f"Provider {provider['model']}: {str(e)}"
+            err_msg = f"LLM key #{i + 1}: {str(e)}"
             errors.append(err_msg)
             logger.warning(err_msg)
-            if i < len(providers) - 1:
-                time.sleep(0.5)  # brief pause before next provider
+            if i < len(keys) - 1:
+                time.sleep(0.5)  # nghỉ ngắn trước khi đổi key
             continue
 
     raise RuntimeError(
-        f"All {len(providers)} providers exhausted. Errors: {' | '.join(errors)}"
+        f"Đã thử hết {len(keys)} key LLM ({model}). Errors: {' | '.join(errors)}"
     )
 
 
 def generate_exercises_for_vocab(words: List[str]) -> Dict[str, Any]:
     """
-    Goi DeepSeek API de tao du lieu tu vung va cau hoi.
+    Goi LLM de tao du lieu tu vung va cau hoi.
     Co validation, retry, va quality filtering.
     """
     words_str = "\n".join([f"- {w}" for w in words])
@@ -250,12 +339,11 @@ def generate_exercises_for_vocab(words: List[str]) -> Dict[str, Any]:
 Danh sach tu:
 {words_str}
 
-CAC LOAI BAI TAP (chon 3 loai phu hop nhat cho moi tu):
+CAC LOAI BAI TAP (chon 3 loai phu hop nhat cho moi tu, KHONG tao bai nghe):
 - vocab: chon nghia tieng Viet cua tu
-- cloze: dien tu vao cho trong trong cau
+- cloze: {_CLOZE_SPEC}
 - translation: dich cau Trung-Viet
-- listening: nghe cau va chon nghia
-- reading: doc cau va chon tu khoa chinh
+- reading: {_READING_SPEC}
 
 OUPUT PHAI LA MOT OBJECT JSON (khong markdown, khong giai thich them):
 
@@ -277,10 +365,17 @@ OUPUT PHAI LA MOT OBJECT JSON (khong markdown, khong giai thich them):
         }},
         {{
           "quiz_type": "cloze",
-          "prompt": "Dien tu con thieu: 我买了三个____。",
-          "options": ["苹果", "香蕉", "橘子", "西瓜"],
+          "prompt": "昨天下午我去了超市。我买了三个____，还买了一些（2）。回家以后，我把水果洗干净放进（3）里。",
+          "options": ["苹果", "面包", "冰箱", "牛奶"],
           "correct_index": 0,
-          "explanation": "Cau hoan chinh: 我买了三个苹果。 - Toi da mua ba qua tao"
+          "explanation": "Cho trong (1) di sau luong tu 个 va truoc dau phay, can mot loai qua dem duoc bang 个 → 苹果. Doan day du: 我买了三个苹果，还买了一些面包。回家以后，我把水果洗干净放进冰箱里。"
+        }},
+        {{
+          "quiz_type": "reading",
+          "prompt": "昨天下午我去超市买了三个苹果和一些面包。回家以后，我把苹果洗干净放进冰箱里，晚上和家人一起吃。\\n\\n根据这段话，下面哪个正确？",
+          "options": ["他把苹果放在冰箱里", "他没有买面包", "他在早上去超市", "他一个人吃苹果"],
+          "correct_index": 0,
+          "explanation": "Cau can cu: 我把苹果洗干净放进冰箱里 → dap an noi anh ay de tao trong tu lanh."
         }}
       ]
     }}
@@ -292,12 +387,13 @@ QUY TAC BAT BUOC:
 2. MOI cau hoi PHAI co DUNG 4 options, khong trung lap
 3. correct_index PHAI la vi tri (0-3) cua dap an DUNG trong options
 4. Dap an DUNG PHAI nam trong options (correct_index phai tro den dap an do)
-5. Cloze PHAI co ____ trong prompt
+5. Cloze PHAI co DUNG MOT ____ trong prompt; cac cho trong khac ghi （2）,（3）…
 6. Options cho vocab PHAI la nghia tieng Viet
-7. Options cho cloze PHAI la tu tieng Trung (hanzi)
-8. KHONG dung cac tu trong danh sach lam distractors cho nhau (tranh lap)
-9. Do dai options tuong duong nhau (tranh dap an qua ro rang vi dai/ngan)
-10. Chi tra ve JSON, khong giai thich gi them"""
+7. Options cho cloze VA reading PHAI la tieng Trung (hanzi)
+8. Prompt cloze va reading PHAI la tieng Trung (doan van, khong phai cau roi)
+9. KHONG dung cac tu trong danh sach lam distractors cho nhau (tranh lap)
+10. Do dai options tuong duong nhau (tranh dap an qua ro rang vi dai/ngan)
+11. Chi tra ve JSON, khong giai thich gi them"""
 
     # Call API with retries
     data = _call_api(prompt)
@@ -320,6 +416,230 @@ QUY TAC BAT BUOC:
         raise RuntimeError(f"All {len(data['words'])} word entries failed validation. Rejected: {rejected}")
 
     return {"words": valid_words, "_quality": {"accepted": len(valid_words), "rejected": rejected}}
+
+
+def _validate_api_quiz_question(item: dict, quiz_type: str) -> Tuple[bool, str]:
+    """Validate contract mà frontend Quiz đang render."""
+    if quiz_type not in API_QUIZ_TYPES:
+        return False, "unsupported quiz_type"
+    for field in ("target_hanzi", "prompt", "options", "correct_index", "explanation"):
+        if field not in item:
+            return False, f"missing {field}"
+    options = item.get("options")
+    if not isinstance(options, list) or len(options) != 4:
+        return False, "options must contain exactly 4 items"
+    cleaned = [str(value).strip() for value in options]
+    if any(not value for value in cleaned) or len(set(cleaned)) != 4:
+        return False, "options must be non-empty and unique"
+    ci = item.get("correct_index")
+    if not isinstance(ci, int) or not 0 <= ci < 4:
+        return False, "invalid correct_index"
+    if len(str(item.get("prompt", "")).strip()) < 5:
+        return False, "prompt too short"
+    if len(str(item.get("explanation", "")).strip()) < 5:
+        return False, "explanation too short"
+    if quiz_type == "cloze":
+        prompt_text = str(item["prompt"])
+        blanks = len(_BLANK_RUN_RE.findall(prompt_text))
+        if blanks == 0:
+            return False, "cloze missing ____"
+        # Renderer frontend tách prompt bằng split(/_{2,}/) và chỉ điền vào một
+        # chỗ, nên nhiều ____ trong cùng prompt sẽ hiện sai. Các chỗ trống khác
+        # của đoạn phải ghi （2）,（3）…
+        if blanks > 1:
+            return False, f"cloze must have exactly one blank, got {blanks}"
+        if not _has_cjk(prompt_text):
+            return False, "cloze prompt must be Chinese"
+        if not _is_passage(prompt_text):
+            return False, "cloze prompt must be a multi-sentence passage"
+        if not all(_has_cjk(value) for value in cleaned):
+            return False, "cloze options must be Chinese"
+    if quiz_type == "reading":
+        # 阅读理解 dùng câu hỏi và 4 lựa chọn tiếng Trung. Options tiếng Việt là
+        # dấu hiệu của dạng cũ (chọn từ khóa/nghĩa) nên bị loại.
+        if not _has_cjk(str(item["prompt"])):
+            return False, "reading prompt must be Chinese"
+        if not _is_passage(str(item["prompt"])):
+            return False, "reading prompt must be a multi-sentence passage"
+        if not all(_has_cjk(value) for value in cleaned):
+            return False, "reading options must be Chinese"
+    if quiz_type == "listening" and len(str(item.get("audio_text", "")).strip()) < 2:
+        return False, "listening missing audio_text"
+    if quiz_type == "drag_drop":
+        metadata = item.get("metadata") or {}
+        segments = metadata.get("segments") or []
+        correct_order = metadata.get("correct_order") or []
+        if len(segments) < 2 or len(correct_order) < 2:
+            return False, "drag_drop missing segments/correct_order"
+        if sorted(map(str, segments)) != sorted(map(str, correct_order)):
+            return False, "drag_drop tokens do not match"
+        if list(segments) == list(correct_order):
+            return False, "drag_drop is not scrambled"
+    return True, "ok"
+
+
+def _shuffle_options(row: dict) -> dict:
+    """Xáo lại vị trí 4 lựa chọn, giữ nguyên đáp án đúng.
+
+    LLM gần như luôn đặt đáp án đúng ở vị trí đầu: đo trên 505 câu đã sinh thì
+    77% có ``correct_index=0`` (cloze tới 94%). Người học chỉ cần luôn chọn A là
+    đúng phần lớn, nên bank mất giá trị đo lường. Chuẩn hóa ở đây thay vì nhờ
+    prompt vì đây là ràng buộc cơ học, kiểm chứng được — không phụ thuộc việc
+    model có tuân lời hay không.
+
+    Seed lấy từ nội dung câu nên cùng một câu luôn cho cùng thứ tự (chạy lại
+    script không tạo ra hoán vị khác cho câu đã có trong bank).
+    """
+    options = row.get("options")
+    ci = row.get("correct_index")
+    if not isinstance(options, list) or len(options) != 4:
+        return row
+    if not isinstance(ci, int) or not 0 <= ci < 4:
+        return row
+    answer = options[ci]
+    indices = [0, 1, 2, 3]
+    rng = random.Random(f"{row.get('prompt', '')}|{'|'.join(map(str, options))}")
+    rng.shuffle(indices)
+    reordered = [options[i] for i in indices]
+    row["options"] = reordered
+    row["correct_index"] = reordered.index(answer)
+    return row
+
+
+def _normalize_api_quiz_question(item: dict, quiz_type: str) -> dict:
+    """Hoàn thiện các trường cơ học, không thay đổi nội dung do API tạo."""
+    row = dict(item)
+    if quiz_type != "drag_drop":
+        # drag_drop dùng options placeholder (frontend không đọc) nên không xáo.
+        return _shuffle_options(row)
+    # drag_drop kiểm tra thứ tự cả câu, không nhắm vào một từ mục tiêu nào — spec
+    # trong prompt bundle cũng chỉ đòi metadata.correct_order. Nhưng validator
+    # bắt buộc khóa ``target_hanzi`` tồn tại, nên thiếu nó là loại sạch cả lượt
+    # (HSK3 drag_drop đã bị bỏ qua vì lỗi này). Điền rỗng: caller tra
+    # ``word_by_hanzi`` không thấy thì ghi word_id=NULL, vốn hợp lệ với cột này.
+    row.setdefault("target_hanzi", "")
+    metadata = dict(row.get("metadata") or {})
+    correct_order = [str(token).strip() for token in metadata.get("correct_order") or [] if str(token).strip()]
+    if len(correct_order) >= 2:
+        scrambled = list(correct_order)
+        rng = random.Random("|".join(correct_order))
+        for _ in range(12):
+            rng.shuffle(scrambled)
+            if scrambled != correct_order:
+                break
+        metadata["correct_order"] = correct_order
+        metadata["segments"] = scrambled
+        row["metadata"] = metadata
+        # Nhúng token vào prompt, đúng định dạng các câu drag_drop viết tay
+        # ("Sắp xếp từ thành câu đúng: A · B · C"). LLM để nguyên câu lệnh chung
+        # cho mọi câu, nên 15 dòng HSK3 chỉ có 3 prompt phân biệt: caller dedup
+        # theo (level, type, prompt) coi mọi câu mới là trùng -> created=0 vĩnh
+        # viễn, bank không bao giờ lấp đủ. Prompt chứa token thì mỗi câu là một
+        # khóa riêng, và người học cũng đọc được đề mà không cần metadata.
+        row["prompt"] = f"Sắp xếp từ thành câu đúng: {' · '.join(scrambled)}"
+        # Frontend Drag-drop không dùng option text, nhưng DB schema yêu cầu 4.
+        row["options"] = ["__drag_1__", "__drag_2__", "__drag_3__", "__drag_4__"]
+        row["correct_index"] = 0
+    return row
+
+
+def generate_quiz_bundle_for_hsk(
+    hsk_level: int,
+    distribution: Dict[str, int],
+    vocabulary: List[dict],
+    avoid_prompts: List[str] | None = None,
+) -> Dict[str, Any]:
+    """Một API call sinh nhiều loại quiz để giảm latency và chi phí.
+
+    ``avoid_prompts``: các prompt đã có trong bank cho cùng (level, type). Relay
+    trả output gần như tất định với cùng input, nên không truyền danh sách này
+    thì lượt gọi thứ hai sinh lại y nguyên đoạn của lượt đầu — caller dedup theo
+    prompt sẽ bỏ hết và vòng lặp không bao giờ lấp đủ ``count``.
+    """
+    requested = {
+        kind: max(1, min(int(count), 10))
+        for kind, count in distribution.items()
+        if kind in API_QUIZ_TYPES and int(count) > 0
+    }
+    if not requested:
+        raise ValueError("Empty quiz bundle")
+    total = sum(requested.values())
+    vocab_json = json.dumps(vocabulary[:50], ensure_ascii=False)
+    distribution_json = json.dumps(requested, ensure_ascii=False)
+    # Nonce phá tính tất định của relay: cùng prompt → cùng response, nên mỗi
+    # lượt cần một chuỗi khác nhau để model chọn ngữ cảnh/đề tài khác.
+    nonce = f"{time.time_ns():x}{random.randrange(1 << 32):08x}"
+    avoid_block = ""
+    if avoid_prompts:
+        # Chỉ gửi 12 prompt gần nhất: đủ để model tránh lặp mà không phình token.
+        sample = [str(item).strip().replace("\n", " ")[:80] for item in avoid_prompts[-12:]]
+        avoid_json = json.dumps(sample, ensure_ascii=False)
+        avoid_block = (
+            f"\nĐÃ CÓ trong ngân hàng (TUYỆT ĐỐI không lặp lại, phải đổi chủ đề/ngữ "
+            f"cảnh/nhân vật): {avoid_json}\n"
+        )
+    prompt = f"""Bạn là trưởng ban ra đề HSK cho người Việt. Tạo một bundle ĐÚNG {total} câu ở HSK {hsk_level}.
+
+Phân bố bắt buộc theo quiz_type: {distribution_json}
+Danh mục từ chuẩn ưu tiên: {vocab_json}
+Mã lượt sinh (chỉ để đa dạng hóa, không đưa vào output): {nonce}
+{avoid_block}
+
+Quy tắc từng loại:
+- vocab: hỏi nghĩa; 4 options tiếng Việt.
+- listening: prompt không lộ transcript; audio_text là câu Trung; 4 options nghĩa tiếng Việt.
+- reading: {_READING_SPEC}
+- translation: câu/đoạn Trung; 4 bản dịch Việt, chỉ một bản tự nhiên và đúng.
+- cloze: {_CLOZE_SPEC}
+- drag_drop: chỉ cần tạo metadata.correct_order là các từ/cụm từ theo thứ tự đúng (2-8 token). Backend sẽ tự xáo trộn thành segments và tạo placeholder; không cần tự xáo trộn.
+
+Chỉ dùng từ vựng/ngữ pháp phù hợp HSK {hsk_level}. Mỗi câu có đúng 4 lựa chọn duy nhất, correct_index 0..3 và giải thích tiếng Việt rõ ràng. Không markdown.
+Chỉ trả JSON object:
+{{"questions":[{{"quiz_type":"vocab","target_hanzi":"词","prompt":"...","options":["A","B","C","D"],"correct_index":0,"explanation":"...","audio_text":"","metadata":{{"segments":[],"correct_order":[],"sentence_vi":""}}}}]}}
+"""
+    data = _call_api(prompt)
+    rows = data.get("questions") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise RuntimeError("API bundle response missing questions list")
+
+    accepted: Dict[str, List[dict]] = {kind: [] for kind in requested}
+    rejected: List[str] = []
+    for row in rows:
+        kind = str(row.get("quiz_type", ""))
+        if kind not in requested:
+            rejected.append(f"unexpected type {kind}")
+            continue
+        row = _normalize_api_quiz_question(row, kind)
+        ok, reason = _validate_api_quiz_question(row, kind)
+        if ok and len(accepted[kind]) < requested[kind]:
+            accepted[kind].append(row)
+        elif not ok:
+            rejected.append(f"{kind}: {reason}")
+
+    # Chấp nhận MỘT PHẦN: trả về mọi câu đã qua validate thay vì hủy cả bundle
+    # khi thiếu vài câu. Trước đây thiếu 2/5 cloze là mất luôn 5 câu drag_drop
+    # đã hợp lệ trong cùng response, và lượt gọi lại phải sinh lại từ đầu.
+    # Caller (upgrade_quiz_bank_ai) chạy vòng while theo số còn thiếu nên phần
+    # thiếu sẽ được lấp ở lượt sau — miễn là lượt này có tiến triển.
+    flat = [row for kind in requested for row in accepted[kind]]
+    if not flat:
+        raise RuntimeError(
+            f"API bundle không có câu nào hợp lệ (yêu cầu {requested}); rejected={rejected[:8]}"
+        )
+    missing = {
+        kind: requested[kind] - len(rows_)
+        for kind, rows_ in accepted.items()
+        if len(rows_) < requested[kind]
+    }
+    return {
+        "questions": flat,
+        "_quality": {
+            "accepted": len(flat),
+            "rejected": len(rejected),
+            "missing": missing,
+            "reasons": rejected[:8],
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +760,7 @@ def generate_questions_for_passage(
         Phan bo `count` deu nhau giua cac subtype duoc chon.
 
     Tat ca cau hoi va giai thich bang tieng Viet. Co validation + filtering,
-    tai su dung _call_api (DeepSeek + fallback Gemini).
+    tai su dung _call_api (relay vilao.ai).
     """
     subtypes = _resolve_subtypes(question_subtypes)
     count = max(1, min(int(count or 5), 20))

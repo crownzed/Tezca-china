@@ -722,7 +722,7 @@ export function ProfilePanel() {
           </div>
 
           {stats.studied_today ? (
-            <p className="profile-streak-note profile-streak-note--active">Hôm nay bạn đã học — giữ chuỗi nhé!</p>
+            <p className="profile-streak-note profile-streak-note--active">Hôm nay bạn đã học, giữ chuỗi nhé!</p>
           ) : stats.current_streak > 0 ? (
             <p className="profile-streak-note">Hãy học hôm nay để không mất chuỗi {stats.current_streak} ngày.</p>
           ) : (

@@ -513,6 +513,26 @@ class PronunciationScoreRequest(BaseModel):
     target_pinyin: str = Field(default="", max_length=400)
 
 
+# Demo phát âm trên trang chủ cho người CHƯA đăng nhập. KHÁC với
+# PronunciationScoreRequest: client KHÔNG gửi câu mục tiêu — chỉ gửi ``sentence_id``
+# và server tra câu mẫu HSK1 cố định theo id đó (chống lạm dụng: không cho client
+# tự chọn văn bản/thanh điệu để chấm). ``max_length`` chặn payload phình trước khi
+# giải mã; router còn siết thêm số byte thật + thời lượng.
+class DemoPronunciationRequest(BaseModel):
+    sentence_id: str = Field(min_length=1, max_length=64)
+    audio_base64: str = Field(min_length=16, max_length=700_000)
+    mime_type: str = "audio/wav"
+
+
+class DemoSentenceOut(BaseModel):
+    """Câu mẫu HSK1 cố định cho demo trang chủ. ``id`` là khóa client gửi lại khi
+    chấm điểm — server tra câu theo id này, không nhận văn bản tự do từ client."""
+    id: str
+    hanzi: str
+    pinyin: str = ""
+    meaning_vi: str = ""
+
+
 class PronunciationToneError(BaseModel):
     pos: int
     expected_tone: int
@@ -582,12 +602,53 @@ class VoiceChatRequest(BaseModel):
     audio_base64: str = Field(min_length=16)
     mime_type: str = "audio/webm"
     history: list[VoiceChatTurn] = Field(default_factory=list)
+    # Kịch bản hội thoại (conversation_bank_service). scenario_id ưu tiên; nếu
+    # rỗng thì hsk_level chọn giúp một kịch bản đúng cấp. Cả hai rỗng -> prompt
+    # chung như trước.
+    scenario_id: str = ""
+    hsk_level: int = Field(default=0, ge=0, le=6)
 
 
 class VoiceChatOut(BaseModel):
     user_text: str = ""
     reply_cn: str = ""
     reply_vi: str = ""
+    # Kịch bản thực sự được dùng — client gửi lại ở lượt sau để giữ nguyên vai.
+    scenario_id: str = ""
+
+
+class ConversationOpeningOut(BaseModel):
+    cn: str = ""
+    vi: str = ""
+
+
+class ConversationVocabOut(BaseModel):
+    hanzi: str = ""
+    pinyin: str = ""
+    meaning_vi: str = ""
+
+
+class ConversationScenarioOut(BaseModel):
+    """Bản mô tả kịch bản cho người học đọc trước khi vào hội thoại.
+
+    Không chứa ``turn_exemplars``/``repair_moves``: đó là chỉ thị cho model, lộ
+    ra client thì người học đọc trước được câu AI sắp nói.
+    """
+
+    scenario_id: str = ""
+    hsk_level: int = 0
+    topic: str = ""
+    # Tên trường là ``speech_register`` vì ``register`` trùng một attribute của
+    # pydantic BaseModel (pydantic cảnh báo shadowing). Alias giữ khóa JSON là
+    # "register" cho client: FastAPI serialize theo alias nên contract không đổi.
+    speech_register: str = Field(default="", alias="register")
+    setting: str = ""
+    ai_name: str = ""
+    user_role: str = ""
+    goal: str = ""
+    key_vocab: list[ConversationVocabOut] = Field(default_factory=list)
+    opening: ConversationOpeningOut = Field(default_factory=ConversationOpeningOut)
+    source: str = ""
 
 
 class WordExampleOut(BaseModel):
@@ -611,6 +672,9 @@ class WordOut(BaseModel):
     radical: str = ""
     component_hint: str = ""
     examples: list[WordExampleOut] = Field(default_factory=list)
+    # Cặp từ dễ nhầm (hanzi) do enrichment_service sinh. Trước đây chỉ lộ qua
+    # QuestionWordOut để làm distractor; thư viện cần luôn để dựng bài "phân biệt".
+    confusable_words: list[str] = Field(default_factory=list)
 
 
 class WordsOut(BaseModel):

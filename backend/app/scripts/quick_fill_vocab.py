@@ -1,41 +1,24 @@
-"""Quick fill HSK vocabulary gaps using DeepSeek v4 Pro."""
-import sys, time, json, urllib.request
+"""Quick fill HSK vocabulary gaps — gọi LLM qua relay vilao.ai."""
+import sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.db import SessionLocal
 from app.models import Word, Example
-from app.settings import settings
+from app.services.llm_generator_service import _call_api
 from sqlalchemy import func, select
-
-API_URL = "https://api.ai-box.vn/v1/chat/completions"
-KEY = settings.deepseek_api_key
-HEADERS = {"Content-Type": "application/json", "Authorization": f"Bearer {KEY}"}
 
 
 def call_api(prompt):
-    data = {
-        "model": "deepseek-v4-pro",
-        "messages": [
-            {"role": "system", "content": "You are a Chinese language database. Output ONLY valid JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.5,
-        "max_tokens": 8000,
-        "response_format": {"type": "json_object"}
-    }
-    req = urllib.request.Request(API_URL, data=json.dumps(data).encode(), headers=HEADERS, method="POST")
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=120) as r:
-                c = json.loads(r.read())["choices"][0]["message"]["content"].strip()
-                if c.startswith("```"): c = c.split("\n", 1)[1]
-                if c.endswith("```"): c = c[:-3]
-                return json.loads(c)
-        except Exception as e:
-            print(f"  retry {attempt+1}: {str(e)[:80]}")
-            time.sleep(3)
-    return {}
+    # _call_api (relay vilao.ai) đã lo xoay vòng key + retry + bóc markdown
+    # fence. Trước đây script tự gọi ai-box/DeepSeek; provider đó đã bị bỏ.
+    # Trả {} khi hết key để vòng lặp gọi tiếp tục như hành vi cũ.
+    try:
+        return _call_api(prompt)
+    except Exception as e:
+        print(f"  LLM fail: {str(e)[:120]}")
+        time.sleep(3)
+        return {}
 
 
 def main():

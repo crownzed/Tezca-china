@@ -2,6 +2,8 @@
 // Nguồn dữ liệu là kho flashcard có sẵn (loadAllFlashcards). Chữ nào không có
 // trong kho thì trả null -> UI bỏ qua tooltip cho chữ đó (degrade sạch).
 
+import { loadAllFlashcards } from '../../vocab-loader.js';
+
 let cache = null;
 let building = null;
 
@@ -11,7 +13,6 @@ let building = null;
 async function build() {
   const map = new Map();
   try {
-    const { loadAllFlashcards } = await import('../../vocab-loader.js');
     const cards = await loadAllFlashcards();
     for (const card of cards) {
       const word = String(card.character || '');

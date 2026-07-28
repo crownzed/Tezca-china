@@ -130,8 +130,8 @@ def main() -> None:
     args = parser.parse_args()
 
     from app.settings import settings
-    if not settings.deepseek_api_key and not settings.gemini_keys_list:
-        print("ERROR: chưa cấu hình DEEPSEEK_API_KEY hoặc GEMINI_API_KEYS")
+    if not settings.llm_keys_list:
+        print("ERROR: chưa cấu hình GEMINI_API_KEYS")
         return
 
     db = SessionLocal()

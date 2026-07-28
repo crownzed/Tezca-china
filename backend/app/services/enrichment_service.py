@@ -4,7 +4,7 @@ Mọi loại câu hỏi trong ``QuestionGeneratorService`` đều dẫn xuất t
   1. Bảng ``examples`` (câu nền cho cloze/listening/drag_drop/voice/dialogue/paragraph).
   2. ``Word.confusable_words_json`` (nguồn distractor "dễ nhầm").
 
-Module này dùng LLM (tái dùng ``_call_api``: DeepSeek primary + Gemini fallback)
+Module này dùng LLM (tái dùng ``_call_api``: relay vilao.ai, xoay vòng key)
 để LÀM GIÀU 2 nguồn trên rồi ghi vào DB — chạy OFFLINE, không nằm trong đường
 request. Nhờ đó chất lượng câu hỏi tăng mà đường runtime vẫn nhanh (template-based,
 không thêm độ trễ LLM per-request).

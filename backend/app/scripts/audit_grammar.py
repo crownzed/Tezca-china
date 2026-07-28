@@ -7,14 +7,13 @@ Checks:
   3. Vietnamese translations are accurate (basic check)
   4. Audio text matches prompt content
 
-Uses DeepSeek API (deepseek-v4-flash) for grammar validation.
-Set DEEPSEEK_API_KEY env var before running.
+Dùng relay vilao.ai qua ``_call_api`` (provider LLM duy nhất còn lại — xem ghi
+chú ở ``app/settings.py``). Đặt GEMINI_API_KEYS trước khi chạy.
 Rate limited to 10 req/s to stay within free tier limits.
 """
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -25,9 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.db import SessionLocal
 from app.models import Example, Question, Word
-
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE = "https://api.ai-box.vn/v1/chat/completions"
+from app.services.llm_generator_service import _call_api
+from app.settings import settings
 
 # ── Rule-based checks (fast, no API call) ────────────────────────────────
 
@@ -137,12 +135,12 @@ Reply in JSON only:
 {{"grammar_ok": true/false, "translation_ok": "yes"/"partial"/"no", "word_usage_natural": true/false, "grammar_issues": ["issue1", "issue2"], "confidence": 0.0-1.0}}"""
 
 
-def check_sentences_with_deepseek(
+def check_sentences_with_llm(
     sentences: list[dict],
     batch_size: int = 10,
     max_total: int = 500,
 ) -> list[dict]:
-    """Check sentences via DeepSeek API with rate limiting.
+    """Check sentences via the LLM relay with rate limiting.
 
     Args:
         sentences: list of {sentence_cn, sentence_vi, word_hanzi, example_id, word_id}
@@ -151,12 +149,9 @@ def check_sentences_with_deepseek(
 
     Returns: list of issue dicts
     """
-    if not DEEPSEEK_API_KEY:
-        print("  ⚠ DEEPSEEK_API_KEY not set — skipping API grammar check")
+    if not settings.llm_keys_list:
+        print("  ⚠ GEMINI_API_KEYS chưa cấu hình — bỏ qua phần kiểm ngữ pháp bằng LLM")
         return []
-
-    import urllib.request
-    import urllib.error
 
     issues: list[dict] = []
     batch = sentences[:max_total]
@@ -172,76 +167,48 @@ def check_sentences_with_deepseek(
                 item["sentence_cn"], item.get("sentence_vi", ""), item.get("word_hanzi", "")
             )
 
-            payload = json.dumps({
-                "model": "deepseek-v4-flash",
-                "messages": [
-                    {"role": "system", "content": "You are a Chinese grammar validator. Reply only in JSON."},
-                    {"role": "user", "content": prompt},
-                ],
-                "max_tokens": 300,
-                "temperature": 0.1,
-            }).encode("utf-8")
-
-            req = urllib.request.Request(
-                DEEPSEEK_BASE,
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                },
-            )
-
             try:
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    result = json.loads(resp.read().decode("utf-8"))
-                    content = result["choices"][0]["message"]["content"]
+                # _call_api tự lo retry/xoay key và bóc markdown fence, nên ở đây
+                # chỉ cần đọc các trường của verdict.
+                parsed = _call_api(prompt)
+                if not isinstance(parsed, dict):
+                    print(f"    Bỏ qua: verdict không phải JSON object ({type(parsed).__name__})")
+                    continue
 
-                    # Parse JSON from response (handle markdown code blocks)
-                    content_clean = content.strip()
-                    if content_clean.startswith("```"):
-                        content_clean = content_clean.split("\n", 1)[1]
-                        if content_clean.endswith("```"):
-                            content_clean = content_clean[:-3]
-                    parsed = json.loads(content_clean)
+                if not parsed.get("grammar_ok"):
+                    issues.append({
+                        "example_id": item["example_id"],
+                        "word_id": item["word_id"],
+                        "hanzi": item.get("word_hanzi", ""),
+                        "sentence_cn": item["sentence_cn"][:100],
+                        "type": "grammar_issue",
+                        "detail": parsed.get("grammar_issues", []),
+                        "confidence": parsed.get("confidence", 0),
+                        "severity": "high",
+                    })
 
-                    if not parsed.get("grammar_ok"):
-                        issues.append({
-                            "example_id": item["example_id"],
-                            "word_id": item["word_id"],
-                            "hanzi": item.get("word_hanzi", ""),
-                            "sentence_cn": item["sentence_cn"][:100],
-                            "type": "grammar_issue",
-                            "detail": parsed.get("grammar_issues", []),
-                            "confidence": parsed.get("confidence", 0),
-                            "severity": "high",
-                        })
+                if parsed.get("translation_ok") == "no":
+                    issues.append({
+                        "example_id": item["example_id"],
+                        "word_id": item["word_id"],
+                        "hanzi": item.get("word_hanzi", ""),
+                        "sentence_cn": item["sentence_cn"][:100],
+                        "type": "translation_mismatch",
+                        "detail": "Vietnamese translation does not match Chinese",
+                        "severity": "medium",
+                    })
 
-                    if parsed.get("translation_ok") == "no":
-                        issues.append({
-                            "example_id": item["example_id"],
-                            "word_id": item["word_id"],
-                            "hanzi": item.get("word_hanzi", ""),
-                            "sentence_cn": item["sentence_cn"][:100],
-                            "type": "translation_mismatch",
-                            "detail": "Vietnamese translation does not match Chinese",
-                            "severity": "medium",
-                        })
+                if not parsed.get("word_usage_natural"):
+                    issues.append({
+                        "example_id": item["example_id"],
+                        "word_id": item["word_id"],
+                        "hanzi": item.get("word_hanzi", ""),
+                        "sentence_cn": item["sentence_cn"][:100],
+                        "type": "unnatural_word_usage",
+                        "detail": f"Target word '{item.get('word_hanzi')}' used unnaturally",
+                        "severity": "low",
+                    })
 
-                    if not parsed.get("word_usage_natural"):
-                        issues.append({
-                            "example_id": item["example_id"],
-                            "word_id": item["word_id"],
-                            "hanzi": item.get("word_hanzi", ""),
-                            "sentence_cn": item["sentence_cn"][:100],
-                            "type": "unnatural_word_usage",
-                            "detail": f"Target word '{item.get('word_hanzi')}' used unnaturally",
-                            "severity": "low",
-                        })
-
-            except urllib.error.HTTPError as e:
-                print(f"    HTTP {e.code}: {e.reason}")
-                if e.code == 429:
-                    time.sleep(5)
             except Exception as e:
                 print(f"    Error: {e}")
 
@@ -392,9 +359,9 @@ def main():
     print(f"  Found {len(rule_issues)} issues via rule checks")
     all_issues.extend(rule_issues)
 
-    # ── Phase 2: DeepSeek grammar check (if API key available) ──
-    print("\n── Phase 2: DeepSeek grammar check ──")
-    if DEEPSEEK_API_KEY:
+    # ── Phase 2: LLM grammar check (if API key available) ──
+    print("\n── Phase 2: LLM grammar check (vilao.ai) ──")
+    if settings.llm_keys_list:
         with SessionLocal() as db:
             examples = db.scalars(
                 select(Example).limit(500)
@@ -416,11 +383,11 @@ def main():
                         "sentence_vi": ex.sentence_vi,
                     })
 
-        api_issues = check_sentences_with_deepseek(sentences, batch_size=10, max_total=200)
-        print(f"  Found {len(api_issues)} issues via DeepSeek")
+        api_issues = check_sentences_with_llm(sentences, batch_size=10, max_total=200)
+        print(f"  Found {len(api_issues)} issues via LLM")
         all_issues.extend(api_issues)
     else:
-        print("  Skipped — set DEEPSEEK_API_KEY to enable")
+        print("  Skipped — đặt GEMINI_API_KEYS để bật")
 
     # ── Phase 3: Question integrity ──
     print("\n── Phase 3: Question integrity ──")

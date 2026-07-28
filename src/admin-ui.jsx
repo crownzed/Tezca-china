@@ -16,19 +16,27 @@ const ADMIN_TOKEN_KEY = 'hanziAdminToken';
 // đang thao tác — 3 phút cho biên an toàn, tránh nhấp nháy online/offline.
 const ONLINE_THRESHOLD_MS = 3 * 60 * 1000;
 
-function isOnline(lastSeenAt) {
-  if (!lastSeenAt) return false;
-  return Date.now() - new Date(lastSeenAt).getTime() < ONLINE_THRESHOLD_MS;
+// Backend trả ISO không kèm offset (datetime.utcnow) nên phải ép về UTC bằng
+// cách thêm 'Z' khi chuỗi chưa có timezone. KHÔNG parse thẳng new Date(iso):
+// trình duyệt sẽ hiểu là giờ ĐỊA PHƯƠNG (VN lệch 7 tiếng) -> mọi mốc sai lệch,
+// online luôn báo offline. isOnline + formatRelative phải dùng chung hàm này.
+function parseUtcMs(iso) {
+  if (!iso) return NaN;
+  const hasTz = /[Z+]|-\d\d:\d\d$/.test(iso);
+  return new Date(hasTz ? iso : `${iso}Z`).getTime();
 }
 
-// Thời gian tương đối gọn cho cột hoạt động. Backend trả ISO không kèm offset
-// (datetime.utcnow) nên ép về UTC bằng cách thêm 'Z' khi chuỗi chưa có timezone.
+function isOnline(lastSeenAt) {
+  const then = parseUtcMs(lastSeenAt);
+  if (Number.isNaN(then)) return false;
+  return Date.now() - then < ONLINE_THRESHOLD_MS;
+}
+
+// Thời gian tương đối gọn cho cột hoạt động.
 function formatRelative(iso) {
-  if (!iso) return null;
-  const hasTz = /[Z+]|-\d\d:\d\d$/.test(iso);
-  const then = new Date(hasTz ? iso : `${iso}Z`).getTime();
-  const diff = Date.now() - then;
+  const then = parseUtcMs(iso);
   if (Number.isNaN(then)) return null;
+  const diff = Date.now() - then;
   if (diff < 60 * 1000) return 'vừa xong';
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins} phút trước`;
@@ -124,21 +132,28 @@ function UsersSection({ token, onAuthError }) {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');       // id đang xử lý
   const [busyAction, setBusyAction] = useState(''); // 'toggle' | 'delete' — để spinner đúng nút
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // mount là đã bắt đầu tải
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await adminListUsers(token);
+  // Viết dạng chuỗi promise (không async/await) và để MỌI setState trong callback
+  // của promise. Effect gọi hàm này, nên setState chạy đồng bộ trong thân hàm sẽ
+  // tạo cascading render ngay lượt mount.
+  const load = useCallback(() => adminListUsers(token)
+    .then(data => {
       setUsers(data.users || []);
-    } catch (err) {
+      setError('');
+    })
+    .catch(err => {
       if (err.message === 'Forbidden') { onAuthError(); return; }
       setError(err.message || 'Không tải được danh sách người dùng');
-    } finally {
-      setLoading(false);
-    }
-  }, [token, onAuthError]);
+    })
+    .finally(() => setLoading(false)), [token, onAuthError]);
+
+  // Nút "Tải lại": bật spinner ngay trong handler (không phải trong effect).
+  const reload = () => {
+    setLoading(true);
+    setError('');
+    load();
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -180,7 +195,7 @@ function UsersSection({ token, onAuthError }) {
     <section className="core-card admin-section">
       <div className="admin-section__header">
         <h4><Users size={18} /> Người dùng</h4>
-        <button type="button" className="btn-secondary admin-refresh-btn" onClick={load} disabled={loading}>
+        <button type="button" className="btn-secondary admin-refresh-btn" onClick={reload} disabled={loading}>
           {loading ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Làm mới
         </button>
       </div>
@@ -190,19 +205,19 @@ function UsersSection({ token, onAuthError }) {
       <div className="admin-stat-strip">
         <div className="admin-stat">
           <span>Tổng</span>
-          <strong>{users ? counts.total : '—'}</strong>
+          <strong>{users ? counts.total : '-'}</strong>
         </div>
         <div className="admin-stat admin-stat--online">
           <span>Trực tuyến</span>
-          <strong>{users ? counts.online : '—'}</strong>
+          <strong>{users ? counts.online : '-'}</strong>
         </div>
         <div className="admin-stat admin-stat--active">
           <span>Bình thường</span>
-          <strong>{users ? counts.active : '—'}</strong>
+          <strong>{users ? counts.active : '-'}</strong>
         </div>
         <div className="admin-stat admin-stat--locked">
           <span>Đã khoá</span>
-          <strong>{users ? counts.locked : '—'}</strong>
+          <strong>{users ? counts.locked : '-'}</strong>
         </div>
       </div>
 
@@ -274,24 +289,33 @@ function ConfigSection({ token, onAuthError }) {
   const [draft, setDraft] = useState({});     // giá trị đang chỉnh
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // mount là đã bắt đầu tải
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  // Viết dạng promise chain (không async/await) để mọi setState nằm trong
+  // callback .then/.catch — gọi được thẳng trong effect. Bật cờ loading đồng bộ
+  // trong thân effect sẽ tạo cascading render nên loading khởi tạo là true.
+  const load = useCallback(() => adminGetConfig(token)
+    .then(data => {
+      setConfig(data.config || {});
+      setDraft(data.config || {});
+      setError('');
+      setSuccess('');
+      setLoading(false);
+    })
+    .catch(err => {
+      setLoading(false);
+      if (err.message === 'Forbidden') { onAuthError(); return; }
+      setError(err.message || 'Không tải được cấu hình');
+    }), [token, onAuthError]);
+
+  // Nút "Tải lại": bật spinner ngay trong handler (không phải trong effect).
+  const reload = () => {
     setLoading(true);
     setError('');
     setSuccess('');
-    try {
-      const data = await adminGetConfig(token);
-      setConfig(data.config || {});
-      setDraft(data.config || {});
-    } catch (err) {
-      if (err.message === 'Forbidden') { onAuthError(); return; }
-      setError(err.message || 'Không tải được cấu hình');
-    } finally {
-      setLoading(false);
-    }
-  }, [token, onAuthError]);
+    load();
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -348,7 +372,7 @@ function ConfigSection({ token, onAuthError }) {
         <h4><ShieldCheck size={18} /> Cấu hình hệ thống</h4>
         <div className="admin-section__header-actions">
           {dirtyKeys.length > 0 && <span className="admin-dirty-count">{dirtyKeys.length} thay đổi chưa lưu</span>}
-          <button type="button" className="btn-secondary admin-refresh-btn" onClick={load} disabled={loading || saving}>
+          <button type="button" className="btn-secondary admin-refresh-btn" onClick={reload} disabled={loading || saving}>
             {loading ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Tải lại
           </button>
         </div>
@@ -383,7 +407,7 @@ function ConfigSection({ token, onAuthError }) {
                         type="button"
                         className="admin-field-reset"
                         onClick={() => resetField(key)}
-                        title={`Hoàn tác — về "${config[key]}"`}
+                        title={`Hoàn tác về "${config[key]}"`}
                         aria-label={`Hoàn tác ${key}`}
                       >
                         <RotateCcw size={13} />

@@ -1,0 +1,581 @@
+/* ==========================================================================
+   SHELL (sau đăng nhập) — namespace `sh-`
+   Tách riêng khỏi .core-* vì overhaul.css ghim sidebar/topbar bằng !important.
+   Nguyên tắc: bỏ thẻ nổi, dùng kẻ 1px + khoảng trống; số liệu dùng mono
+   tabular; chỉ animate transform/opacity.
+   ========================================================================== */
+
+:root {
+  --sh-hair: rgba(44, 62, 80, 0.10);
+  --sh-hair-soft: rgba(44, 62, 80, 0.06);
+  --sh-surface: rgba(255, 253, 250, 0.72);
+  --sh-ink: var(--modern-zen-text, #232B2E);
+  --sh-muted: var(--muted, #6b7780);
+  --sh-accent: var(--jade, #1F8A70);
+  --sh-accent-soft: rgba(31, 138, 112, 0.09);
+  --sh-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root[data-theme='dark'] {
+  --sh-hair: rgba(247, 242, 234, 0.12);
+  --sh-hair-soft: rgba(247, 242, 234, 0.07);
+  --sh-surface: rgba(13, 24, 38, 0.62);
+  --sh-accent-soft: rgba(45, 186, 145, 0.13);
+}
+
+/* --- Khung tổng: lệch trục, sidebar hẹp hơn tỉ lệ vàng của cột nội dung --- */
+.sh-app {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 234px minmax(0, 1fr);
+  background: transparent;
+}
+
+/* --- Sidebar: không phải thẻ, chỉ là một dải có kẻ dọc 1px --- */
+.sh-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 100dvh;
+  min-width: 0;
+  padding: 22px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--sh-surface);
+  border-right: 1px solid var(--sh-hair);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+/* Thương hiệu: dấu nhỏ + chữ, thay cho khối gradient 46px cũ. */
+.sh-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px 16px;
+  border-bottom: 1px solid var(--sh-hair-soft);
+  min-width: 0;
+}
+
+.sh-brand-mark {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 9px;
+  /* Viền trong 1px + highlight inset: khúc xạ mép thay vì đổ bóng dày. */
+  box-shadow:
+    inset 0 0 0 1px var(--sh-hair),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.sh-brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sh-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.sh-brand-text b {
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--sh-ink);
+}
+
+.sh-brand-text i {
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sh-muted);
+}
+
+/* --- Nav --- */
+.sh-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sh-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sh-item {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sh-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.sh-item>span:first-of-type {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.855rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sh-item svg {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+/* Vạch chỉ báo 2px ở lề trái: chỉ hiện khi active, không viền quanh nút. */
+.sh-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--sh-accent);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sh-item:hover {
+  color: var(--sh-ink);
+  background: var(--sh-hair-soft);
+}
+
+.sh-item:focus-visible {
+  outline: 2px solid var(--sh-accent);
+  outline-offset: 1px;
+}
+
+.sh-item.is-active {
+  color: var(--sh-accent);
+  background: var(--sh-accent-soft);
+}
+
+.sh-item.is-active>span:first-of-type {
+  font-weight: 800;
+}
+
+.sh-item.is-active::before {
+  transform: scaleY(1);
+}
+
+.sh-item.is-active svg {
+  opacity: 1;
+}
+
+/* Số mục con: mono tabular, hai chữ số để cột không nhảy khi mở/đóng. */
+.sh-count {
+  flex: 0 0 auto;
+  font-family: var(--sh-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--sh-muted);
+  opacity: 0.6;
+}
+
+.sh-item.is-active .sh-count {
+  color: var(--sh-accent);
+  opacity: 0.85;
+}
+
+/* Hàng nhóm có thêm số đếm + chevron nên siết lề phải lại cho khỏi chật. */
+.sh-group-toggle {
+  padding-right: 6px;
+}
+
+.sh-chevron {
+  flex: 0 0 auto;
+  opacity: 0.55;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sh-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+/* Submenu: kẻ dọc 1px làm dấu phân cấp, không thụt bằng thẻ. */
+.sh-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  margin: 2px 0 4px 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--sh-hair);
+}
+
+/* Giữ đúng ngữ nghĩa hidden khi submenu đóng. */
+.sh-sub[hidden] {
+  display: none;
+}
+
+.sh-subitem {
+  height: 33px;
+  padding-left: 8px;
+}
+
+.sh-subitem>span:first-of-type {
+  font-size: 0.795rem;
+  font-weight: 600;
+}
+
+.sh-subitem::before {
+  left: -9px;
+  top: 10px;
+  bottom: 10px;
+}
+
+/* --- Cột nội dung --- */
+.sh-shell {
+  min-width: 0;
+  min-height: 100dvh;
+  padding: 14px clamp(16px, 2.6vw, 36px) 36px;
+  background: transparent;
+}
+
+/* Topbar lệch trục: chữ bên trái, điều khiển dồn phải, chỉ 1px kẻ dưới. */
+.sh-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  min-height: 62px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid var(--sh-hair);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.sh-topbar-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sh-eyebrow {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--gold, #C08A2D);
+}
+
+.sh-topbar-title h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 1.6vw, 1.42rem);
+  font-weight: 800;
+  line-height: var(--line-compact, 1.32);
+  letter-spacing: -0.02em;
+  color: var(--sh-ink);
+  text-wrap: balance;
+}
+
+.sh-topbar-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sh-theme-toggle {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--sh-hair);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sh-muted);
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.sh-theme-toggle:hover {
+  color: var(--gold, #C08A2D);
+  background: var(--sh-hair-soft);
+  transform: translateY(-1px);
+}
+
+.sh-theme-toggle:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.sh-theme-toggle:focus-visible {
+  outline: 2px solid var(--sh-accent);
+  outline-offset: 2px;
+}
+
+/* --- Fallback khi lazy-load view: khung xương theo layout, không spinner --- */
+.sh-tab-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 260px;
+  padding-top: 4px;
+}
+
+.sh-sk-row {
+  display: grid;
+  grid-template-columns: var(--phi-major, 0.618fr) var(--phi-minor, 0.382fr);
+  gap: 14px;
+}
+
+.sh-sk {
+  display: block;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--sh-hair-soft) 25%, var(--sh-hair) 37%, var(--sh-hair-soft) 63%);
+  background-size: 400% 100%;
+  animation: shSkShimmer 1.5s ease-in-out infinite;
+}
+
+.sh-sk-line {
+  height: 15px;
+}
+
+.sh-sk-block {
+  height: 132px;
+}
+
+.sh-sk-tile {
+  height: 168px;
+}
+
+@keyframes shSkShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* --- Rail chỉ-icon: nhãn bị ẩn nên bỏ chevron, count và thụt lề submenu --- */
+@media (max-width: 1040px) and (min-width: 861px) {
+  .sh-app {
+    grid-template-columns: 74px minmax(0, 1fr);
+  }
+
+  .sh-sidebar {
+    padding: 20px 12px 16px;
+    align-items: center;
+  }
+
+  .sh-brand {
+    justify-content: center;
+    padding: 2px 0 14px;
+    width: 100%;
+  }
+
+  .sh-brand-text {
+    display: none;
+  }
+
+  .sh-nav,
+  .sh-group,
+  .sh-sub {
+    align-items: center;
+    width: 100%;
+  }
+
+  .sh-item {
+    justify-content: center;
+    padding: 0;
+    gap: 0;
+  }
+
+  .sh-item>span:first-of-type,
+  .sh-count,
+  .sh-chevron {
+    display: none;
+  }
+
+  .sh-sub {
+    margin: 2px 0 4px;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .sh-subitem::before {
+    left: 0;
+  }
+}
+
+/* --- Bottom nav mobile: submenu mở trải vào hàng cuộn ngang --- */
+@media (max-width: 860px) {
+  .sh-app {
+    display: block;
+    padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sh-sidebar {
+    position: fixed;
+    top: auto;
+    inset: auto 0 0 0;
+    height: auto;
+    min-height: 62px;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-right: 0;
+    border-top: 1px solid var(--sh-hair);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    z-index: 100;
+  }
+
+  .sh-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sh-brand {
+    display: none;
+  }
+
+  /* display:contents để nút con nằm trực tiếp trong hàng cuộn của sidebar. */
+  .sh-nav,
+  .sh-group {
+    display: contents;
+  }
+
+  .sh-sub:not([hidden]) {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    border-left: 0;
+  }
+
+  .sh-item {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 66px;
+    max-width: 86px;
+    height: auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 7px 6px;
+    border-radius: 11px;
+    scroll-snap-align: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .sh-item::before {
+    display: none;
+  }
+
+  .sh-item:hover {
+    transform: none;
+  }
+
+  .sh-item>span:first-of-type {
+    flex: 0 0 auto;
+    font-size: 0.63rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.1;
+    max-width: 100%;
+  }
+
+  .sh-count,
+  .sh-chevron {
+    display: none;
+  }
+
+  .sh-subitem {
+    height: auto;
+    padding: 7px 6px;
+  }
+
+  .sh-subitem>span:first-of-type {
+    font-size: 0.63rem;
+  }
+
+  .sh-shell {
+    padding: 10px 14px calc(22px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sh-topbar {
+    min-height: 54px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
+    margin-bottom: 14px;
+  }
+
+  .sh-topbar-title h2 {
+    font-size: 1.16rem;
+  }
+
+  .sh-sk-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .sh-item,
+  .sh-item::before,
+  .sh-chevron,
+  .sh-theme-toggle {
+    transition: none;
+  }
+
+  .sh-sk {
+    animation: none;
+  }
+}

@@ -9,10 +9,12 @@
 // ============================================================
 import { Fragment, useMemo, useState } from 'react';
 import { ArrowLeft, BookOpen, Brain, CalendarClock, CheckCircle2, GraduationCap, Play, RotateCcw, Sparkles, XCircle } from 'lucide-react';
-import { grammarLessons, getGrammarLessonsByLevel } from '../grammar-db.js';
+import { grammarLessons } from '../grammar-db.js';
 import { sampleN } from '../grammar-engine.js';
 import { getGrammarSummary, getLessonProgress, getDueLessons, recordGrammarResult } from '../grammar-progress.js';
 import { ClickableChineseText, TonedPinyin } from './chinese-text.jsx';
+import HskLevelPicker from './HskLevelPicker.jsx';
+import { normalizeLevels, levelMatches } from '../hsk-levels.js';
 
 const GRAMMAR_LEVELS = [1, 2, 3, 4, 5, 6];
 const TOTAL_LESSONS = grammarLessons.length;
@@ -105,7 +107,7 @@ function PracticeRunner({ title, questions, onExit, onFinish }) {
   if (!q) return null;
 
   return (
-    <section className="core-card question-card learning-question-card">
+    <section className="qz core-card question-card learning-question-card">
       <div className="question-topline">
         <button type="button" className="grammar-back" onClick={onExit}><ArrowLeft size={16} /> {title}</button>
         <strong>{index + 1}/{total}</strong>
@@ -276,7 +278,7 @@ function TheoryView({ lesson, onExit, onPractice }) {
 function ResultView({ correct, total, records, onAgain, onExit }) {
   const accuracy = total ? Math.round((correct / total) * 100) : 0;
   return (
-    <section className="core-card result-card">
+    <section className="qz core-card result-card">
       <span className="core-eyebrow">Kết quả luyện ngữ pháp</span>
       <h1>{accuracy >= 80 ? 'Nắm chắc rồi' : accuracy >= 70 ? 'Đã qua bài' : 'Cần ôn thêm'}</h1>
       <div className="result-summary">
@@ -300,9 +302,10 @@ function ResultView({ correct, total, records, onAgain, onExit }) {
   );
 }
 
-export default function GrammarLab({ focusLevel = 1 }) {
+export default function GrammarLab({ focusLevels }) {
   const [view, setView] = useState('overview');
-  const [activeLevel, setActiveLevel] = useState(GRAMMAR_LEVELS.includes(Number(focusLevel)) ? Number(focusLevel) : 1);
+  // activeLevels = MẢNG số đã chọn. Rỗng => tất cả cấp (levelMatches xử lý).
+  const [activeLevels, setActiveLevels] = useState(() => normalizeLevels(focusLevels));
   const [activeLesson, setActiveLesson] = useState(null);
   const [runnerQuestions, setRunnerQuestions] = useState([]);
   const [runnerTitle, setRunnerTitle] = useState('');
@@ -315,7 +318,7 @@ export default function GrammarLab({ focusLevel = 1 }) {
   const summary = useMemo(() => getGrammarSummary(TOTAL_LESSONS), [progressTick]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dueLessons = useMemo(() => new Set(getDueLessons()), [progressTick]);
-  const lessons = useMemo(() => getGrammarLessonsByLevel(activeLevel), [activeLevel]);
+  const lessons = useMemo(() => grammarLessons.filter(lesson => levelMatches(activeLevels, lesson.level)), [activeLevels]);
 
   const startLessonPractice = (lesson) => {
     setActiveLesson(lesson);
@@ -418,7 +421,7 @@ export default function GrammarLab({ focusLevel = 1 }) {
     <main className="core-page page-enter grammar-lab">
       <section className="core-card core-section-head">
         <h1><GraduationCap size={22} /> Ngữ pháp</h1>
-        <p>Học lý thuyết, luyện theo bài và ôn tập thông minh — HSK 1 đến 3.</p>
+        <p>Học lý thuyết, luyện theo bài và ôn tập thông minh cho HSK 1 đến 3.</p>
       </section>
 
       <section className="core-card grammar-summary">
@@ -441,19 +444,17 @@ export default function GrammarLab({ focusLevel = 1 }) {
         )}
       </section>
 
-      <section className="level-grid" aria-label="Chọn cấp HSK">
-        {GRAMMAR_LEVELS.map(lvl => (
-          <button
-            key={lvl}
-            type="button"
-            className={`level-card ${activeLevel === lvl ? 'active' : ''}`}
-            onClick={() => setActiveLevel(lvl)}
-          >
-            <span>HSK</span>
-            <strong>{lvl}</strong>
-          </button>
-        ))}
-      </section>
+      <HskLevelPicker
+        value={activeLevels}
+        onChange={setActiveLevels}
+        levels={GRAMMAR_LEVELS}
+        variant="card"
+        showAll
+        allowEmpty
+        className="level-grid"
+        buttonClassName="level-card"
+        ariaLabel="Chọn cấp HSK"
+      />
 
       <section className="grammar-lesson-grid" aria-label="Danh sách bài ngữ pháp">
         {lessons.map(lesson => {

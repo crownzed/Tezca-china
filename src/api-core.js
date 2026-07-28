@@ -1,5 +1,8 @@
 import { scopedKey } from './user-scope';
 import { recordWordReview } from './vocab-srs';
+import { loadAllFlashcards } from './vocab-loader';
+import { effectiveLevels, primaryLevel } from './hsk-levels';
+import { buildExamQuestions } from './exam-items';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000');
 
@@ -111,7 +114,11 @@ async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
 // meaning_vi. Ném lỗi khi backend không tới được để tầng gọi (vocab-loader)
 // degrade sạch về file JS local.
 export async function getWords(level) {
-  const query = level ? `?level=${encodeURIComponent(level)}` : '';
+  // level có thể là số đơn hoặc mảng nhiều cấp. Mảng => lặp param ?level=..&level=..
+  const levels = Array.isArray(level) ? level : (level ? [level] : []);
+  const query = levels.length
+    ? `?${levels.map(value => `level=${encodeURIComponent(value)}`).join('&')}`
+    : '';
   return request(`/api/words${query}`);
 }
 
@@ -231,10 +238,29 @@ function localDragDrop(card) {
   };
 }
 
-async function localQuestions({ level, quiz_type, limit }) {
-  const { loadAllFlashcards } = await import('./vocab-loader');
+async function localQuestions({ level, levels, quiz_type, limit }) {
   const allCards = await loadAllFlashcards();
-  const cards = allCards.filter(card => card.hskLevel === Number(level));
+  // Chấp nhận cả `levels` (mảng, chọn nhiều cấp) lẫn `level` (số, tương thích cũ).
+  // effectiveLevels rỗng => toàn bộ HSK; ngược lại lọc theo tập đã chọn.
+  const selectedLevels = effectiveLevels(levels ?? level);
+  const levelSet = new Set(selectedLevels);
+  // Cấp đại diện cho các trường scalar (id/level của câu hỏi): cấp thấp nhất đã chọn.
+  const tagLevel = primaryLevel(levels ?? level, selectedLevels[0] || 1);
+
+  // cloze/reading dùng ngân hàng đoạn văn chuẩn đề thi (选词填空 / 阅读理解).
+  // Ngân hàng rỗng cho các cấp đã chọn => rơi về logic per-word bên dưới.
+  if (quiz_type === 'cloze' || quiz_type === 'reading') {
+    // Không truyền tagLevel: mỗi câu lấy level từ passage.hsk_level của chính
+    // đoạn văn (xem buildExamQuestions), không dùng cấp đại diện của phiên.
+    const examQuestions = buildExamQuestions({
+      quizType: quiz_type,
+      levels: selectedLevels,
+      limit,
+    });
+    if (examQuestions.length) return examQuestions;
+  }
+
+  const cards = allCards.filter(card => levelSet.has(Number(card.hskLevel)));
   const pool = cards.length >= 4 ? cards : allCards.slice(0, 80);
   const typeSeed = [...String(quiz_type)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
   return shuffle(pool).slice(0, limit).map((card, index) => {
@@ -257,8 +283,8 @@ async function localQuestions({ level, quiz_type, limit }) {
     const correctValue = byType[0];
     const options = shuffle([...new Set(byType)]).slice(0, 4);
     return {
-      id: Number(`${level}${typeSeed}${index + 1}${Date.now().toString().slice(-4)}`),
-      level: Number(level),
+      id: Number(`${tagLevel}${typeSeed}${index + 1}${Date.now().toString().slice(-4)}`),
+      level: tagLevel,
       local: true,
       offline: true,
       quiz_type,
@@ -891,11 +917,33 @@ export async function scorePronunciation(payload) {
   return request('/api/speech/pronunciation', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+// --- Demo phát âm trang chủ (người CHƯA đăng nhập) ---
+
+// Lấy một câu mẫu HSK1 cố định cho demo. Server là nguồn sự thật của câu + id.
+export async function getDemoSentence() {
+  return request('/api/speech/demo-sentence');
+}
+
+// Chấm điểm demo: chỉ gửi sentence_id + audio (server tra câu theo id). Rate limit
+// theo IP ở backend là lớp bảo vệ thật; lỗi 429 ném ra cho UI hiển thị CTA đăng ký.
+export async function scoreDemoPronunciation(payload) {
+  return request('/api/speech/demo-pronunciation', { method: 'POST', body: JSON.stringify(payload) });
+}
+
 // --- Speech features: turn-based voice chat (Feature 2) ---
 
 // Gửi audio (base64) + lịch sử hội thoại, nhận lời người dùng + câu trả lời CN/VI.
+// Payload có thể kèm scenario_id để AI giữ nguyên vai qua các lượt.
 export async function voiceChat(payload) {
   return request('/api/speech/chat', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Danh sách kịch bản hội thoại (conversation bank) để người học chọn tình huống.
+// Server chỉ trả phần công khai: vai, tình huống, mục tiêu, từ khóa, câu mở đầu.
+// Không trả turn_exemplars/repair_moves vì đó là chỉ thị dành cho model.
+export async function getConversationScenarios(level) {
+  const query = level ? `?level=${encodeURIComponent(level)}` : '';
+  return request(`/api/speech/scenarios${query}`);
 }
 
 // --- AI phân tích dữ liệu học tổng hợp (on-demand) ---

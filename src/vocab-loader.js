@@ -2,6 +2,7 @@
 // VOCAB-LOADER — Hợp nhất data.js + vocab-bank + mega-vocab
 // Có xử lý lỗi, fallback nếu generator fail
 // ============================================================
+import { getWords } from './api-core';
 
 let cachedAllCards = null;
 // Guard in-flight: hai lời gọi loadAllFlashcards() đồng thời (vd nhiều component
@@ -66,6 +67,9 @@ function mapBackendWord(w) {
     exampleVi: examples[0]?.vi || '',
     breakdown: w.radical ? [{ radical: w.radical, meaning: '' }] : [],
     mnemonic: w.component_hint || '',
+    // Cặp dễ nhầm do pipeline enrichment sinh (confusable_words_json). DB dev có
+    // thể chưa enrich => rỗng; ConfusablePairs tự suy cặp khi thiếu.
+    confusables: Array.isArray(w.confusable_words) ? w.confusable_words.filter(Boolean) : [],
   };
 }
 
@@ -73,7 +77,6 @@ function mapBackendWord(w) {
 // backend lỗi/ngủ (Render cold start) hoặc trả rỗng thì degrade sạch về file JS
 // local để app vẫn dùng offline được.
 async function loadFromBackend() {
-  const { getWords } = await import('./api-core');
   const data = await getWords();
   const words = data?.words || [];
   const cards = words.map(mapBackendWord).filter(isReliableCard);

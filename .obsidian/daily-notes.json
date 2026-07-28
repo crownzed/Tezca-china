@@ -1,0 +1,6 @@
+{
+  "folder": "Tezca-Vault/journal",
+  "format": "YYYY-MM-DD",
+  "template": "Tezca-Vault/templates/Daily note.md",
+  "autorun": false
+}

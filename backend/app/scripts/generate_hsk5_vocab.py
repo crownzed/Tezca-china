@@ -1,14 +1,11 @@
-"""Generate HSK 5 vocabulary using DeepSeek v4 Flash API.
+"""Generate HSK 5 vocabulary using the configured LLM relay.
 
 Creates words with pinyin, meaning, POS, and example sentences.
 Then seeds them into the database and generates questions.
 """
 from __future__ import annotations
 
-import json
 import time
-import urllib.request
-import urllib.error
 from pathlib import Path
 
 import sys
@@ -16,35 +13,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.db import SessionLocal
 from app.models import Example, Word
+from app.services.llm_generator_service import _call_api
 from app.settings import settings
 
-API_URL = "https://api.ai-box.vn/v1/chat/completions"
 BATCH_SIZE = 30  # words per API call
 TOTAL_TARGET = 300  # target HSK 5 words
 
 
 def _call_llm(prompt: str) -> dict:
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {settings.deepseek_api_key}"
-    }
-    data = {
-        "model": "deepseek-v4-flash",
-        "messages": [
-            {"role": "system", "content": "You are a Chinese language expert. Output ONLY valid JSON, no markdown."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.8,
-        "max_tokens": 8000,
-        "response_format": {"type": "json_object"}
-    }
-    req = urllib.request.Request(API_URL, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
-        content = result["choices"][0]["message"]["content"].strip()
-        if content.startswith("```"): content = content.split("\n", 1)[1]
-        if content.endswith("```"): content = content[:-3]
-        return json.loads(content)
+    # Dùng chung _call_api (relay vilao.ai) thay vì gọi thẳng ai-box/DeepSeek:
+    # provider đó đã bị bỏ khỏi cấu hình, và _call_api lo sẵn xoay vòng key,
+    # retry, bóc markdown fence.
+    return _call_api(prompt)
 
 
 def generate_hsk5_batch(offset: int, count: int = BATCH_SIZE) -> list[dict]:
@@ -134,8 +114,8 @@ def import_words_into_db(words: list[dict]) -> int:
 
 
 def main():
-    if not settings.deepseek_api_key:
-        print("ERROR: DEEPSEEK_API_KEY not set")
+    if not settings.llm_keys_list:
+        print("ERROR: GEMINI_API_KEYS not set")
         return
 
     db = SessionLocal()

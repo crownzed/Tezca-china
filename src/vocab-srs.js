@@ -42,6 +42,7 @@ function emptyRecord() {
     word_id: null,
     hanzi: '',
     pinyin: '',
+    meaning: '',
     level: 0,
     seen: 0,
     correct: 0,
@@ -51,6 +52,7 @@ function emptyRecord() {
     repetition: 0,
     lapses: 0,
     mastery: 0,
+    starred: false,
     lastReviewAt: null,
     nextReviewAt: null,
   };
@@ -137,6 +139,7 @@ export function recordWordReview(word, { correct, confidence = null, latencyMs =
   record.word_id = word.word_id ?? word.id ?? record.word_id;
   record.hanzi = word.hanzi || word.character || record.hanzi;
   record.pinyin = word.pinyin || record.pinyin;
+  record.meaning = word.meaning_vi || word.meaning || record.meaning;
   record.level = Number(word.level ?? word.hskLevel ?? record.level) || 0;
   record.seen += 1;
   record.correct += correct ? 1 : 0;
@@ -177,4 +180,46 @@ export function getSrsSummary() {
     studied: records.length,
     dueCount,
   };
+}
+
+// --- Starred (từ đã đánh dấu ★) ---
+// Đánh dấu nằm CHUNG record SRS (không tách store riêng) để một từ chỉ có một
+// nguồn sự thật. Đánh dấu một từ chưa từng ôn vẫn tạo record (seen=0) — chỉ để
+// ghim, không đụng lịch ôn. Lưu meaning/pinyin kèm theo để trang starred hiển
+// thị được mà không phải nạp lại kho từ.
+export function setStarred(word, starred = true) {
+  const key = wordKeyOf(word);
+  if (!key) return false;
+
+  const store = readVocabSrs();
+  const record = store[key] ? { ...emptyRecord(), ...store[key] } : emptyRecord();
+  record.word_id = word.word_id ?? word.id ?? record.word_id;
+  record.hanzi = word.hanzi || word.character || record.hanzi;
+  record.pinyin = word.pinyin || record.pinyin;
+  record.meaning = word.meaning_vi || word.meaning || record.meaning;
+  record.level = Number(word.level ?? word.hskLevel ?? record.level) || 0;
+  record.starred = Boolean(starred);
+
+  store[key] = record;
+  writeVocabSrs(store);
+  return record.starred;
+}
+
+// Đảo trạng thái ★, trả về trạng thái mới.
+export function toggleStarred(word) {
+  return setStarred(word, !isStarred(word));
+}
+
+export function isStarred(word) {
+  const key = wordKeyOf(word);
+  if (!key) return false;
+  return Boolean(readVocabSrs()[key]?.starred);
+}
+
+// Danh sách từ đã ★, mới đánh dấu gần nhất không đảm bảo thứ tự (object key
+// order) — sort theo hanzi cho ổn định.
+export function getStarredWords() {
+  return Object.values(readVocabSrs())
+    .filter(record => record.starred)
+    .sort((a, b) => String(a.hanzi).localeCompare(String(b.hanzi)));
 }

@@ -1,0 +1,987 @@
+/* ==========================================================================
+   BÊN TRONG PHIÊN HỌC (câu hỏi + kết quả) - scope '.qz'
+   --------------------------------------------------------------------------
+   Nạp SAU overhaul.css nên thắng cả thứ tự cascade; thêm '.qz' ở tổ tiên để
+   thắng specificity, và vẫn cần !important vì overhaul.css đánh !important lên
+   đúng những class này. Không đổi tên class -> logic quiz/SRS không phải sửa.
+
+   Quy ước hình khối (giữ 1 hệ, không trộn):
+     - thẻ lớn:        12px
+     - nút / ô chọn:   10px
+     - chip tròn:      999px (chỉ dùng cho thanh tiến độ)
+   ========================================================================== */
+
+:root{
+  --qz-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --qz-hair: color-mix(in srgb, var(--modern-zen-text, #232B2E) 11%, transparent);
+  --qz-hair-soft: color-mix(in srgb, var(--modern-zen-text, #232B2E) 6%, transparent);
+  --qz-ink: var(--modern-zen-text, #232B2E);
+  --qz-muted: color-mix(in srgb, var(--modern-zen-text, #232B2E) 58%, transparent);
+  --qz-dim: color-mix(in srgb, var(--modern-zen-text, #232B2E) 42%, transparent);
+  --qz-surface: var(--modern-zen-card, #FFFDFA);
+  --qz-accent: var(--jade, #1F8A70);
+  --qz-accent-soft: color-mix(in srgb, var(--jade, #1F8A70) 9%, transparent);
+  --qz-warn: var(--cinabar, #C2402F);
+  --qz-warn-soft: color-mix(in srgb, var(--cinabar, #C2402F) 9%, transparent);
+  --qz-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root[data-theme='dark']{
+  --qz-hair: rgba(255, 255, 255, 0.13);
+  --qz-hair-soft: rgba(255, 255, 255, 0.07);
+  --qz-muted: rgba(255, 255, 255, 0.62);
+  --qz-dim: rgba(255, 255, 255, 0.44);
+}
+
+/* --------------------------------------------------------------- vỏ thẻ --- */
+/* Bỏ shadow 48px + padding 40px của overhaul: đường kẻ 1px đủ tách khỏi nền,
+   đỡ cảm giác "thẻ nổi trong thẻ" khi bên trong còn feedback-panel. */
+.qz.question-card,
+.qz.result-card{
+  max-width: 900px !important;
+  width: 100%;
+  padding: 26px 28px 24px !important;
+  border: 1px solid var(--qz-hair) !important;
+  border-radius: 12px !important;
+  background-color: var(--qz-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  display: flex;
+  flex-direction: column;
+  gap: 20px !important;
+}
+
+.qz.result-card{
+  min-height: 0 !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+}
+
+/* ------------------------------------------------------- dòng trên cùng --- */
+.qz .question-topline{
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-start !important;
+  margin: 0 !important;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--qz-hair-soft);
+  font-size: 0.78rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: none !important;
+  color: var(--qz-muted) !important;
+}
+
+/* Số thứ tự khoá ở cuối hàng. Đẩy bằng margin-left trên chính phần tử số, không
+   phải margin-right trên span: GrammarLab không có span trong topline, còn
+   typing-card lại có hai span. */
+.qz .question-topline strong,
+.qz .question-topline .card-progress{
+  margin-left: auto;
+}
+
+/* Số câu là dữ liệu thật -> mono + tabular-nums để cột số không nhảy khi
+   sang câu 10, thay vì vòng tròn vàng 38px chiếm chỗ. */
+.qz .question-topline strong{
+  display: inline !important;
+  width: auto !important;
+  aspect-ratio: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  color: var(--qz-ink) !important;
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* GrammarLab dùng '.grammar-back', các phiên khác dùng '.quiz-back': cùng vai
+   trò nút thoát nên gộp một rule để tông màu không lệch giữa các tab. */
+.qz .quiz-back,
+.qz .grammar-back{
+  order: -1;
+  color: var(--qz-muted) !important;
+  transition: color 160ms var(--qz-ease);
+}
+
+.qz .quiz-back:hover,
+.qz .grammar-back:hover{
+  color: var(--qz-accent) !important;
+  background: none !important;
+  transform: none !important;
+}
+
+/* Nhãn cấp độ trong topline: chữ thường như nhãn dạng bài, không phải huy hiệu. */
+.qz .question-topline .hsk-badge,
+.qz .question-topline .grammar-level-badge{
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  color: var(--qz-muted) !important;
+  font-size: 0.78rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
+}
+
+.qz .question-topline .card-progress{
+  color: var(--qz-ink) !important;
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+/* ---------------------------------------------------------- tiến độ ------- */
+.qz .quiz-progress{
+  height: 3px !important;
+  margin: -12px 0 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  background: var(--qz-hair-soft) !important;
+}
+
+.qz .quiz-progress span{
+  display: block;
+  height: 100%;
+  border-radius: inherit !important;
+  background: var(--qz-accent) !important;
+  transition: width 420ms var(--qz-ease) !important;
+}
+
+.qz .quiz-strategy-strip{
+  gap: 10px;
+  margin: 0;
+  color: var(--qz-dim);
+  font-size: 0.74rem;
+}
+
+.qz .quiz-strategy-strip small{
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------- đề bài ----- */
+.qz.question-card h2,
+.qz.learning-question-card h2{
+  margin: 6px 0 2px !important;
+  font-size: clamp(1.6rem, 4.4vw, 2rem) !important;
+  font-weight: 700 !important;
+  line-height: 1.28 !important;
+  letter-spacing: -0.01em;
+  color: var(--qz-ink) !important;
+}
+
+.qz.learning-question-card h2.cloze-prompt{
+  font-size: clamp(1.2rem, 3.4vw, 1.42rem) !important;
+  line-height: 1.72 !important;
+  margin: 4px 0 !important;
+}
+
+.qz.learning-question-card h2.prompt--passage,
+.qz.learning-question-card h2.cloze-prompt--passage{
+  font-size: 1.08rem !important;
+  font-weight: 500 !important;
+  line-height: 1.86 !important;
+  letter-spacing: 0;
+  text-align: left !important;
+  margin: 0 !important;
+  padding: 16px 18px;
+  border: 1px solid var(--qz-hair-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--qz-ink) 2.5%, transparent);
+}
+
+.qz .reading-stem{
+  margin: 2px 0 0 !important;
+  padding-top: 16px !important;
+  border-top: 1px solid var(--qz-hair-soft) !important;
+  font-size: 1.1rem !important;
+}
+
+.qz .repair-notice{
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--qz-hair);
+  border-radius: 10px;
+  background: none;
+  color: var(--qz-muted);
+  font-size: 0.82rem;
+}
+
+/* ---------------------------------------------------------- đáp án -------- */
+.qz .option-grid{
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+  margin: 0 !important;
+}
+
+.qz .option-grid button{
+  min-height: 0 !important;
+  padding: 14px 16px !important;
+  border: 1px solid var(--qz-hair) !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: var(--qz-ink) !important;
+  font-size: 1.02rem !important;
+  font-weight: 550 !important;
+  text-align: left !important;
+  gap: 14px !important;
+  transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease),
+              opacity 170ms var(--qz-ease), transform 120ms var(--qz-ease) !important;
+}
+
+/* Chữ cái A/B/C/D: ô vuông mono nhỏ, không phải huy hiệu tròn nền vàng. */
+.qz .option-grid button > span:not(.clickable-text){
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px;
+  border: 1px solid var(--qz-hair) !important;
+  border-radius: 6px !important;
+  background: none !important;
+  color: var(--qz-dim) !important;
+  font-family: var(--qz-mono);
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+  transition: color 170ms var(--qz-ease), border-color 170ms var(--qz-ease),
+              background 170ms var(--qz-ease) !important;
+}
+
+.qz .option-grid button:hover:not(:disabled){
+  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent) !important;
+  background: var(--qz-accent-soft) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.qz .option-grid button:active:not(:disabled){
+  transform: translateY(1px) !important;
+}
+
+.qz .option-grid button.selected{
+  border-color: var(--qz-accent) !important;
+  background: var(--qz-accent-soft) !important;
+  transform: none !important;
+}
+
+.qz .option-grid button.selected > span:not(.clickable-text){
+  border-color: var(--qz-accent) !important;
+  background: var(--qz-accent) !important;
+  color: #fff !important;
+}
+
+.qz .option-grid button.option-correct{
+  border-color: var(--qz-accent) !important;
+  background: var(--qz-accent-soft) !important;
+}
+
+.qz .option-grid button.option-correct > span:not(.clickable-text){
+  border-color: var(--qz-accent) !important;
+  color: var(--qz-accent) !important;
+}
+
+.qz .option-grid button.option-wrong{
+  border-color: var(--qz-warn) !important;
+  background: var(--qz-warn-soft) !important;
+}
+
+.qz .option-grid button.option-wrong > span:not(.clickable-text){
+  border-color: var(--qz-warn) !important;
+  color: var(--qz-warn) !important;
+}
+
+.qz .option-grid button.muted-option{
+  opacity: 0.4 !important;
+}
+
+/* ------------------------------------------------------- mức tự tin ------- */
+.qz .confidence-panel{
+  gap: 12px;
+  margin: 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--qz-hair-soft);
+  border-radius: 0;
+  background: none;
+}
+
+.qz .confidence-panel p,
+.qz .confidence-label{
+  margin: 0 0 12px;
+  color: var(--qz-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.qz .confidence-grid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.qz .confidence-grid button{
+  padding: 12px 10px;
+  border: 1px solid var(--qz-hair);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--qz-ink);
+  transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease);
+}
+
+.qz .confidence-grid button:hover{
+  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent);
+  background: var(--qz-accent-soft);
+  transform: none;
+}
+
+.qz .confidence-grid button strong{
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.02rem;
+  color: var(--qz-ink);
+}
+
+.qz .confidence-grid button span{
+  color: var(--qz-muted);
+  font-size: 0.76rem;
+}
+
+.qz .confidence-grid button small{
+  color: var(--qz-dim);
+  font-size: 0.7rem;
+}
+
+/* -------------------------------------------------------- phản hồi ------- */
+.qz .feedback-panel{
+  gap: 12px;
+  margin: 0;
+  padding: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--qz-hair-soft);
+  border-radius: 0;
+  background: none !important;
+}
+
+.qz .feedback-panel--correct .feedback-head,
+.qz .feedback-panel--wrong .feedback-head{
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.qz .feedback-panel--correct .feedback-head svg,
+.qz .feedback-panel--correct .feedback-head strong{
+  color: var(--qz-accent);
+}
+
+.qz .feedback-panel--wrong .feedback-head svg,
+.qz .feedback-panel--wrong .feedback-head strong{
+  color: var(--qz-warn);
+}
+
+.qz .feedback-head{
+  gap: 10px;
+  align-items: center;
+}
+
+.qz .feedback-head strong{
+  font-size: 0.95rem;
+}
+
+.qz .feedback-head span{
+  margin-left: auto;
+  color: var(--qz-dim);
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.qz .feedback-panel p{
+  margin: 0;
+  color: var(--qz-muted);
+  font-size: 0.94rem;
+  line-height: var(--line-readable, 1.62);
+}
+
+.qz .feedback-panel small{
+  color: var(--qz-dim);
+  font-size: 0.82rem;
+}
+
+.qz .feedback-error-tag{
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--qz-hair);
+  border-radius: 10px;
+  background: none;
+}
+
+.qz .feedback-panel button.btn-primary{
+  align-self: flex-start;
+  margin-top: 2px;
+  box-shadow: none !important;
+}
+
+/* --------------------------------------------------------- kết quả ------- */
+/* Con số lớn dùng mono tabular-nums: đây là số liệu thật của phiên học. */
+.qz .result-summary{
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.qz .result-summary strong{
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(2.6rem, 8vw, 3.4rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--qz-ink);
+}
+
+.qz .result-summary span{
+  color: var(--qz-muted);
+  font-size: 0.84rem;
+  font-weight: 550;
+}
+
+.qz .result-narrative{
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Kẻ giữa các dòng, không kẻ trên/dưới cả khối -> tránh 'bảng spec' nhiều gạch. */
+.qz .result-narrative li{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--qz-hair-soft);
+  background: none;
+  color: var(--qz-muted);
+  font-size: 0.9rem;
+  line-height: var(--line-readable, 1.62);
+}
+
+.qz .result-narrative li:first-child{
+  border-top: 0;
+  padding-top: 0;
+}
+
+.qz .result-narrative li svg{
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--qz-dim);
+}
+
+.qz .result-narrative strong{
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--qz-ink);
+}
+
+.qz .session-result-grid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--qz-hair-soft);
+  border-radius: 0;
+}
+
+/* Ô số liệu tách nhau bằng khe 1px, không bọc mỗi ô thành một thẻ riêng. */
+.qz .session-result-grid span{
+  display: grid;
+  gap: 4px;
+  padding: 14px 14px 14px 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--qz-surface);
+  text-align: left;
+}
+
+.qz .session-result-grid span + span{
+  padding-left: 14px;
+}
+
+.qz .session-result-grid svg{
+  display: none;
+}
+
+.qz .session-result-grid strong{
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.24rem;
+  font-weight: 600;
+  color: var(--qz-ink);
+}
+
+.qz .session-result-grid small{
+  color: var(--qz-dim);
+  font-size: 0.72rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.qz .result-actions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--qz-hair-soft);
+}
+
+.qz .core-eyebrow{
+  color: var(--qz-dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}
+
+/* --------------------------------------------------- danh sách xem lại --- */
+/* '.result-review' là section em của thẻ '.qz', bên trong chỉ có '.review-item'
+   nên không lồng '.qz' vào đây được. */
+.result-review .review-item{
+  box-shadow: none !important;
+}
+
+/* ------------------------------------------------- thẻ gõ từ (typing) ---- */
+/* Hai thẻ luyện dưới đây trước đó nằm ngoài '.qz' nên vẫn còn shadow + nhấc
+   hover của index.css, lệch tông với thẻ kết quả. Kéo vào cùng hệ. */
+.qz.typing-card,
+.qz.pair-drill-card{
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 26px 28px 24px;
+  border: 1px solid var(--qz-hair);
+  border-radius: 12px;
+  background: var(--qz-surface);
+  box-shadow: none;
+  gap: 20px;
+}
+
+.qz.pair-drill-card{
+  max-width: 620px;
+}
+
+/* Thẻ luyện không nhấc lên khi hover: con trỏ đang ở ô nhập, thẻ nhảy là nhiễu. */
+.qz.typing-card:hover{
+  transform: none;
+  box-shadow: none;
+}
+
+/* Thanh tiến độ riêng của hai thẻ này (class khác '.quiz-progress'). */
+.qz .progress-bar-container{
+  height: 3px;
+  margin-top: -12px;
+  border-radius: 999px;
+  background: var(--qz-hair-soft);
+}
+
+.qz .progress-bar-fill{
+  border-radius: inherit;
+  background: var(--qz-accent);
+  transition: width 420ms var(--qz-ease);
+}
+
+.qz .card-progress{
+  color: var(--qz-ink);
+  font-family: var(--qz-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.qz .hsk-badge{
+  color: var(--qz-muted);
+}
+
+/* Khối đề bài: bỏ viền gạch nối + nền sheen, canh trái theo phần còn lại. */
+.qz .prompt-container{
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.qz .eyebrow-label{
+  margin-bottom: 6px;
+  color: var(--qz-dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}
+
+.qz .meaning-prompt{
+  font-size: clamp(1.6rem, 4.4vw, 2rem);
+  line-height: 1.28;
+  color: var(--qz-ink);
+}
+
+.qz .typing-input{
+  border-width: 1px;
+  border-color: var(--qz-hair);
+  border-radius: 10px;
+  background: transparent;
+  transition: border-color 170ms var(--qz-ease), box-shadow 170ms var(--qz-ease);
+}
+
+.qz .typing-input:focus{
+  border-color: var(--qz-accent);
+}
+
+.qz .btn-submit-ans{
+  border-radius: 10px;
+}
+
+.qz .typing-card-actions .action-btn,
+.qz .typing-card-actions .next-btn{
+  border-radius: 10px;
+}
+
+/* --------------------------------------------- thẻ cặp từ dễ nhầm ------- */
+.qz .pair-drill-sentence{
+  color: var(--qz-ink);
+}
+
+.qz .pair-drill-vi{
+  color: var(--qz-muted);
+}
+
+.qz .pair-drill-options{
+  gap: 8px;
+}
+
+.qz .pair-drill-option{
+  border: 1px solid var(--qz-hair);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--qz-ink);
+  transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease),
+              transform 120ms var(--qz-ease);
+}
+
+.qz .pair-drill-option:hover:not(:disabled){
+  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent);
+  background: var(--qz-accent-soft);
+  transform: none;
+}
+
+.qz .pair-drill-option:active:not(:disabled){
+  transform: translateY(1px);
+}
+
+.qz .pair-drill-option.option-correct{
+  border-color: var(--qz-accent);
+  background: var(--qz-accent-soft);
+  color: var(--qz-accent);
+}
+
+.qz .pair-drill-option.option-wrong{
+  border-color: var(--qz-warn);
+  background: var(--qz-warn-soft);
+  color: var(--qz-warn);
+}
+
+/* Cùng quy ước với feedback-panel: kẻ 1px phía trên, không bọc thành thẻ con. */
+.qz .pair-drill-feedback{
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--qz-hair-soft);
+  border-radius: 0;
+  background: none;
+  gap: 10px;
+}
+
+.qz .pair-drill-feedback p{
+  margin: 0;
+  color: var(--qz-muted);
+  font-size: 0.94rem;
+  line-height: var(--line-readable, 1.62);
+}
+
+.qz .pair-drill-feedback .btn-primary{
+  align-self: flex-start;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.qz .pair-drill-feedback.is-correct strong{
+  color: var(--qz-accent);
+}
+
+.qz .pair-drill-feedback.is-wrong strong{
+  color: var(--qz-warn);
+}
+
+/* ------------------------------------------ thẻ luyện tầng chữ Hán ------ */
+/* Cùng phiên học với '.question-card' (chung topline + quiz-progress) nhưng
+   trước đó ở ngoài '.qz' nên vẫn giữ nền vàng + ô số liệu bọc thẻ. */
+.qz.chinese-practice-card{
+  max-width: 900px;
+  padding: 26px 28px 24px;
+  border: 1px solid var(--qz-hair);
+  border-radius: 12px;
+  background: var(--qz-surface);
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Chữ Hán lớn là nội dung chính, không cần khung vàng bọc quanh: đổi sang
+   nền trung tính + kẻ mảnh, để màu vàng dành cho chỗ thật sự cần nhấn. */
+.qz .hanzi-hero{
+  min-height: 148px;
+  border: 1px solid var(--qz-hair-soft);
+  border-radius: 12px;
+  color: var(--qz-ink);
+  background: color-mix(in srgb, var(--qz-ink) 2.5%, transparent);
+  font-size: clamp(3.6rem, 9vw, 6rem);
+}
+
+.qz .character-card-body{
+  gap: 22px;
+  align-items: start;
+}
+
+.qz .character-card-body h2,
+.qz .practice-stack h2{
+  font-size: clamp(1.5rem, 4vw, 1.9rem);
+  line-height: 1.24;
+  color: var(--qz-ink);
+}
+
+.qz .character-card-body p,
+.qz .practice-stack p{
+  color: var(--qz-muted);
+  line-height: var(--line-readable, 1.62);
+}
+
+/* Ô dữ liệu: tách nhau bằng khe 1px thay vì mỗi ô một thẻ có nền riêng,
+   cùng quy ước với '.session-result-grid'. */
+.qz .metadata-strip{
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--qz-hair-soft);
+  border-radius: 12px;
+  background: var(--qz-hair-soft);
+  overflow: hidden;
+}
+
+.qz .metadata-strip span{
+  flex: 1 1 118px;
+  min-height: 54px;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--qz-surface);
+}
+
+.qz .metadata-strip strong{
+  color: var(--qz-ink);
+  font-family: var(--qz-mono);
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.qz .metadata-strip small{
+  color: var(--qz-dim);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+/* Bốn tone là lựa chọn, dùng chung ngôn ngữ với '.option-grid button'. */
+.qz .tone-option-grid{
+  gap: 8px;
+}
+
+.qz .tone-option-grid button{
+  min-height: 58px;
+  border: 1px solid var(--qz-hair);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--qz-ink);
+  font-family: var(--qz-mono);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease),
+              transform 120ms var(--qz-ease);
+}
+
+.qz .tone-option-grid button:hover:not(:disabled){
+  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent);
+  background: var(--qz-accent-soft);
+  transform: none;
+}
+
+.qz .tone-option-grid button:active:not(:disabled){
+  transform: translateY(1px);
+}
+
+.qz .practice-input,
+.qz .practice-textarea{
+  border-color: var(--qz-hair);
+  border-radius: 10px;
+  background: transparent;
+  transition: border-color 170ms var(--qz-ease);
+}
+
+.qz .practice-input:focus,
+.qz .practice-textarea:focus{
+  border-color: var(--qz-accent);
+}
+
+.qz .audio-actions{
+  gap: 10px;
+}
+
+/* ------------------------------------------------------ chuyển động ----- */
+/* Vào câu mới: fade + nhấc nhẹ, chỉ transform/opacity. Mục đích là báo
+   "đã sang câu khác", không phải trang trí. */
+@media (prefers-reduced-motion: no-preference){
+  .qz.question-card,
+  .qz.chinese-practice-card{
+    animation: qzEnter 300ms var(--qz-ease) both;
+  }
+
+  .qz .option-grid button{
+    animation: qzEnter 260ms var(--qz-ease) both;
+    animation-delay: calc(var(--qz-i, 0) * 40ms);
+  }
+
+  .qz .option-grid button:nth-child(1){ --qz-i: 1; }
+  .qz .option-grid button:nth-child(2){ --qz-i: 2; }
+  .qz .option-grid button:nth-child(3){ --qz-i: 3; }
+  .qz .option-grid button:nth-child(4){ --qz-i: 4; }
+
+  .qz .feedback-panel,
+  .qz .confidence-panel{
+    animation: qzEnter 240ms var(--qz-ease) both;
+  }
+}
+
+@keyframes qzEnter{
+  from{
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .qz.question-card,
+  .qz.chinese-practice-card,
+  .qz .option-grid button,
+  .qz .tone-option-grid button,
+  .qz .feedback-panel,
+  .qz .confidence-panel{
+    animation: none !important;
+  }
+
+  .qz .quiz-progress span{
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------- mobile ------- */
+@media (max-width: 768px){
+  .qz.question-card,
+  .qz.result-card{
+    padding: 18px 16px 20px !important;
+    border-radius: 12px !important;
+    gap: 16px !important;
+  }
+
+  /* 4 ô số liệu không đủ chỗ ở 1 hàng -> 2x2, vẫn giữ khe 1px. */
+  .qz .session-result-grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .qz .session-result-grid span,
+  .qz .session-result-grid span + span{
+    padding: 12px;
+  }
+
+  .qz .confidence-grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .qz .option-grid button{
+    padding: 13px 14px !important;
+    font-size: 0.98rem !important;
+  }
+
+  .qz .question-topline{
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .qz .result-actions .btn-primary,
+  .qz .result-actions .btn-secondary{
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .qz.typing-card,
+  .qz.pair-drill-card{
+    padding: 18px 16px 20px;
+    gap: 16px;
+  }
+
+  /* Ô nhập và nút Kiểm tra không đủ chỗ cạnh nhau ở màn hẹp. */
+  .qz .input-row{
+    flex-direction: column;
+  }
+
+  .qz .btn-submit-ans{
+    width: 100%;
+    padding: 12px 20px;
+  }
+
+  .qz .pair-drill-options{
+    grid-template-columns: 1fr;
+  }
+
+  .qz.chinese-practice-card{
+    padding: 18px 16px 20px;
+    gap: 16px;
+  }
+
+  /* Chữ Hán 132px + phần chú giải không vừa 1 hàng ở màn hẹp -> xếp dọc. */
+  .qz .character-card-body{
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .qz .hanzi-hero{
+    min-height: 116px;
+  }
+
+  /* 4 tone cạnh nhau còn ~70px mỗi ô, chạm tay dễ sai -> 2x2. */
+  .qz .tone-option-grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

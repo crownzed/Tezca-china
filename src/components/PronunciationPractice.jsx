@@ -3,11 +3,17 @@ import { Headphones, Mic, Square, RotateCcw, X, Volume2 } from 'lucide-react';
 import { getPracticeSentence, scorePronunciation } from '../api-core';
 import { speak, speakFeedback, stopSpeech } from '../speech.jsx';
 import { isRecordingSupported, startRecording } from '../speech-ai.js';
-import LevelButton from './Pronunciation/LevelButton.jsx';
 import Waveform from './Pronunciation/Waveform.jsx';
 import ScoreRing from './Pronunciation/ScoreRing.jsx';
+import HskLevelPicker from './HskLevelPicker.jsx';
+import { ALL_LEVELS, normalizeLevels, effectiveLevels } from '../hsk-levels.js';
 
-const LEVELS = [1, 2, 3, 4, 5, 6];
+// Mỗi câu luyện phát âm chỉ thuộc MỘT cấp (backend trả một câu/level). Khi người
+// dùng chọn nhiều cấp, mỗi lần tải câu ta rút NGẪU NHIÊN một cấp trong tập đã chọn.
+function pickLevel(levels) {
+  const pool = effectiveLevels(levels);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 // Gộp phản hồi âm học (DSP) + gợi ý sửa lỗi thành một câu để đọc lên.
 function feedbackSpeech(result) {
@@ -17,11 +23,9 @@ function feedbackSpeech(result) {
 // Feature 1 — Pronunciation practice (shadowing + scoring).
 // Flow: AI plays a model reading via the existing speak() TTS, the user records
 // a repeat, and Gemini transcribes it while pinyin_scorer scores deterministically.
-export default function PronunciationPractice({ focusLevel = 1 }) {
-  const [level, setLevel] = useState(() => {
-    const n = Number(focusLevel);
-    return n >= 1 && n <= 6 ? n : 1;
-  });
+export default function PronunciationPractice({ focusLevels }) {
+  // levels = MẢNG cấp đã chọn. Rỗng => tất cả (pickLevel xử lý).
+  const [levels, setLevels] = useState(() => normalizeLevels(focusLevels));
   const [target, setTarget] = useState(null);
   const [loading, setLoading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -42,7 +46,7 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
       setResult(null);
       stopSpeech();
       try {
-        const data = await getPracticeSentence(level);
+        const data = await getPracticeSentence(pickLevel(levels));
         if (active) setTarget(data);
       } catch (e) {
         if (active) {
@@ -55,7 +59,7 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
     };
     run();
     return () => { active = false; stopSpeech(); };
-  }, [level, reloadKey]);
+  }, [levels, reloadKey]);
 
   const playModel = useCallback(() => {
     if (!target?.hanzi) return;
@@ -113,17 +117,18 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
       <div className="pron-head">
         <h3>Luyện phát âm</h3>
         <p className="pron-sub">Nghe câu mẫu, lặp lại, AI chấm điểm âm và thanh điệu.</p>
-        <div className="pron-levels">
-          {LEVELS.map((lvl) => (
-            <LevelButton
-              key={lvl}
-              level={lvl}
-              active={lvl === level}
-              disabled={recording || scoring}
-              onClick={() => setLevel(lvl)}
-            />
-          ))}
-        </div>
+        <HskLevelPicker
+          value={levels}
+          onChange={setLevels}
+          levels={ALL_LEVELS}
+          variant="card"
+          showAll
+          allowEmpty
+          disabled={recording || scoring}
+          className="pron-levels"
+          buttonClassName="level-button"
+          ariaLabel="Chọn cấp HSK luyện phát âm"
+        />
       </div>
 
       {loading ? (
@@ -193,7 +198,7 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
               </div>
 
               <div className="pron-result-body">
-                <p className="pron-line"><b>Bạn đọc:</b> {result.actual_hanzi || '—'} <i>{result.actual_pinyin}</i></p>
+                <p className="pron-line"><b>Bạn đọc:</b> {result.actual_hanzi || '-'} <i>{result.actual_pinyin}</i></p>
                 <p className="pron-line"><b>Mục tiêu:</b> {result.target_hanzi} <i>{result.target_pinyin}</i></p>
                 {(result.detailed_feedback || result.tip) && (
                   <div className="pron-tip-block">
@@ -230,7 +235,7 @@ export default function PronunciationPractice({ focusLevel = 1 }) {
                       {result.tone_syllables.map((ts, i) => (
                         <li key={`ts${i}`} className={ts.ok ? 'pron-syl--ok' : 'pron-syl--bad'}>
                           Âm tiết {ts.pos + 1} · thanh {ts.tone}: {ts.ok ? 'đạt' : 'cần sửa'}
-                          {ts.feedback ? ` — ${ts.feedback}` : ''}
+                          {ts.feedback ? `: ${ts.feedback}` : ''}
                         </li>
                       ))}
                     </ul>

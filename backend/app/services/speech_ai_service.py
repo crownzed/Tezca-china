@@ -24,6 +24,7 @@ import urllib.error
 import urllib.request
 
 from ..settings import settings
+from .conversation_bank_service import get_conversation_bank
 from .pinyin_scorer import _extract_tone, score_pinyin
 from .tone_dsp_service import ToneDspError, score_tones
 
@@ -336,11 +337,23 @@ def _pronunciation_tip(
 # Feature 2 — turn-based voice chat
 # ---------------------------------------------------------------------------
 
-def voice_chat(audio_b64: str, mime_type: str, history: list[dict]) -> dict:
+def voice_chat(
+    audio_b64: str,
+    mime_type: str,
+    history: list[dict],
+    scenario_id: str = "",
+    hsk_level: int = 0,
+) -> dict:
     """Hear the user's utterance and produce a spoken-style reply.
 
-    Returns {user_text, reply_cn, reply_vi}. The client speaks reply_cn via the
-    existing speak() TTS.
+    Returns {user_text, reply_cn, reply_vi, scenario_id}. The client speaks
+    reply_cn via the existing speak() TTS.
+
+    Vai và tình huống lấy từ ``conversation_bank_service``: prompt chung ("bạn
+    luyện hội thoại thân thiện") khiến model nói giọng sách giáo khoa — mỗi lượt
+    một câu hỏi mới, không phản hồi nội dung vừa nghe. Kịch bản cấp vai, few-shot
+    nhịp đối đáp, và nước đi cứu hội thoại. Khi không tra được kịch bản nào
+    (bank rỗng / id lạ), rơi về prompt chung để tính năng không chết.
     """
     history_lines = []
     for turn in history[-6:]:  # keep prompt bounded
@@ -350,10 +363,26 @@ def voice_chat(audio_b64: str, mime_type: str, history: list[dict]) -> dict:
             history_lines.append(f"{role}: {content}")
     history_block = "\n".join(history_lines) if history_lines else "(chưa có)"
 
+    bank = get_conversation_bank()
+    scenario = bank.get(scenario_id) if scenario_id else None
+    if scenario is None and hsk_level:
+        scenario = bank.pick(hsk_level)
+
+    if scenario is not None:
+        role_block = bank.system_prompt(scenario)
+        resolved_id = str(scenario.get("id", ""))
+    else:
+        role_block = (
+            "Bạn là bạn luyện hội thoại tiếng Trung thân thiện. Trả lời tự nhiên "
+            "bằng tiếng Trung, đơn giản, phù hợp trình độ sơ-trung cấp (HSK 1-4). "
+            "Phản hồi đúng nội dung người học vừa nói, không đổi chủ đề, không "
+            "sửa lỗi ngữ pháp và không giảng bài."
+        )
+        resolved_id = ""
+
     prompt = (
-        "Bạn là bạn luyện hội thoại tiếng Trung thân thiện. Hãy NGHE đoạn ghi âm "
-        "của người học và trả lời tự nhiên bằng tiếng Trung, đơn giản, phù hợp "
-        "trình độ sơ-trung cấp (HSK 1-4).\n"
+        f"{role_block}\n\n"
+        "Hãy NGHE đoạn ghi âm của người học và đáp lại đúng vai.\n"
         f"Lịch sử hội thoại gần đây:\n{history_block}\n\n"
         "Trả về JSON THUẦN (không markdown):\n"
         '{\n'
@@ -373,4 +402,5 @@ def voice_chat(audio_b64: str, mime_type: str, history: list[dict]) -> dict:
         "user_text": str(data.get("user_text", "")).strip(),
         "reply_cn": str(data.get("reply_cn", "")).strip(),
         "reply_vi": str(data.get("reply_vi", "")).strip(),
+        "scenario_id": resolved_id,
     }

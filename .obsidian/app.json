@@ -1,0 +1,19 @@
+{
+  "userIgnoreFilters": [
+    "node_modules/",
+    "dist/",
+    ".git/",
+    ".github/",
+    ".vercel/",
+    ".vs/",
+    ".pytest_cache/",
+    "backend/.venv/",
+    "node_modules",
+    "packages/"
+  ],
+  "attachmentFolderPath": "Tezca-Vault/attachments",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "Tezca-Vault",
+  "alwaysUpdateLinks": true,
+  "showUnsupportedFiles": true
+}

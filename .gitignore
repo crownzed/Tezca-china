@@ -49,3 +49,18 @@ backend/fly.secrets
 # Local pipeline artifacts + large media
 backend/data/
 public/grok-video.mp4
+
+# Agent tooling: chứa token thật (ANTHROPIC_AUTH_TOKEN / API_KEY) -> không commit
+.claude/settings.local.json
+.claude/worktrees/
+.codex/
+.mcp.json
+
+# DB backup cục bộ (~20MB, *.db không bắt được hậu tố .bak-*)
+backend/dev.db.bak-*
+
+# Scratch / báo cáo tạm
+eslint-report.tmp.json
+pairtest.mjs
+backend/t_nonce.py
+backend/quiz-bank-upgrade.log

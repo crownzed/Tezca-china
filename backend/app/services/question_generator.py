@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from ..models import Example, Question, QuizType, Word
 from .distractor_policy import order_distractors_by_stage
+from .exam_passage_service import (
+    QUESTION_SUBTYPE_GUIDED_CLOZE,
+    QUESTION_SUBTYPE_READING_COMP,
+    get_exam_passage_bank,
+)
 from .template_engine import get_template_engine
 from .viet_distractor import get_vietnamese_aware_distractors
 
@@ -24,6 +29,9 @@ QUESTION_SUBTYPE_KEYWORD = "keyword"
 QUESTION_SUBTYPE_DRAG_DROP = "drag_drop"
 QUESTION_SUBTYPE_VOICE = "voice"
 
+# Các dạng có ngân hàng đoạn văn chuẩn đề thi (选词填空 / 阅读理解) viết tay.
+_EXAM_BANK_TYPES = frozenset({QuizType.cloze, QuizType.reading})
+
 # Giới hạn độ dài đoạn đọc (số ký tự CJK) theo cấp HSK. Đoạn vượt mức bị
 # thay bằng câu ví dụ đơn (đúng cấp) để tránh sinh đoạn quá dài so với chuẩn
 # cấp độ — HSK1/2 chỉ đọc câu ngắn, cấp cao mới đọc đoạn dài.
@@ -32,6 +40,41 @@ _PARAGRAPH_CJK_CAP_BY_LEVEL = {1: 16, 2: 30, 3: 60, 4: 100, 5: 150, 6: 200}
 
 def _count_cjk(text: str) -> int:
     return len(re.findall(f"[{_CJK_RANGE}]", text or ""))
+
+
+def _valid_question_payload(
+    quiz_type: QuizType,
+    prompt: str,
+    options: list[str],
+    correct_index: int,
+    explanation: str,
+    metadata: dict,
+) -> bool:
+    """Cổng QA cuối trước khi ghi bank.
+
+    Template/LLM đều phải đi qua cùng một contract: 4 lựa chọn khác nhau,
+    đáp án hợp lệ, prompt có nội dung và dạng đặc biệt có metadata cần thiết.
+    Điều này ngăn dữ liệu lỗi lọt vào DB khi nguồn ví dụ hoặc template thiếu.
+    """
+    if not isinstance(prompt, str) or len(prompt.strip()) < 5:
+        return False
+    if not isinstance(explanation, str) or len(explanation.strip()) < 3:
+        return False
+    if not isinstance(options, list) or len(options) != 4:
+        return False
+    cleaned = [str(item).strip() for item in options]
+    if any(not item for item in cleaned) or len(set(cleaned)) != 4:
+        return False
+    if not isinstance(correct_index, int) or not 0 <= correct_index < 4:
+        return False
+    if quiz_type == QuizType.cloze and "____" not in prompt:
+        return False
+    if quiz_type == QuizType.drag_drop:
+        segments = metadata.get("segments") or []
+        order = metadata.get("correct_order") or []
+        if len(segments) < 2 or len(order) < 2:
+            return False
+    return True
 
 
 def _pos_filtered_pool(word: Word, pool: list[Word], quiz_type: QuizType) -> list[Word]:
@@ -93,6 +136,22 @@ def _primary_subtype(quiz_type: QuizType) -> str:
     return QUESTION_SUBTYPE_SIMPLE
 
 
+def _accepted_subtypes(quiz_type: QuizType) -> set[str]:
+    """Các subtype được coi là "đúng dạng" khi đọc lại bank đã có.
+
+    cloze/reading giờ có hai nguồn: ngân hàng đoạn văn chuẩn đề thi
+    (``guided_cloze``/``reading_comp_mc``) và template per-word cũ. Cả hai đều
+    hợp lệ nên bộ lọc phải nhận cả tập, nếu không mỗi lượt sinh sẽ tưởng bank
+    trống và tạo thêm row per-word trùng lặp.
+    """
+    accepted = {_primary_subtype(quiz_type)}
+    if quiz_type == QuizType.cloze:
+        accepted.add(QUESTION_SUBTYPE_GUIDED_CLOZE)
+    if quiz_type == QuizType.reading:
+        accepted.add(QUESTION_SUBTYPE_READING_COMP)
+    return accepted
+
+
 class QuestionGeneratorService:
     def __init__(self, db: Session):
         self.db = db
@@ -132,6 +191,11 @@ class QuestionGeneratorService:
         return cached
 
     def ensure_questions(self, level: int, quiz_type: QuizType, limit: int) -> list[Question]:
+        # cloze/reading: nạp ngân hàng đoạn văn chuẩn đề thi trước. Đây là dữ
+        # liệu viết tay nên luôn ưu tiên hơn template per-word; template chỉ lấp
+        # phần còn thiếu khi bank chưa đủ ``limit``.
+        self._seed_exam_bank(level, quiz_type)
+
         existing = self._existing_questions(level, quiz_type, limit)
         if len(existing) >= limit:
             return existing[:limit]
@@ -154,18 +218,80 @@ class QuestionGeneratorService:
         self.db.commit()
         return existing[:limit]
 
+    def _seed_exam_bank(self, level: int, quiz_type: QuizType) -> int:
+        """Ghi các câu từ ngân hàng đoạn văn chuẩn đề thi vào DB (idempotent).
+
+        Chỉ áp dụng cho cloze/reading. Trả về số row MỚI thêm.
+
+        Các row này không gắn với từ nào nên ``word_id`` để NULL — hợp lệ vì cột
+        nullable. Hệ quả: ``UniqueConstraint(word_id, quiz_type, prompt)`` KHÔNG
+        chặn trùng (NULL không so sánh bằng nhau trong SQL), nên phải tự dedup ở
+        Python theo prompt trước khi insert.
+        """
+        if quiz_type not in _EXAM_BANK_TYPES:
+            return 0
+
+        bank = get_exam_passage_bank()
+        payloads = bank.items(quiz_type.value, level)
+        if not payloads:
+            return 0
+
+        existing_prompts = set(
+            self.db.scalars(
+                select(Question.prompt).where(
+                    Question.level == level,
+                    Question.quiz_type == quiz_type,
+                    Question.word_id.is_(None),
+                )
+            ).all()
+        )
+
+        added = 0
+        for payload in payloads:
+            prompt = payload["prompt"]
+            if prompt in existing_prompts:
+                continue
+            if not _valid_question_payload(
+                quiz_type,
+                prompt,
+                payload["options"],
+                payload["correct_index"],
+                payload["explanation"],
+                payload["metadata_json"],
+            ):
+                continue
+            self.db.add(
+                Question(
+                    word_id=None,
+                    level=level,
+                    quiz_type=quiz_type,
+                    prompt=prompt,
+                    options=payload["options"],
+                    correct_index=payload["correct_index"],
+                    explanation=payload["explanation"],
+                    audio_text=payload.get("audio_text"),
+                    metadata_json=payload["metadata_json"],
+                )
+            )
+            existing_prompts.add(prompt)
+            added += 1
+
+        if added:
+            self.db.commit()
+        return added
+
     def _existing_questions(self, level: int, quiz_type: QuizType, limit: int) -> list[Question]:
         """Lấy câu hỏi đã có, dùng ``question_subtype`` trong metadata_json để lọc.
 
         Các câu hỏi cũ (chưa có ``question_subtype``) được giữ lại để tránh
         tái sinh trùng lặp — chỉ lọc khi metadata đã có subtype rõ ràng.
         """
-        desired_subtype = _primary_subtype(quiz_type)
+        accepted = _accepted_subtypes(quiz_type)
         query = select(Question).where(Question.level == level, Question.quiz_type == quiz_type)
         all_existing = self.db.scalars(query.limit(limit * 4)).all()
         return [
             q for q in all_existing
-            if (q.metadata_json or {}).get("question_subtype") in (None, desired_subtype)
+            if (q.metadata_json or {}).get("question_subtype") in (None, *accepted)
         ]
 
     def _question_subtype(self, quiz_type: QuizType, prompt: str | None) -> str:
@@ -243,6 +369,19 @@ class QuestionGeneratorService:
         if len(options) < 4:
             return None
 
+        extra_metadata = self._extra_metadata(word, quiz_type, seed)
+        metadata = {
+            "source": "generated",
+            "option_word_ids": option_word_ids,
+            "question_subtype": self._question_subtype(quiz_type, prompt),
+            **extra_metadata,
+        }
+        if not _valid_question_payload(
+            quiz_type, prompt, options, correct_index,
+            self._explanation_for(word, quiz_type, seed), metadata,
+        ):
+            return None
+
         question = Question(
             word_id=word.id,
             level=level,
@@ -252,12 +391,7 @@ class QuestionGeneratorService:
             correct_index=correct_index,
             explanation=self._explanation_for(word, quiz_type, seed),
             audio_text=audio_text,
-            metadata_json={
-                "source": "generated",
-                "option_word_ids": option_word_ids,
-                "question_subtype": self._question_subtype(quiz_type, prompt),
-                **self._extra_metadata(word, quiz_type, seed),
-            },
+            metadata_json=metadata,
         )
         self.db.add(question)
         self.db.flush()

@@ -12,6 +12,15 @@ on:
       - 'backend/app/services/question_generator.py'
       - 'backend/app/services/template_engine.py'
       - 'backend/app/scripts/**'
+      # Cổng dữ liệu nằm ở hai chỗ này: sửa luật mà không sửa data thì vẫn phải
+      # chạy lại, nếu không luật mới không bao giờ được kiểm trên CI.
+      - 'backend/tests/**'
+      - 'scripts/validate-*.mjs'
+      # Cổng validate cũng là mã: sửa luật mà không sửa data thì vẫn phải chạy lại.
+      - 'backend/tests/test_conversation_bank.py'
+      - 'backend/tests/test_exam_passages.py'
+      - 'scripts/validate-conversation-bank.mjs'
+      - 'scripts/validate-exam-passages.mjs'
   workflow_dispatch:
 
 jobs:
@@ -33,6 +42,19 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pypinyin
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Cổng dữ liệu tất định: không cần DB, không gọi LLM. Chạy TRƯỚC QA vì QA
+      # tự skip khi không có DB (secret trống), còn lỗi trong các bank JSON thì
+      # phải chặn ngay. Cùng bộ luật với tests/test_conversation_bank.py.
+      - name: Validate content banks
+        run: |
+          node scripts/validate-conversation-bank.mjs
+          node scripts/validate-exam-passages.mjs
+          cd backend && python -m pytest tests/test_conversation_bank.py tests/test_exam_passages.py -q
+
       - name: Run Content QA
         id: qa
         env:
@@ -42,7 +64,6 @@ jobs:
           # Secret rỗng -> fallback sqlite để không ghi đè default bằng "" (create_engine("") crash).
           # Khi chưa có secret: sqlite rỗng -> guard db_is_ready() bắt -> exit 0. Có secret prod -> QA chạy thật.
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'sqlite:///./dev.db' }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python backend/app/scripts/cron_qa_runner.py
 

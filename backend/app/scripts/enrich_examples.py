@@ -23,8 +23,8 @@ from app.settings import settings
 
 
 def main() -> None:
-    if not settings.deepseek_api_key and not settings.gemini_keys_list:
-        print("ERROR: chưa cấu hình DEEPSEEK_API_KEY hoặc GEMINI_API_KEYS — bỏ qua enrichment.")
+    if not settings.llm_keys_list:
+        print("ERROR: chưa cấu hình GEMINI_API_KEYS — bỏ qua enrichment.")
         return
 
     grand = {"examples_added": 0, "confusables_added": 0, "words_done": 0}

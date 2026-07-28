@@ -13,12 +13,15 @@ from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgres
 from ..schemas import AnswerResult, QuizSubmitRequest, QuizSubmitResponse
 from ..settings import settings
 from .event_service import LearningEventService
+from .exam_passage_service import (
+    QUESTION_SUBTYPE_GUIDED_CLOZE,
+    QUESTION_SUBTYPE_READING_COMP,
+)
 from .item_difficulty import difficulty_fit, is_low_quality
 from .distractor_policy import order_distractors_by_stage
 from .acquisition_service import acquisition_stage
 from .question_generator import (
     QUESTION_SUBTYPE_DIALOGUE,
-    QUESTION_SUBTYPE_KEYWORD,
     QUESTION_SUBTYPE_MEANING,
     QUESTION_SUBTYPE_PARAGRAPH,
     QUESTION_SUBTYPE_SENTENCE,
@@ -37,7 +40,7 @@ _bankfill_inflight: set[tuple[int, str]] = set()
 # schema Question và render được qua option-grid sẵn có. Các dạng khác
 # (listening/dialogue/translation/drag_drop/voice) cần audio_text CN hoặc
 # segments mà output AI không cung cấp → giữ nguyên template-only.
-_AI_MAPPABLE_TYPES = {QuizType.vocab, QuizType.cloze, QuizType.reading}
+_AI_MAPPABLE_TYPES = {QuizType.vocab, QuizType.cloze, QuizType.reading, QuizType.translation}
 # Nguồn đánh dấu câu hỏi AI sinh nền cho luồng luyện tập.
 _AI_PRACTICE_SOURCE = "ai_practice_llm"
 # Trần số câu AI mỗi (level, quiz_type) — chặn chi phí gọi LLM. Blend chỉ cần
@@ -51,8 +54,8 @@ _ai_bankfill_inflight: set[int] = set()
 
 
 def _ai_available() -> bool:
-    """AI khả dụng khi có ít nhất một API key (DeepSeek hoặc Gemini fallback)."""
-    return bool(settings.deepseek_api_key or settings.gemini_keys_list)
+    """AI khả dụng khi relay vilao.ai có ít nhất một key (provider duy nhất)."""
+    return bool(settings.llm_keys_list)
 
 
 def _is_ai_question(question: Question) -> bool:
@@ -63,13 +66,21 @@ def _is_ai_question(question: Question) -> bool:
 def _ai_subtype_for(quiz_type: QuizType) -> str:
     """question_subtype để câu AI lọt qua bộ lọc subtype trong get_quiz.
 
-    cloze phải là SENTENCE (get_quiz lọc cloze theo subtype này); vocab/reading
-    không bị lọc theo subtype nên chỉ cần giá trị hợp lệ để phân loại.
+    cloze/reading: prompt LLM giờ yêu cầu đúng khuôn đề thi (选词填空 /
+    阅读理解) như ngân hàng đoạn văn viết tay, nên gắn cùng subtype với ngân
+    hàng đó. Bộ lọc cloze trong get_quiz nhận cả guided_cloze nên câu AI vẫn
+    được phục vụ. reading không bị lọc theo subtype.
+
+    Lưu ý: câu AI không có ``passage``/``stem`` tách riêng trong metadata nên UI
+    render cả prompt trong một khối — vẫn đọc được vì prompt đã gồm đoạn + câu
+    hỏi, chỉ không tách khung như câu từ ngân hàng.
     """
     if quiz_type == QuizType.cloze:
-        return QUESTION_SUBTYPE_SENTENCE
+        return QUESTION_SUBTYPE_GUIDED_CLOZE
     if quiz_type == QuizType.reading:
-        return QUESTION_SUBTYPE_KEYWORD
+        return QUESTION_SUBTYPE_READING_COMP
+    if quiz_type == QuizType.translation:
+        return QUESTION_SUBTYPE_PARAGRAPH
     return QUESTION_SUBTYPE_MEANING
 
 
@@ -427,7 +438,14 @@ class QuizService:
         if quiz_type == QuizType.translation:
             candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_PARAGRAPH]
         if quiz_type == QuizType.cloze:
-            candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_SENTENCE]
+            # cloze có hai nguồn hợp lệ: đoạn văn chuẩn đề thi (选词填空 —
+            # guided_cloze) và câu đơn per-word cũ (sentence). Lọc chỉ theo
+            # SENTENCE sẽ loại sạch bank đoạn văn nên phải nhận cả hai.
+            candidates = [
+                q for q in candidates
+                if (q.metadata_json or {}).get("question_subtype")
+                in (QUESTION_SUBTYPE_SENTENCE, QUESTION_SUBTYPE_GUIDED_CLOZE)
+            ]
         if not candidates:
             return []
 

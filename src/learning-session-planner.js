@@ -1,6 +1,7 @@
 import { inferBehaviorState } from './behavior-engine';
 import { scopedKey } from './user-scope';
 import { getDueWords } from './vocab-srs';
+import { primaryLevel } from './hsk-levels';
 
 const QUIZ_TYPE_LABELS = {
   vocab: 'Từ vựng',
@@ -96,14 +97,17 @@ function buildMissions({ analytics, stats, mode, weakWords, dueCount, repairCoun
   ];
 }
 
-export function buildTodaySessionPlan({ analytics, stats, focusLevel = 1, modeId = 'standard' }) {
+export function buildTodaySessionPlan({ analytics, stats, focusLevel, focusLevels, modeId = 'standard' }) {
   const selectedMode = modeById(modeId);
   const weakWords = getWeakWords(analytics);
   const answered = analytics?.answered || stats?.answered || 0;
   const weakCount = analytics?.weak_words ?? stats?.weak_words ?? weakWords.length;
   const weakestType = getWeakestType(analytics);
   const recommendation = analytics?.recommendation || {};
-  const targetLevel = Number(recommendation.level || weakWords[0]?.level || focusLevel || 1);
+  // Today-plan chỉ nhắm MỘT cấp để hiển thị + dựng một action quiz. Khi người dùng
+  // chọn nhiều cấp, lấy cấp thấp nhất (học từ dễ lên) làm mục tiêu buổi học.
+  const focusPrimary = primaryLevel(focusLevels ?? focusLevel, 1);
+  const targetLevel = Number(recommendation.level || weakWords[0]?.level || focusPrimary || 1);
   // Số từ đến hạn ôn THẬT từ kho SRS local (per-word next_review_at). Chỉ khi kho
   // còn rỗng (tài khoản cũ đã làm quiz kiểu cũ nhưng chưa có record SRS) mới rơi
   // về proxy suy từ weakWords để không vỡ trải nghiệm buổi đầu.

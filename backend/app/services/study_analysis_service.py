@@ -4,8 +4,7 @@ Gom số liệu học đã có (AnalyticsOut từ router quiz + streak/động l
 ProfileService) rồi nhờ LLM viết nhận xét tổng hợp và lộ trình các bước tiếp
 theo. Chỉ gọi khi khách bấm nút (on-demand), không chạy nền.
 
-Dùng _call_api (llm_generator_service): Gemini primary + DeepSeek fallback, ép
-JSON. Trả về dict {summary, strengths[], weaknesses[], roadmap[]}; nếu LLM fail
+Dùng _call_api (llm_generator_service): relay vilao.ai, xoay vòng key, ép JSON. Trả về dict {summary, strengths[], weaknesses[], roadmap[]}; nếu LLM fail
 hoặc trả JSON méo, raise RuntimeError để router map 502 (giống mẫu speech).
 """
 import json

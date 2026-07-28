@@ -1,5 +1,5 @@
 """
-Grammar Checker — validates Chinese sentences using DeepSeek API.
+Grammar Checker — validates Chinese sentences using the vilao.ai LLM relay.
 
 Features:
   - Grammar correctness check
@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
-import urllib.request
-import urllib.error
 from pathlib import Path
 from typing import TypedDict
+
+from .llm_generator_service import _call_api
+from ..settings import settings
 
 
 class GrammarResult(TypedDict):
@@ -27,9 +27,6 @@ class GrammarResult(TypedDict):
     grammar_issues: list[str]
     confidence: float
 
-
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE = "https://api.ai-box.vn/v1/chat/completions"
 
 _CACHE: dict[str, GrammarResult] = {}
 _CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "grammar_cache.json"
@@ -70,7 +67,7 @@ def check_sentence(
     Returns None if API is unavailable or rate limited.
     Results are cached by sentence content.
     """
-    if not DEEPSEEK_API_KEY:
+    if not settings.llm_keys_list:
         return None
 
     key = _cache_key(sentence_cn)
@@ -87,49 +84,20 @@ Vietnamese: {sentence_vi}
 Reply in JSON only (no markdown):
 {{"grammar_ok": true/false, "translation_ok": "yes"/"partial"/"no", "word_usage_natural": true/false, "grammar_issues": [], "confidence": 0.0-1.0}}"""
 
-    payload = json.dumps({
-        "model": "deepseek-v4-flash",
-        "messages": [
-            {"role": "system", "content": "You are a Chinese grammar validator. Reply ONLY in JSON, no explanation."},
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": 200,
-        "temperature": 0.1,
-    }).encode("utf-8")
-
     try:
-        req = urllib.request.Request(
-            DEEPSEEK_BASE,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            content = result["choices"][0]["message"]["content"].strip()
+        # _call_api lo sẵn xoay vòng key vilao.ai, retry và bóc markdown fence.
+        parsed = _call_api(prompt)
+        if not isinstance(parsed, dict):
+            return None
 
-            # Strip markdown code fences if present
-            if content.startswith("```"):
-                lines = content.split("\n")
-                content = "\n".join(lines[1:])
-                if content.endswith("```"):
-                    content = content[:-3]
+        if use_cache:
+            _CACHE[key] = parsed  # type: ignore[assignment]
+            _save_cache()
 
-            parsed: GrammarResult = json.loads(content)
-
-            if use_cache:
-                _CACHE[key] = parsed
-                _save_cache()
-
-            return parsed
-
-    except urllib.error.HTTPError as e:
-        if e.code == 429:
-            time.sleep(2)
-        return None
+        return parsed  # type: ignore[return-value]
     except Exception:
+        # Giữ contract cũ: mọi lỗi (hết key, timeout, JSON méo) trả None để
+        # caller coi như "api_unavailable" thay vì làm vỡ cả batch.
         return None
 
 

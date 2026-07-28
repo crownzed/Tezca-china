@@ -6,7 +6,10 @@ không hiển thị thẻ thiếu nghĩa; từ đang chờ dịch tự bị lọ
 """
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query
+from pydantic import Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -25,7 +28,12 @@ def _has_meaning():
 
 @router.get("", response_model=WordsOut)
 def list_words(
-    level: int | None = Query(default=None, ge=1, le=6),
+    # Nhận lặp param (?level=1&level=2) để khớp getWords() ở src/api-core.js khi
+    # người học chọn nhiều cấp. Nếu khai báo scalar, Starlette chỉ lấy giá trị
+    # cuối và âm thầm thu hẹp yêu cầu nhiều cấp thành một cấp.
+    # ge/le phải nằm ở PHẦN TỬ (Annotated[int, Field(...)]), không phải ở Query:
+    # đặt trên list sẽ khiến pydantic ném TypeError → 500 thay vì 422.
+    level: list[Annotated[int, Field(ge=1, le=6)]] | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     query = (
@@ -34,8 +42,9 @@ def list_words(
         .options(selectinload(Word.examples))
         .order_by(Word.hsk_level, Word.id)
     )
-    if level is not None:
-        query = query.where(Word.hsk_level == level)
+    levels = sorted({value for value in (level or [])})
+    if levels:
+        query = query.where(Word.hsk_level.in_(levels))
 
     words = db.scalars(query).all()
 
@@ -58,6 +67,7 @@ def list_words(
                 radical=w.character_family or "",
                 component_hint=w.component_hint or "",
                 examples=examples,
+                confusable_words=list(w.confusable_words_json or []),
             )
         )
         key = f"HSK {w.hsk_level}"

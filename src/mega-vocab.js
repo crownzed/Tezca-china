@@ -246,8 +246,11 @@ export function generateMegaVocab(target = 20000) {
   realW.forEach(w => {
     if (!seen.has(w[1])) {
       seen.add(w[1]);
+      // w[0] is the word serial ID (1-600). Map it to actual HSK level:
+      // 1-150 -> HSK 1, 151-300 -> HSK 2, 301-600 -> HSK 3
+      const hskLevel = w[0] <= 150 ? 1 : w[0] <= 300 ? 2 : 3;
       result.push({ id: id++, character: w[1], pinyin: w[2], meaning: w[3],
-        hskLevel: w[0], category: w[4] || 'noun', strokeCount: w[1].length * 3,
+        hskLevel: hskLevel, category: w[4] || 'noun', strokeCount: w[1].length * 3,
         exampleSentence: '', examplePinyin: '', exampleVi: '', breakdown: [], mnemonic: '' });
     }
   });

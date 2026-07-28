@@ -21,7 +21,7 @@ function HanziText({ text }) {
             className={`hanzi-tip${open ? ' is-open' : ''}`}
             tabIndex={0}
             role="button"
-            aria-label={`${char} — ${info.pinyin}: ${info.meaning}`}
+            aria-label={`${char}: ${info.pinyin}: ${info.meaning}`}
             onMouseEnter={() => setActive(i)}
             onMouseLeave={() => setActive((cur) => (cur === i ? null : cur))}
             onFocus={() => setActive(i)}

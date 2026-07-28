@@ -1,36 +1,23 @@
-"""Fill HSK 4 vocabulary to 600 words using DeepSeek v4 Pro."""
-import sys, json, time, urllib.request
+"""Fill HSK 4 vocabulary to 600 words — gọi LLM qua relay vilao.ai."""
+import sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.db import SessionLocal
 from app.models import Word
-from app.settings import settings
+from app.services.llm_generator_service import _call_api
 from sqlalchemy import func, select
-
-API = "https://api.ai-box.vn/v1/chat/completions"
-KEY = settings.deepseek_api_key
-H = {"Content-Type": "application/json", "Authorization": f"Bearer {KEY}"}
 
 
 def ask(prompt):
-    d = {"model": "deepseek-v4-pro", "messages": [
-        {"role": "system", "content": "Output ONLY valid JSON, no markdown."},
-        {"role": "user", "content": prompt}
-    ], "temperature": 0.3, "max_tokens": 4000}
-    for _ in range(3):
-        try:
-            req = urllib.request.Request(API, data=json.dumps(d).encode(), headers=H, method="POST")
-            with urllib.request.urlopen(req, timeout=90) as r:
-                c = json.loads(r.read())["choices"][0]["message"]["content"].strip()
-                if c.startswith("```"):
-                    c = c.split("\n", 1)[1]
-                if c.endswith("```"):
-                    c = c[:-3]
-                return json.loads(c)
-        except Exception as e:
-            time.sleep(2)
-    return {}
+    # _call_api (relay vilao.ai) lo xoay vòng key + retry + bóc markdown fence.
+    # Trước đây script tự gọi ai-box/DeepSeek; provider đó đã bị bỏ khỏi cấu hình.
+    try:
+        return _call_api(prompt)
+    except Exception as e:
+        print(f"  LLM fail: {str(e)[:120]}")
+        time.sleep(2)
+        return {}
 
 
 def main():

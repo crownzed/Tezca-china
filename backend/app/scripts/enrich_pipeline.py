@@ -42,8 +42,8 @@ def _log(msg: str) -> None:
 
 
 def main() -> None:
-    if not settings.gemini_keys_list and not settings.deepseek_api_key:
-        _log("ERROR: chưa cấu hình GEMINI_API_KEYS/DEEPSEEK_API_KEY — thoát.")
+    if not settings.llm_keys_list:
+        _log("ERROR: chưa cấu hình GEMINI_API_KEYS — thoát.")
         return
 
     _LOG_DIR.mkdir(parents=True, exist_ok=True)

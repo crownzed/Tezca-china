@@ -17,16 +17,46 @@ class Settings(BaseSettings):
     )
     turso_database_url: str = ""
     turso_auth_token: str = ""
-    deepseek_api_key: str = ""
+
+    # Provider LLM sinh câu hỏi/enrichment: DUY NHẤT relay vilao.ai. OpenAI và
+    # DeepSeek đã bị bỏ — key OpenAI chưa bao giờ được cấu hình nên luôn bị skip,
+    # còn ai-box.vn/DeepSeek trả 403 insufficient_user_quota, mỗi lần fail chỉ
+    # tốn thêm round-trip vô ích.
+    # Không ghi secret vào repo; các giá trị này chỉ đọc từ environment.
+    # Nhiều key comma-separated: _call_api xoay vòng khi một key cạn quota.
+    gemini_api_keys: str = ""
+    gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
+    # Relay tự chọn model thật (response trả model="gemini-default"), nên giá trị
+    # này chỉ là khai báo mong muốn phía client.
+    gemini_model: str = "ram/gemini-3.5-flash-low"
+    llm_max_tokens: int = 24000
+
+    # Override provider LLM mà không cần sửa code: cả ba biến dưới đây, khi đặt,
+    # thắng các giá trị ``gemini_*`` ở trên (xem property ``llm_*_effective``).
+    # Mọi relay đang dùng đều là OpenAI-compatible ``/chat/completions`` nên đổi
+    # provider chỉ là đổi 3 biến môi trường:
+    #   LLM_API_URL=https://<host>/v1/chat/completions
+    #   LLM_API_KEYS=<key1,key2>
+    #   LLM_MODEL=<tên model>
+    # URL chỉ có gốc (kết thúc bằng /v1) sẽ tự được nối "/chat/completions".
+    llm_api_url: str = ""
+    llm_api_keys: str = ""
+    llm_model: str = ""
+    # json_object mode: chỉ bật khi relay hỗ trợ response_format. Relay vilao
+    # không hỗ trợ nên mặc định tắt và JSON được ép bằng system prompt.
+    llm_json_mode: bool = False
+    # Ngân sách reasoning ("low"/"medium"/"high"). Model reasoning đốt phần lớn
+    # thời gian vào chain-of-thought: đo trên gilotex/grok-4.5 cùng một prompt,
+    # mặc định tốn 103s/4360 reasoning token, còn effort=low chỉ 13s/250 token và
+    # vẫn finish_reason=stop. Gateway cắt ở ~121s nên bundle đầy đủ chỉ chạy nổi
+    # khi hạ effort. Để rỗng = không gửi tham số (relay vilao không nhận).
+    llm_reasoning_effort: str = ""
 
     # Single-admin credentials. Không hardcode: đọc từ env. Khi cả hai còn rỗng,
     # dependency require_admin trả 503 "admin not configured". password_hash phải
     # là bcrypt hash (cùng thư viện passlib[bcrypt] mà auth_service dùng).
     admin_email: str = ""
     admin_password_hash: str = ""
-    gemini_api_keys: str = ""  # comma-separated fallback keys for vilao.ai
-    gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
-    gemini_model: str = "ram/gemini-3.5-flash-low"
 
     # Google Gemini TTS. Dùng chung GEMINI_NATIVE_API_KEYS với speech (xem dưới);
     # chỉ giữ model + voice ở đây.
@@ -67,7 +97,14 @@ class Settings(BaseSettings):
     # Thời hạn token đặt lại mật khẩu (phút).
     password_reset_expire_minutes: int = 30
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # extra="ignore": biến môi trường không khớp field nào thì BỎ QUA thay vì
+    # ném ValidationError. Mặc định của pydantic-settings là "forbid", nên khi bỏ
+    # một field (vd DEEPSEEK_API_KEY/OPENAI_API_KEY) mà .env hoặc secret store của
+    # môi trường triển khai vẫn còn dòng cũ thì app không khởi động nổi — hỏng cả
+    # service chỉ vì một biến đã hết dùng.
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     @property
     def smtp_from_addr(self) -> str:
@@ -103,6 +140,30 @@ class Settings(BaseSettings):
     @property
     def gemini_keys_list(self) -> list[str]:
         return [k.strip() for k in self.gemini_api_keys.split(",") if k.strip()]
+
+    @property
+    def llm_api_url_effective(self) -> str:
+        """URL /chat/completions đang dùng — LLM_API_URL thắng nếu được đặt.
+
+        Nhận cả URL gốc (``.../v1``) và URL đầy đủ: chỉ nối hậu tố khi thiếu, nên
+        đặt biến kiểu nào cũng chạy.
+        """
+        url = self.llm_api_url.strip().rstrip("/")
+        if not url:
+            return self.gemini_api_url
+        if url.endswith("/chat/completions"):
+            return url
+        return f"{url}/chat/completions"
+
+    @property
+    def llm_keys_list(self) -> list[str]:
+        """Key đang dùng. LLM_API_KEYS thắng; không đặt thì rơi về GEMINI_API_KEYS."""
+        keys = [k.strip() for k in self.llm_api_keys.split(",") if k.strip()]
+        return keys or self.gemini_keys_list
+
+    @property
+    def llm_model_effective(self) -> str:
+        return self.llm_model.strip() or self.gemini_model
 
     @property
     def gemini_native_keys_list(self) -> list[str]:

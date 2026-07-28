@@ -121,6 +121,10 @@ export async function preloadAudioIndex() {
   return audioIndex;
 }
 
+// CJK Unified Ideographs (basic + ext A + compatibility) — đồng bộ với
+// _CJK_RE ở backend/app/services/llm_generator_service.py.
+const HAS_CJK_RE = /[一-鿿㐀-䶿豈-﫿]/;
+
 export function resolveQuestionAudioText(question) {
   if (!question) return '';
   const direct = String(question.audio_text || '').trim();
@@ -130,7 +134,11 @@ export function resolveQuestionAudioText(question) {
     const explanation = String(question.explanation || '').trim();
     if (explanation) {
       const cn = explanation.split(' · ')[0]?.trim();
-      if (cn) return cn;
+      // Chỉ nhận khi tiền tố THẬT là tiếng Trung. Câu template lưu explanation
+      // dạng "câu CN · nghĩa VI" nên tiền tố là hanzi; câu AI (source
+      // ai_practice_llm / ai_bank_upgrade_llm) lưu giải thích thuần tiếng Việt
+      // và audio_text rỗng — không lọc thì TTS đọc tiếng Việt bằng giọng Trung.
+      if (cn && HAS_CJK_RE.test(cn)) return cn;
     }
   }
   // vocab/cloze (và các dạng có từ mục tiêu) không lưu audio_text: đọc chữ Hán
@@ -300,6 +308,31 @@ export function speak(text, rate = 0.82, onDone) {
   });
 
   return src;
+}
+
+// Đọc câu tiếng Trung qua ElevenLabs (/tts?no_gemini=1, giọng đa ngôn ngữ mặc
+// định). Dùng cho Voice Chat: Gemini nghe + sinh câu trả lời, ElevenLabs đọc.
+// Nếu ElevenLabs lỗi/hết quota (429), fallback sang Gemini TTS -> browser TTS
+// qua playOnlineTts để câu trả lời luôn được phát.
+export function speakEleven(text, rate = 0.9, onDone) {
+  const clean = normalizeForTts(String(text || '').trim());
+  if (!clean) { onDone?.(false); return; }
+  unlockSpeech();
+  const runId = ++speechRunId;
+  stopActiveAudio();
+  if (hasSpeechSupport()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+
+  const url = `${TTS_API_BASE}/tts?text=${encodeURIComponent(clean)}&no_gemini=1`;
+  tryPlayUrl(url, rate, runId, (success) => {
+    if (runId !== speechRunId) return;
+    onDone?.(success);
+  }, () => {
+    if (runId !== speechRunId) return;
+    playOnlineTts(clean, rate, runId, (success) => {
+      if (runId !== speechRunId) return;
+      onDone?.(success);
+    });
+  });
 }
 
 // Đọc phản hồi tiếng Việt qua ElevenLabs (/tts/feedback). Tách khỏi speak():

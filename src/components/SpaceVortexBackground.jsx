@@ -13,6 +13,27 @@ function detectPerfTier() {
   return 'high';
 }
 
+// Đọc prefers-reduced-motion ngay lúc dựng state để lần render đầu đã đúng.
+// Guard typeof cho môi trường không có window (SSR / test).
+function prefersReducedMotion() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// Thông số từng lớp sao, chỉ mục = layer 0..3. Gộp thành bảng thay vì chuỗi
+// if/else gán lại biến: mỗi lớp luôn ghi đè cả 3 giá trị nên phần khởi tạo ban
+// đầu là code chết.
+const STAR_LAYERS = [
+  // Deep stars — bluish tint
+  { speed: () => 0.01 + Math.random() * 0.03, size: () => 0.4 + Math.random() * 0.6, color: 'rgba(150, 180, 255, ' },
+  // Mid stars — purplish tint
+  { speed: () => 0.04 + Math.random() * 0.06, size: () => 0.8 + Math.random() * 0.8, color: 'rgba(220, 200, 255, ' },
+  // Close stars / vortex drivers
+  { speed: () => 0.08 + Math.random() * 0.12, size: () => 1.4 + Math.random() * 1.0, color: 'rgba(255, 255, 255, ' },
+  // Cosmic dust — cyan/teal glow, drifting
+  { speed: () => 0.02 + Math.random() * 0.05, size: () => 1.5 + Math.random() * 1.5, color: 'rgba(0, 210, 255, ' },
+];
+
 // Per-tier knobs. Everything visual reads from here so tuning stays in one place.
 const TIER_CONFIG = {
   low:  { starCount: 140, bloom: false, twinkle: false, video: false, coreBloom: false },
@@ -24,7 +45,10 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
   const canvasRef = useRef(null);
   const requestRef = useRef(null);
   const lastTimeRef = useRef(0);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  // Đọc prefers-reduced-motion ngay trong lazy init thay vì setState trong
+  // effect: tránh render lần đầu bằng giá trị sai rồi render lại (cascading
+  // render). Effect bên dưới chỉ còn việc lắng nghe thay đổi.
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [perfTier] = useState(detectPerfTier);
   const videoRef = useRef(null);
 
@@ -45,10 +69,10 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
   }, [active, reducedMotion]);
 
 
-  // Monitor prefers-reduced-motion
+  // Monitor prefers-reduced-motion. Giá trị ban đầu đã lấy ở lazy init nên
+  // effect chỉ đăng ký lắng nghe thay đổi.
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReducedMotion(mediaQuery.matches);
 
     const handleQueryChange = (e) => {
       setReducedMotion(e.matches);
@@ -176,31 +200,10 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
       
       const layer = Math.floor(Math.random() * 4); // 0, 1, 2, 3
       
-      let baseSpeed = 0.05 + Math.random() * 0.15;
-      let size = 0.5 + Math.random() * 1.2;
-      let color = 'rgba(255, 255, 255, '; // base color
-      
-      if (layer === 0) {
-        // Deep stars
-        baseSpeed = 0.01 + Math.random() * 0.03;
-        size = 0.4 + Math.random() * 0.6;
-        color = 'rgba(150, 180, 255, '; // bluish tint
-      } else if (layer === 1) {
-        // Mid stars
-        baseSpeed = 0.04 + Math.random() * 0.06;
-        size = 0.8 + Math.random() * 0.8;
-        color = 'rgba(220, 200, 255, '; // purplish tint
-      } else if (layer === 2) {
-        // Close stars / Vortex drivers
-        baseSpeed = 0.08 + Math.random() * 0.12;
-        size = 1.4 + Math.random() * 1.0;
-        color = 'rgba(255, 255, 255, ';
-      } else {
-        // Cosmic dust (drifting, different behavior)
-        baseSpeed = 0.02 + Math.random() * 0.05;
-        size = 1.5 + Math.random() * 1.5;
-        color = 'rgba(0, 210, 255, '; // Cyan/Teal glow
-      }
+      const style = STAR_LAYERS[layer];
+      const baseSpeed = style.speed();
+      const size = style.size();
+      const color = style.color;
 
       return {
         angle,

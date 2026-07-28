@@ -2,9 +2,16 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './overhaul.css'
+// Nạp SAU overhaul.css: dashboard dùng namespace `dash-` riêng nên không cần
+// đấu !important với các rule cũ, chỉ cần nằm cuối cascade.
+import './dashboard.css'
+import './shell.css'
+// Nạp cuối: quiz.css chỉ ăn trong phạm vi .qz nên không đụng tới các trang khác.
+import './quiz.css'
 import App from './App.jsx'
 import { AuthProvider } from './auth-context.jsx'
-import { AuthGate, ResetPasswordPage } from './auth-ui.jsx'
+import { ResetPasswordPage } from './auth-ui.jsx'
+import LandingGate from './landing-gate.jsx'
 import AdminApp from './admin-ui.jsx'
 import { warmUpBackend } from './api-core.js'
 
@@ -39,9 +46,9 @@ createRoot(document.getElementById('root')).render(
         {isResetRoute ? (
           <ResetPasswordPage />
         ) : (
-          <AuthGate>
+          <LandingGate>
             <App />
-          </AuthGate>
+          </LandingGate>
         )}
       </AuthProvider>
     )}

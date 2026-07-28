@@ -5,6 +5,8 @@ import {
   draftQuizFromTopic,
 } from '../api-core';
 import { Loader2, Sparkles, CheckCircle2, ListChecks, FileText, Tags, Play } from 'lucide-react';
+import HskLevelPicker from './HskLevelPicker.jsx';
+import { primaryLevel } from '../hsk-levels.js';
 
 // Ba nguồn dữ liệu của hub tạo bài tập.
 const SOURCES = [
@@ -57,7 +59,9 @@ export default function CustomVocabInput({ onSessionCreated }) {
   const [vocabText, setVocabText] = useState('');
   const [topic, setTopic] = useState('');
   const [passage, setPassage] = useState('');
-  const [hskLevel, setHskLevel] = useState(1);
+  // hskLevels = MẢNG cấp đã chọn. Độ khó AI cần MỘT giá trị nên khi tạo bài lấy
+  // cấp thấp nhất (primaryLevel). Mặc định [1].
+  const [hskLevels, setHskLevels] = useState([1]);
   const [count, setCount] = useState(5);
   const [selectedTypes, setSelectedTypes] = useState(QUESTION_TYPES.map(t => t.id));
 
@@ -109,7 +113,7 @@ export default function CustomVocabInput({ onSessionCreated }) {
       }
       action = () => draftQuizFromTopic({
         topic: t,
-        hsk_level: hskLevel,
+        hsk_level: primaryLevel(hskLevels),
         count,
         question_types: selectedTypes,
       });
@@ -125,7 +129,7 @@ export default function CustomVocabInput({ onSessionCreated }) {
       }
       action = () => draftQuizFromPassage({
         text,
-        hsk_level: hskLevel,
+        hsk_level: primaryLevel(hskLevels),
         count,
         question_types: selectedTypes,
       });
@@ -168,7 +172,7 @@ export default function CustomVocabInput({ onSessionCreated }) {
       <section className="core-card core-section-head">
         <span className="core-eyebrow">Trung tâm tạo bài tập</span>
         <h1>Tự tạo Quiz</h1>
-        <p>Chọn nguồn dữ liệu, tùy chỉnh tham số rồi để AI sinh bài trắc nghiệm. Xem trước rồi làm ngay — phiên chạy trực tiếp, không lưu.</p>
+        <p>Chọn nguồn dữ liệu, tùy chỉnh tham số rồi để AI sinh bài trắc nghiệm. Xem trước rồi làm ngay: phiên chạy trực tiếp, không lưu.</p>
       </section>
 
       {/* Bước 1: Chọn nguồn dữ liệu */}
@@ -270,14 +274,19 @@ export default function CustomVocabInput({ onSessionCreated }) {
         <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600 }}>Độ khó</label>
-            <select
-              value={hskLevel}
-              onChange={(e) => setHskLevel(Number(e.target.value))}
+            <HskLevelPicker
+              value={hskLevels}
+              onChange={setHskLevels}
+              levels={HSK_LEVELS}
+              variant="chip"
               disabled={loading || source === 'vocab'}
-              style={selectStyle}
-            >
-              {HSK_LEVELS.map(l => <option key={l} value={l}>HSK {l}</option>)}
-            </select>
+              className="vocab-hsk-tabs"
+              buttonClassName=""
+              ariaLabel="Chọn cấp HSK cho bài AI tạo"
+            />
+            <small style={{ display: 'block', marginTop: '0.4rem', color: 'var(--muted, #888)' }}>
+              AI viết bài theo cấp thấp nhất đã chọn (HSK {primaryLevel(hskLevels)}).
+            </small>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600 }}>Số lượng câu hỏi</label>
