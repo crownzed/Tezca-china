@@ -122,6 +122,27 @@
   --fs-h1: clamp(2.1rem, 5.2vw, 3.56rem);
   --fs-hanzi: clamp(2.6rem, 7vw, 3.56rem);
 
+  /* --- Chiều dọc: leading và tracking theo cỡ chữ -----------------------
+     Leading không phải một con số cho cả trang. Chữ càng lớn thì khoảng
+     dòng tương đối càng phải NHỎ, vì bản thân chiều cao chữ đã đủ tách hai
+     dòng; giữ 1.6 cho tiêu đề lớn thì các dòng rời ra thành từng câu lẻ.
+     Ngược lại chữ nhỏ cần nhiều khoảng thở để mắt bắt được đầu dòng sau.
+     Bản cũ có 1.08 cho h1 và 1.1 cho hanzi/số liệu — cả hai đều là "tiêu đề
+     lớn", lệch 0.02 thì không ai thấy, chỉ là hai lần chọn tay khác nhau.
+     Gộp về ba bậc, mỗi bậc ứng một dải cỡ chữ:
+       --leading-tight  cho >= 2rem (h1, hanzi, số liệu)
+       --leading-snug   cho tiêu đề vừa (h2)
+       --line-readable  cho chữ thân (1.62, token của app trong index.css)
+     Tracking cũng đi theo cỡ: font hiển thị ở cỡ lớn có khoảng chữ mặc định
+     hơi rộng, siết lại thì chữ thành một khối; cỡ nhỏ và chữ in hoa nhỏ thì
+     phải nới ra mới đọc được. Bản cũ siết h1 -0.02em, h2 -0.015em nhưng
+     BỎ SÓT số liệu 2.37rem — cỡ lớn thứ hai trên trang mà không siết. */
+  --leading-tight: 1.09;
+  --leading-snug: 1.18;
+  --tracking-display: -0.02em;
+  --tracking-title: -0.015em;
+  --tracking-label: 0.03em;
+
   /* --- Thang khoảng cách: bội số của 4px --------------------------------
      Bản cũ dùng gần như mọi số nguyên từ 4 đến 22px (4,5,6,7,8,9,10,11,12,
      14,16,18,20,22) — cùng một kiểu chọn theo cảm giác như thang chữ, và hệ
@@ -276,7 +297,7 @@
   /* Tràn ngang ra ngoài khung nhìn: mắt không bao giờ thấy cạnh trái/phải nên
      lớp đệm đọc như một dải bụi tối của thiên hà, không phải cái hộp. Bản cũ
      dùng inset nhỏ + border-radius + blur(18px) -> ra đúng một vệt chữ nhật
-     mờ, đó là chỗ trông rẻ tiền. .landing đã có overflow-x: hidden nên tràn
+     mờ, đó là chỗ trông rẻ tiền. .landing đã có overflow-x: clip nên tràn
      ngang không sinh thanh cuộn. */
   inset: -56px -50vw;
   z-index: -1;
@@ -489,7 +510,6 @@
   font-size: var(--fs-md);
   color: var(--text);
   text-decoration: none;
-  letter-spacing: 0.01em;
 }
 
 .landing-brand img {
@@ -575,7 +595,7 @@
   color: var(--muted);
   font-size: var(--fs-2xs);
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-label);
 }
 
 /* Tiêu đề là chữ đặc một màu. Gradient cũ chạy trắng -> mint -> vàng ngang
@@ -585,8 +605,14 @@
 .landing-hero__copy h1 {
   margin: 0 0 var(--sp-4);
   font-size: var(--fs-h1);
-  line-height: 1.08;
-  letter-spacing: -0.02em;
+  line-height: var(--leading-tight);
+  /* !important là BẮT BUỘC ở mọi khai báo letter-spacing của tiêu đề trên
+     trang này. overhaul.css có `h1, h2, h3 { letter-spacing: -0.01em
+     !important }` — rule bare-tag, specificity 0,0,1, nhưng vì mang
+     !important nên nó thắng cả .landing-hero__copy h1. Không có !important
+     thì token tracking ở trên tính ra rồi bị bỏ, mọi tiêu đề đều nhận
+     -0.01em bất kể cỡ chữ, tức cỡ càng lớn càng thiếu siết. */
+  letter-spacing: var(--tracking-display) !important;
   font-weight: 800;
   color: var(--text);
 }
@@ -795,7 +821,7 @@
   margin: 0;
   font-family: var(--font-cn);
   font-size: var(--fs-hanzi);
-  line-height: 1.1;
+  line-height: var(--leading-tight);
   font-weight: 700;
   color: var(--text);
 }
@@ -933,7 +959,11 @@
   font-size: var(--fs-stat);
   font-weight: 800;
   color: var(--text);
-  line-height: 1.1;
+  line-height: var(--leading-tight);
+  /* Siết tracking như mọi cỡ chữ lớn khác. Dùng được cùng tabular-nums vì
+     tabular chỉ ép mọi chữ số về CÙNG một bề rộng — letter-spacing cộng
+     thêm đều nhau vào từng chữ số nên bốn con số vẫn thẳng cột với nhau. */
+  letter-spacing: var(--tracking-title);
   font-variant-numeric: tabular-nums;
 }
 
@@ -946,7 +976,11 @@
 .landing-stat small {
   font-size: var(--fs-2xs);
   color: var(--dim);
-  line-height: 1.45;
+  /* Đây là chữ thân thật (chú thích dưới con số), không phải tiêu đề, nên
+     dùng luôn bậc leading của thân chữ. Bản cũ để 1.45 — ở 12.6px thì lệch
+     so với 1.62 chỉ hơn 2px một dòng, không đủ để thành một bậc riêng trong
+     hệ, chỉ là một lần chọn tay nữa. */
+  line-height: var(--line-readable);
 }
 
 /* --- Khung section chung --- */
@@ -971,8 +1005,8 @@
 .landing-section__head h2 {
   margin: 0 0 var(--sp-3);
   font-size: var(--fs-h2);
-  line-height: 1.18;
-  letter-spacing: -0.015em;
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-title) !important;
   font-weight: 800;
 }
 
@@ -1017,6 +1051,17 @@
   /* Viền mảnh thay cho khối màu đặc: ô icon vẫn tách khỏi mặt thẻ mà không
      cần đến độ bão hoà. */
   border: 1px solid rgba(168, 196, 240, 0.16);
+}
+
+/* Ba h3 trên trang (thẻ tính năng, bước, câu hỏi) đều ở --fs-md = 18px.
+   overhaul.css siết cả h3 xuống -0.01em bằng !important, nhưng tracking âm
+   là kỹ thuật dành cho chữ HIỂN THỊ cỡ lớn: ở 18px nó chỉ làm các nét dính
+   lại, khó đọc hơn mà không được gì. Trả về normal, cũng phải !important
+   mới thắng được rule bare-tag kia. */
+.landing-feature h3,
+.landing-step h3,
+.landing-faq__item h3 {
+  letter-spacing: normal !important;
 }
 
 .landing-feature h3 {
@@ -1118,7 +1163,10 @@
 
 .landing-faq__item h3 {
   margin: 0;
-  font-size: var(--fs-sm);
+  /* Cùng bậc --fs-md như h3 thẻ tính năng và h3 bước. Bản cũ để --fs-sm,
+     tức ba thẻ cùng cấp tiêu đề lại có hai cỡ; ở đây h3 còn là nhãn bấm
+     được của cả hàng nên không có lý gì để nó nhỏ hơn hai chỗ kia. */
+  font-size: var(--fs-md);
 }
 
 .landing-faq__item button {
@@ -1190,7 +1238,11 @@
   margin: 0;
   font-size: var(--fs-h2);
   font-weight: 800;
-  letter-spacing: -0.015em;
+  /* Thiếu line-height ở đây nên nó thừa hưởng 1.62 của thân chữ, trong khi
+     .landing-section__head h2 cùng cỡ lại để 1.18: hai tiêu đề y hệt nhau
+     về cỡ mà giãn dòng khác nhau. Gán cùng bậc leading. */
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-title) !important;
 }
 
 .landing-final p {
