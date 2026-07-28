@@ -100,6 +100,12 @@
   --primary-end: #6f97ea !important;
   /* Gradient xanh sáng -> chữ nút phải là xanh đêm rất tối mới đủ tương phản. */
   --primary-text: #071431 !important;
+  /* Token này KHÔNG còn là chỉ báo focus của landing nữa. Vòng focus thật
+     nằm ở rule .landing a/button:focus-visible phía dưới, dùng màu đặc hai
+     tông vì không màu đơn nào đủ tương phản trên nền tinh hệ biến thiên.
+     Giữ token lại vì index.css có `button, select:focus-visible` dùng nó, và
+     vì phần app trong đọc cùng tên token — xoá ở đây thì rule kia rơi về
+     giá trị mint của app, lệch tông với landing. */
   --focus-ring: rgba(150, 186, 255, 0.85) !important;
 
   /* --- Thang chữ: 5 bậc thân + 4 cỡ tiêu đề, tỉ lệ 1.125 ----------------
@@ -463,14 +469,33 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.38) !important;
 }
 
-/* Vòng focus: index.css dùng var(--focus-ring) — token này đã được khoá sang
-   mint sáng ở trên nên tự thấy rõ trên tinh hệ. Thêm viền tối bọc ngoài để
-   ring không tan vào vệt sao sáng, và ép hiện trên link/nút thuần CSS. */
+/* Vòng focus: hai tông, sáng đặc kẹp giữa hai lớp tối.
+
+   Bản cũ dùng var(--focus-ring) = rgba(150,186,255,0.85), tức xanh nhạt CÓ
+   alpha, đặt trực tiếp lên nền tinh hệ. Đo ra: trên lõi tinh vân sáng nhất
+   (RGB 173,184,224) tương phản đúng 1.0:1 — vòng focus TÀNG HÌNH. Người
+   dùng bàn phím mất dấu hoàn toàn ở đúng những chỗ nền sáng.
+
+   Và không sửa được bằng cách đổi màu: nền này biến thiên từ RGB 5,8,20 đến
+   173,184,224, nên KHÔNG màu đơn nào đạt 3:1 trên cả hai đầu — kể cả trắng
+   thuần cũng chỉ được 1.96:1 trên lõi sáng nhất.
+
+   Cách duy nhất đúng là để vòng tự tương phản với chính nó thay vì với nền:
+   ring sáng ĐẶC (bỏ alpha, để nền không thấu qua) kẹp giữa lớp tối trong và
+   lớp tối ngoài. Dù nền chỗ đó sáng hay tối, ranh giới sáng/tối vẫn còn.
+   Đo được 16.2:1 trên lõi sáng nhất, 17.5:1 trên mặt thẻ, 18.0:1 trên nền
+   tối nhất — mọi nền đều vượt xa ngưỡng 3:1. */
 .landing a:focus-visible,
 .landing button:focus-visible {
-  outline: 2px solid var(--focus-ring) !important;
-  outline-offset: 3px !important;
-  box-shadow: 0 0 0 5px rgba(4, 6, 16, 0.75) !important;
+  outline: 2px solid #eaf2ff !important;
+  outline-offset: 2px !important;
+  /* Lớp tối TRONG (0 0 0 2px) lấp đúng khoảng outline-offset, nên ring sáng
+     luôn có nền tối áp sát ở phía trong; lớp NGOÀI (0 0 0 5px) tách ring khỏi
+     vệt sao phía ngoài. Không có lớp trong thì ring nằm trực tiếp trên nền và
+     quay lại đúng lỗi cũ ở những chỗ nền sáng. */
+  box-shadow:
+    0 0 0 2px rgba(4, 6, 16, 0.92),
+    0 0 0 5px rgba(4, 6, 16, 0.92) !important;
 }
 
 /* --- Reveal khi cuộn --- */
@@ -546,6 +571,16 @@
   gap: var(--sp-3);
 }
 
+/* Hai nút trên thanh nav không mang class .landing-cta (JSX chỉ gán
+   btn-primary / btn-secondary), nên rule chặn transform của CTA không với
+   tới chúng: chúng vẫn nhấc lên và phóng to khi hover trong khi bốn nút CTA
+   phía dưới đã thôi. Nhắm cả vùng nav thay vì thêm class vào JSX — cùng một
+   quyết định thiết kế thì nên nằm cùng một chỗ trong CSS. */
+.landing-nav__actions button:hover,
+.landing-nav__actions button:active {
+  transform: none !important;
+}
+
 .landing-theme-toggle {
   width: 38px;
   height: 38px;
@@ -556,13 +591,17 @@
   background: var(--control-bg);
   color: var(--muted);
   cursor: pointer;
-  transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
+  transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
 }
 
+/* Nút này sót lại rotate(-12deg) từ lượt bỏ transform ở hover: cả trang đã
+   thống nhất hover chỉ đổi viền + nền, riêng nó vẫn nghiêng đi. Một phần tử
+   cư xử khác mọi phần tử còn lại thì đọc ra trang trí ngẫu nhiên, không ra
+   chủ đích. Đổi sang cùng ngôn ngữ với các nút khác: viền đậm lên. */
 .landing-theme-toggle:hover {
   color: var(--text);
   background: var(--control-hover);
-  transform: rotate(-12deg);
+  border-color: var(--edge-strong);
 }
 
 /* --- Hero --- */
@@ -639,9 +678,19 @@
 }
 
 /* Nút CTA cũng không nhấc lên nữa. Bóng và độ sáng viền đã đủ báo hover;
-   dịch chuyển vị trí làm mắt phải bám lại mục tiêu đang định bấm. */
+   dịch chuyển vị trí làm mắt phải bám lại mục tiêu đang định bấm.
+   !important là BẮT BUỘC: overhaul.css có `.btn-primary:hover { transform:
+   translateY(-2px) scale(1.02) !important }` và nút này mang cả hai class
+   (btn-primary landing-cta). Không có !important thì rule dưới đây tính ra
+   rồi bị bỏ, nút vẫn nhấc lên và phóng to — đúng thứ đã quyết định bỏ. */
 .landing-cta:hover {
-  transform: none;
+  transform: none !important;
+}
+
+/* :active của .btn-primary trong overhaul.css là scale(0.95) !important —
+   cũng phải chặn, nếu không thì bỏ được hover mà lúc bấm nút vẫn co lại. */
+.landing-cta:active {
+  transform: none !important;
 }
 
 .landing-assurances {
@@ -1367,6 +1416,15 @@
     animation: none;
   }
 
+  /* landingWordIn bị bỏ sót ở bản trước. Nó trượt cả khối chữ lên 8px mỗi
+     lần bấm đổi từ — tức là chuyển động do NGƯỜI DÙNG chủ động kích, gặp
+     nhiều nhất trên trang này, đúng loại mà prefers-reduced-motion nhắm
+     tới. Tắt animation thì `both` không còn giữ trạng thái "from" nữa nên
+     chữ hiện ngay, không cần gán lại opacity. */
+  .landing-preview__word {
+    animation: none;
+  }
+
   /* Dải Ngân Hà đứng yên ở vị trí giữa keyframe (không nhảy về "from"), để bố
      cục nền không lệch so với khi có chuyển động. */
   .landing-cosmos__band {
@@ -1374,11 +1432,13 @@
     transform: rotate(-16deg) scale(1.56);
   }
 
-  .landing-cta:hover,
-  .landing-feature:hover,
-  .landing-theme-toggle:hover {
-    transform: none;
-  }
+  /* Không còn khối `*:hover { transform: none }` ở đây: từ lượt bỏ scale/bounce,
+     KHÔNG hover nào trên trang còn dùng transform nữa (.landing-feature:hover
+     đã bị xoá hẳn, .landing-theme-toggle:hover thôi nghiêng, .core-card:hover
+     chỉ đổi viền + bóng). Giữ lại thì là selector chết, và tệ hơn: nó ngụ ý
+     trang vẫn có hover dịch chuyển, khiến lần sau ai đọc cũng tưởng phải tắt.
+     Chỗ duy nhất còn transform là :active của thẻ xem trước — mà `transform:
+     none` vốn đã là giá trị của nó. */
 }
 
 /* =========================================================
