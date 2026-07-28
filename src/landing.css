@@ -135,6 +135,24 @@
   --sp-5: 20px;
   --sp-6: 24px;
 
+  /* --- Bán kính góc và nhịp chuyển động ---------------------------------
+     Bản cũ có 10px và 12px cho hai ô vuông nhỏ cạnh nhau (logo, ô icon) —
+     lệch 2px thì không đọc ra chủ đích, chỉ ra ngẫu nhiên. Gộp về một giá
+     trị. Trang có bốn bán kính, mỗi cái một vai trò rõ và KHÔNG nên gộp
+     thêm: 12px cho ô nhỏ, 16px cho thẻ (--radius của app, áp qua
+     .core-card), 999px cho viên thuốc, 50% cho tròn. Bán kính lớn hơn cho
+     bề mặt lớn hơn là có chủ đích, không phải thiếu nhất quán.
+     Thời lượng: 180ms và 200ms không phân biệt nổi, gộp về 200ms. */
+  --radius-box: 12px;
+  --t-fast: 200ms;
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  /* Chuyển động DÀI (hiện dần khi cuộn, thanh chạy) dùng expo-out: nó giảm
+     tốc rất mạnh ở cuối nên đoạn đường dài không thấy "kéo". Khác vai trò
+     với --ease-out ở trên, chứ không phải hai biến thể của cùng một thứ.
+     Cả hai đều KHÔNG vượt biên — không có đường nào nảy. */
+  --ease-long: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-reveal: 620ms;
+
   /* Nền dự phòng khi canvas chưa vẽ xong: tránh nháy trắng ở frame đầu. */
   --bg-top: #050814 !important;
   --bg-bottom: #050814 !important;
@@ -343,8 +361,8 @@
      ghi đè ở đây: bóng đổ nảy lên rồi lùi lại là chuyển động không tồn tại
      ở bề mặt vật lý. Không để `all` — nó sẽ kéo theo cả transform. */
   transition:
-    border-color 200ms cubic-bezier(0.33, 1, 0.68, 1),
-    box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1) !important;
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out) !important;
 }
 
 .landing .core-card:hover {
@@ -375,9 +393,9 @@
   -webkit-backdrop-filter: blur(10px) !important;
   backdrop-filter: blur(10px) !important;
   transition:
-    background-color 200ms cubic-bezier(0.33, 1, 0.68, 1),
-    border-color 200ms cubic-bezier(0.33, 1, 0.68, 1),
-    box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1) !important;
+    background-color var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out) !important;
   /* Cùng ba tầng, cùng màu mực với thẻ, chỉ thấp hơn một bậc: nút nằm TRÊN
      nền chứ không nổi bằng thẻ. */
   box-shadow:
@@ -400,8 +418,8 @@
 .landing .btn-primary {
   color: var(--primary-text) !important;
   transition:
-    box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1),
-    filter 200ms cubic-bezier(0.33, 1, 0.68, 1) !important;
+    box-shadow var(--t-fast) var(--ease-out),
+    filter var(--t-fast) var(--ease-out) !important;
   /* Hai tầng bóng tối để bám nền + MỘT tầng hắt màu nhấn rất loãng. Tầng hắt
      giữ ở 0.18: đây là nút duy nhất trên trang được phát sáng, nên nó không
      cần mạnh mới nổi — cả trang còn lại đã trung tính. */
@@ -438,8 +456,8 @@
 .landing-reveal {
   opacity: 0;
   transform: translateY(18px);
-  transition: opacity 620ms cubic-bezier(0.16, 1, 0.3, 1),
-              transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity var(--t-reveal) var(--ease-long),
+              transform var(--t-reveal) var(--ease-long);
   height: 100%;
 }
 
@@ -475,7 +493,7 @@
 }
 
 .landing-brand img {
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   object-fit: cover;
 }
 
@@ -494,7 +512,7 @@
      border-bottom, đệm ngang rộng hơn sẽ làm gạch dài hơn chữ trông lỏng. */
   padding: var(--sp-2) 2px;
   border-bottom: 2px solid transparent;
-  transition: color 180ms ease, border-color 180ms ease;
+  transition: color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
 }
 
 .landing-nav__links a:hover {
@@ -518,7 +536,7 @@
   background: var(--control-bg);
   color: var(--muted);
   cursor: pointer;
-  transition: color 180ms ease, background 180ms ease, transform 180ms ease;
+  transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
 }
 
 .landing-theme-toggle:hover {
@@ -710,7 +728,7 @@
 .landing-preview__note svg {
   flex-shrink: 0;
   color: var(--accent);
-  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 320ms var(--ease-long);
 }
 
 /* Bấm xuống: bề mặt không lún và không co, chỉ bóng xẹp lại một bậc — đúng
@@ -770,7 +788,7 @@
   gap: var(--sp-1);
   text-align: center;
   padding: var(--sp-2) 0 var(--sp-1);
-  animation: landingWordIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: landingWordIn 420ms var(--ease-long) both;
 }
 
 .landing-preview__hanzi {
@@ -856,7 +874,7 @@
   width: var(--fill);
   border-radius: 999px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--positive) 76%, #5f9fd0), var(--positive));
-  animation: landingBarGrow 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: landingBarGrow 1100ms var(--ease-long) both;
 }
 
 @keyframes landingBarGrow {
@@ -993,7 +1011,7 @@
   height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--on-surface-icon-bg);
   color: var(--on-surface-icon);
   /* Viền mảnh thay cho khối màu đặc: ô icon vẫn tách khỏi mặt thẻ mà không
