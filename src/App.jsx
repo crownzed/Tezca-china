@@ -1,6 +1,6 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sun, Wrench, XCircle } from 'lucide-react';
-import { completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
+import { AlertCircle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, Clock3, Eraser, Headphones, Languages, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, XCircle } from 'lucide-react';
+import { analyzeStudyData, completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
@@ -197,6 +197,28 @@ function strategyLabel(strategy) {
 }
 
 function AnalyticsPanel({ analytics, onStartRecommended }) {
+  const { userId } = useAuth();
+  // AI phân tích on-demand. Chỉ khả dụng khi backend online — analytics.offline
+  // là tín hiệu online/offline duy nhất ở frontend (không có state toàn cục).
+  const aiAvailable = !analytics?.offline;
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [aiError, setAiError] = useState('');
+
+  const runAiAnalysis = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const result = await analyzeStudyData(userId);
+      setAiResult(result);
+    } catch {
+      setAiError('AI phân tích tạm thời không khả dụng, thử lại sau.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const recommendation = analytics?.recommendation || { level: 1, quiz_type: 'vocab', title: 'HSK 1 · Từ vựng', reason: 'Chưa đủ dữ liệu, nên bắt đầu bằng từ vựng HSK 1 để tạo đường chuẩn.', focus_words: [], recommended_strategy: 'targeted' };
   const recommendedStrategy = recommendation.recommended_strategy || 'targeted';
   const eventCount = analytics?.event_count || 0;
@@ -369,6 +391,48 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
           </div>
         </div>
       </div>
+
+      {aiAvailable && (
+        <div className="ai-analysis-box">
+          <div className="ai-analysis-head">
+            <div>
+              <span className="core-eyebrow">Cố vấn AI</span>
+              <h3>Phân tích toàn diện dữ liệu học của bạn</h3>
+            </div>
+            <button className="btn-primary" type="button" onClick={runAiAnalysis} disabled={aiLoading || !hasData}>
+              {aiLoading ? <><Loader2 className="spin" size={16} /> Đang phân tích</> : <><Sparkles size={16} /> Phân tích với AI</>}
+            </button>
+          </div>
+          {!hasData && <p className="ai-analysis-hint">Hãy học vài phiên để AI có dữ liệu phân tích.</p>}
+          {aiError && <div className="speech-toast" role="alert">{aiError}</div>}
+          {aiLoading && !aiResult && (
+            <div className="skeleton"><span className="skeleton-line" /><span className="skeleton-line" /><span className="skeleton-line" /></div>
+          )}
+          {aiResult && (
+            <div className="ai-analysis-result">
+              {aiResult.summary && <p className="ai-analysis-summary">{aiResult.summary}</p>}
+              {aiResult.strengths?.length > 0 && (
+                <div className="ai-analysis-group">
+                  <span className="core-eyebrow">Điểm mạnh</span>
+                  <ul>{aiResult.strengths.map((item, i) => <li key={`s-${i}`}>{item}</li>)}</ul>
+                </div>
+              )}
+              {aiResult.weaknesses?.length > 0 && (
+                <div className="ai-analysis-group">
+                  <span className="core-eyebrow">Cần cải thiện</span>
+                  <ul>{aiResult.weaknesses.map((item, i) => <li key={`w-${i}`}>{item}</li>)}</ul>
+                </div>
+              )}
+              {aiResult.roadmap?.length > 0 && (
+                <div className="ai-analysis-group">
+                  <span className="core-eyebrow">Lộ trình tiếp theo</span>
+                  <ol>{aiResult.roadmap.map((item, i) => <li key={`r-${i}`}>{item}</li>)}</ol>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="analytics-bottom">
         <div className="recommendation-box">

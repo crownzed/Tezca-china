@@ -663,3 +663,12 @@ class AdminConfigOut(BaseModel):
 class AdminConfigUpdateRequest(BaseModel):
     updates: dict[str, str | int] = Field(default_factory=dict)
 
+
+# AI phân tích dữ liệu học tập tổng hợp (on-demand). Không nhận body — user lấy
+# từ token; server tự gom analytics + stats theo user_id.
+class StudyAnalysisOut(BaseModel):
+    summary: str = ""
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    roadmap: list[str] = Field(default_factory=list)
+

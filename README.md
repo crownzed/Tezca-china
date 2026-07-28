@@ -30,10 +30,12 @@
 2. [✨ Tính năng chính](#-tính-năng-chính)
 3. [🛠 Công nghệ sử dụng](#-công-nghệ-sử-dụng)
 4. [🚀 Hướng dẫn cài đặt & Chạy thử](#-hướng-dẫn-cài-đặt--chạy-thử)
-5. [📸 Ảnh minh họa](#-ảnh-minh-họa)
-6. [📂 Cấu trúc thư mục](#-cấu-trúc-thư-mục)
-7. [🤝 Quy trình đóng góp](#-quy-trình-đóng-góp)
-8. [📄 Giấy phép (License)](#-giấy-phép-license)
+5. [🧠 Xây dựng AI — checklist chi tiết](#-xây-dựng-ai--checklist-chi-tiết)
+6. [🔁 Lộ trình tự học của AI](#-lộ-trình-tự-học-của-ai)
+7. [📸 Ảnh minh họa](#-ảnh-minh-họa)
+8. [📂 Cấu trúc thư mục](#-cấu-trúc-thư-mục)
+9. [🤝 Quy trình đóng góp](#-quy-trình-đóng-góp)
+10. [📄 Giấy phép (License)](#-giấy-phép-license)
 
 ---
 
@@ -87,7 +89,7 @@ Hệ thống hỗ trợ cơ chế hoạt động offline thông minh, tự độ
 | **Thiết kế & Icon** | Lucide React, CSS | Giao diện tối giản mang phong cách Zen hiện đại, hỗ trợ Dark/Light mode. |
 | **Backend API** | FastAPI, Python 3.10+ | RESTful API hiệu năng cao, xử lý đa luồng bất đồng bộ. |
 | **Xử lý tín hiệu (DSP)** | NumPy, Praat / Parselmouth | Trích xuất F0, tính toán sai lệch DTW thanh điệu và các chỉ số lưu loát. |
-| **Trí tuệ nhân tạo (AI)** | Gemini Native API, DeepSeek (fallback) | Nhận diện giọng nói, trò chuyện ngôn ngữ tự nhiên và chẩn đoán ngữ âm. |
+| **Trí tuệ nhân tạo (AI)** | Gemini Native API (giọng nói), relay vilao.ai (sinh câu hỏi) | Nhận diện giọng nói, trò chuyện ngôn ngữ tự nhiên, chẩn đoán ngữ âm và sinh câu hỏi luyện tập. |
 | **Cơ sở dữ liệu** | SQLite, SQLAlchemy (ORM) | Lưu trữ tiến trình cục bộ, hỗ trợ Turso (libSQL) cho môi trường production. |
 
 ---
@@ -160,6 +162,305 @@ uvicorn app.main:app --reload --port 8000
     *   `TURSO_AUTH_TOKEN`: Token xác thực Turso.
     *   `JWT_SECRET`: Khóa bảo mật để ký và xác thực token JWT người dùng.
     *   `GEMINI_NATIVE_API_KEYS`: Danh sách API Key của Google Gemini phục vụ các tính năng Speech AI (phân tách bằng dấu phẩy).
+
+---
+
+## 🧠 Xây dựng AI — checklist chi tiết
+
+Phần này là quy trình đầy đủ để dựng tầng AI của Tezca từ một repo trắng đến trạng thái chạy được trên production. Các giai đoạn có thứ tự phụ thuộc: **không bỏ qua giai đoạn trước**, vì mỗi bước sau đọc dữ liệu do bước trước sinh ra.
+
+### Giai đoạn 0 — Cấu hình provider LLM (làm một lần)
+
+Toàn bộ tính năng sinh nội dung đi qua một provider duy nhất. Khi không có key, hệ thống **không crash** mà tự degrade về ngân hàng câu hỏi tĩnh — nên nếu quiz vẫn chạy mà không thấy câu mới, hãy kiểm tra key trước tiên.
+
+1. Tạo `backend/.env` từ mẫu:
+   ```bash
+   cd backend
+   cp .env.example .env
+   ```
+2. Điền các biến theo bảng sau (tên biến lấy từ [settings.py](backend/app/settings.py)):
+
+   | Biến | Bắt buộc | Ý nghĩa & lưu ý |
+   | :--- | :---: | :--- |
+   | `GEMINI_API_KEYS` | ✅ | Danh sách key relay vilao.ai, phân tách bằng dấu phẩy. Mỗi key là một "lượt": key cạn quota thì service tự chuyển sang key kế tiếp. Để trống → mọi tính năng sinh nội dung tự tắt. |
+   | `GEMINI_API_URL` | — | Mặc định `https://api.vilao.ai/v1/chat/completions`. Chỉ đổi khi relay đổi endpoint. |
+   | `GEMINI_MODEL` | — | Mặc định `ram/gemini-3.5-flash-low`. |
+   | `LLM_API_URL` / `LLM_API_KEYS` / `LLM_MODEL` | — | Bộ ba **ghi đè** `GEMINI_*` để đổi provider mà không sửa code. Mọi relay đang dùng đều OpenAI-compatible `/chat/completions`, nên `LLM_API_URL` nhận cả URL gốc (`.../v1`) lẫn URL đầy đủ. |
+   | `LLM_JSON_MODE` | — | Chỉ bật `true` khi relay hỗ trợ `response_format`. **vilao.ai không hỗ trợ** — bật lên sẽ lỗi. |
+   | `LLM_REASONING_EFFORT` | — | `low` / `medium` / `high`, hoặc để trống để không gửi tham số. Đây là đòn giảm latency có tác dụng thật: với `grok-4.5` trên gilotex, cùng một bundle ở mặc định mất ~103s và bị gateway cắt ở ~121s, còn `low` chỉ 13–18s và trả JSON đầy đủ. |
+   | `GEMINI_NATIVE_API_KEYS` | ✅ (nếu dùng speech) | Key Google AI Studio thật (`generativelanguage.googleapis.com`), dùng chung cho pronunciation + voice chat + TTS. **Khác** `GEMINI_API_KEYS` ở trên. |
+   | `JWT_SECRET` | ✅ (production) | `settings` sẽ từ chối khởi động ở production nếu còn giá trị mặc định. |
+
+3. Kiểm chứng cấu hình đã nạp — chạy trong `backend/`:
+   ```bash
+   python -c "from app.settings import settings; print(len(settings.llm_keys_list), 'key(s)'); print(settings.llm_endpoint)"
+   ```
+   Kết quả phải in số key > 0. Nếu in `0 key(s)`, `.env` chưa được đọc (sai thư mục làm việc) hoặc tên biến sai.
+
+> ⚠️ **Không commit `.env`.** Mọi secret chỉ đọc từ environment; `.env.example` là tài liệu, không chứa giá trị thật.
+
+### Giai đoạn 1 — Nền dữ liệu từ vựng
+
+AI không sinh từ vựng từ hư không: nó cần bảng `words` làm neo. Mọi câu hỏi đều tham chiếu về một từ có thật trong DB.
+
+```bash
+cd backend
+
+# 1. Nạp từ vựng HSK gốc + câu ví dụ mẫu (idempotent, chạy lại an toàn)
+python -m app.scripts.seed
+
+# 2. Bổ sung từ còn thiếu theo level (chọn script phù hợp)
+python -m app.scripts.fill_hsk_vocab          # lấp các level còn khuyết
+python -m app.scripts.fill_hsk4               # riêng HSK 4
+python -m app.scripts.generate_hsk5_vocab     # sinh HSK 5 bằng LLM
+
+# 3. Dịch nghĩa tiếng Việt cho từ chưa có
+python -m app.scripts.translate_meanings
+
+# 4. Chuẩn hoá pinyin (khoảng trắng, dấu thanh) — chạy SAU mọi bước nạp từ
+python -m app.scripts.normalize_pinyin
+python -m app.scripts.fix_pinyin_spacing
+```
+
+**Kiểm chứng trước khi sang giai đoạn 2:**
+```bash
+python -m app.scripts.audit_pinyin      # báo cáo sai lệch pinyin
+python -m app.scripts.export_words      # xuất app/data/words_export.json để soát tay
+```
+Điều kiện đạt: mỗi level HSK 1–4 có đủ từ, `audit_pinyin` không còn lỗi severity cao. Pinyin sai ở giai đoạn này sẽ lan vào **mọi** câu hỏi và mọi điểm phát âm sau đó — sửa ở đây rẻ hơn sửa sau rất nhiều.
+
+### Giai đoạn 2 — Làm giàu ngữ liệu (examples + confusables)
+
+Đây là bước tốn thời gian LLM nhất. Nó sinh câu ví dụ và danh sách từ dễ nhầm (`confusable_words_json`) cho từng từ — dữ liệu mà [distractor_policy.py](backend/app/services/distractor_policy.py) sẽ dùng để chọn đáp án sai "vừa đủ khó".
+
+```bash
+# Cách A — chạy một lượt, dừng khi bạn đóng session
+python -m app.scripts.enrich_examples
+
+# Cách B (khuyến nghị cho khối lượng lớn) — pipeline tự-loop, bền với teardown
+python -m app.scripts.enrich_pipeline
+```
+
+Vì sao nên dùng `enrich_pipeline`: nó được thiết kế chạy như **process HĐH độc lập**, tự lặp tới khi mọi từ HSK 1–4 đủ câu ví dụ, tối đa `MAX_PASSES = 4` vòng mỗi level, và thoát sạch khi hết tiến triển thay vì treo vô hạn. Nó cũng idempotent: cổng `words_needing_enrichment` bỏ qua từ đã đủ câu, nên chạy lại từ bất kỳ đâu cũng không tạo bản trùng.
+
+**Theo dõi từ ngoài** (không cần giữ terminal):
+```bash
+tail -f backend/data/enrich_pipeline.log     # log tiến trình
+ls backend/data/enrich_pipeline.done         # marker xuất hiện khi xong
+```
+
+**Việc bạn phải làm:** một số từ sẽ **luôn** fail validation (LLM trả câu vượt trần độ dài). Đó là hành vi mong đợi, không phải bug — pipeline bỏ qua chúng. Sau khi chạy xong, đọc log để lấy danh sách từ sót và tự viết câu ví dụ cho chúng nếu chúng là từ tần suất cao.
+
+### Giai đoạn 3 — Ngân hàng câu hỏi
+
+Có hai đường sinh câu hỏi, dùng cho hai mục đích khác nhau:
+
+| Cách | Lệnh | Khi nào dùng |
+| :--- | :--- | :--- |
+| **Pre-generate** | `python -c "from app.db import SessionLocal; from app.scripts.pregenerate_questions import pregenerate_questions; db=SessionLocal(); print(pregenerate_questions(db))"` | Lấp đủ sàn: đảm bảo **mọi** cặp (level 1–6 × 6 dạng bài) có tối thiểu `TARGET_PER_TYPE = 20` câu. Chạy lần đầu và sau khi thêm từ mới. |
+| **Upgrade bằng AI** | `python -m app.scripts.upgrade_quiz_bank_ai --levels 1 2 3 4 5 6 --count 20` | Nâng chất lượng bank đã có. Nhận `--levels`, `--types`, `--count` (1–20 câu mỗi level/type). |
+
+Sáu dạng bài được sinh: `vocab`, `listening`, `cloze`, `translation`, `drag_drop`, `reading`.
+
+**Hai cơ chế then chốt cần hiểu khi vận hành:**
+
+- **Chống trùng lặp.** Relay vilao.ai trả output gần **tất định** — cùng prompt thì gần như cùng kết quả. [llm_generator_service.py](backend/app/services/llm_generator_service.py) xử lý bằng cách chèn một `nonce` ngẫu nhiên vào prompt và truyền `avoid_prompts` (12 prompt gần nhất đã có trong bank cho cùng cặp level+type). Nếu bạn thấy câu hỏi lặp lại, kiểm tra hai thứ này trước khi nghi model.
+- **Cổng định dạng đoạn văn.** Prompt `cloze` phải chứa **đúng một** chuỗi `____`, vì renderer frontend tách prompt bằng `split(/_{2,}/)`. Các chỗ trống khác trong cùng đoạn phải ghi `（2）`,`（3）`… Ngoài ra đoạn phải có tối thiểu 16 ký tự Hán và 2 dấu kết câu (`。！？`) để bị coi là *đoạn* chứ không phải *câu rời*. Câu không đạt bị loại tự động.
+
+**Hậu xử lý bắt buộc** — chạy sau mỗi lần sinh số lượng lớn:
+```bash
+python -m app.scripts.rebalance_answer_positions   # tránh đáp án dồn về một vị trí
+python -m app.scripts.backfill_drag_prompts        # lấp prompt thiếu cho dạng sắp xếp câu
+```
+Bước rebalance không phải làm đẹp: LLM có thiên lệch vị trí đáp án, để nguyên thì người học đoán được đáp án bằng vị trí mà không cần biết tiếng Trung.
+
+### Giai đoạn 4 — Ngân hàng đoạn văn chuẩn đề thi
+
+Hai dạng 选词填空 (guided cloze) và 阅读理解 (reading) có ngân hàng viết tay riêng, tách khỏi câu sinh bằng LLM.
+
+**Nguồn sự thật duy nhất:** [backend/app/data/exam_passages.json](backend/app/data/exam_passages.json). Bản sao phía frontend (`src/data/exam-passages.js`) được **sinh tự động** — không sửa tay.
+
+Quy tắc viết một đoạn mới:
+
+| Ràng buộc | Chi tiết |
+| :--- | :--- |
+| Ký hiệu chỗ trống | `{{n}}` trong `passage`, và `blanks[].index` phải khớp đúng `n`. |
+| Word bank | Đúng **4** phần tử, dùng chung cho **cả đoạn**; mọi `blanks[].answer` phải nằm trong đó. |
+| Trần độ dài | Theo `_passage_cjk_cap`: HSK 1→45, 2→65, 3→110, 4→130, 5→150, 6→180 ký tự Hán. Trần này **rộng hơn** trần của câu ví dụ đơn lẻ vì đoạn dài 3–6 câu. |
+| Nhãn kỹ năng | `cloze`: `pos`, `collocation`, `conjunction`, `logic`. `reading`: `scanning`, `skimming`, `inference`, `reference`. |
+| Reading | Mỗi đoạn nên có một câu hỏi chi tiết và một câu hỏi ý chính; 4 lựa chọn **đều bằng tiếng Trung**, độ dài tương đương. |
+
+Sau khi sửa JSON, chạy đủ ba cổng:
+```bash
+node scripts/sync-exam-passages.mjs        # đồng bộ sang frontend
+node scripts/validate-exam-passages.mjs    # cổng build phía frontend
+cd backend && python -m pytest tests/test_exam_passages.py tests/test_exam_format_gate.py -q
+```
+
+> ⚠️ Luật kiểm tra được **nhân đôi** ở `scripts/validate-exam-passages.mjs` và `backend/tests/test_exam_passages.py`. Sửa luật một bên thì phải sửa cả bên kia, nếu không CI và build sẽ bất đồng.
+
+Thứ tự lựa chọn được trộn bằng **seed tất định** (dựa trên id đoạn + số thứ tự), nên prompt/options của một câu luôn giống nhau giữa các lần sinh. Đây là điều kiện để không tạo row trùng và không lệch `correct_index` giữa lúc phục vụ và lúc chấm — đừng thay bằng `random.shuffle()` không seed.
+
+Ngân hàng hội thoại làm tương tự với [conversation_scenarios.json](backend/app/data/conversation_scenarios.json) + `node scripts/validate-conversation-bank.mjs`.
+
+### Giai đoạn 5 — Tầng Speech AI
+
+Cần `GEMINI_NATIVE_API_KEYS` (key AI Studio thật, không phải key relay).
+
+Kiến trúc chấm phát âm gồm hai lớp độc lập rồi **veto chéo**:
+
+1. **Lớp định danh** — [speech_ai_service.py](backend/app/services/speech_ai_service.py) gửi audio cho Gemini, nhận về Hán tự + pinyin thực tế; [pinyin_scorer.py](backend/app/services/pinyin_scorer.py) so khớp để tìm âm tiết thừa/thiếu/sai thanh.
+2. **Lớp âm học** — [tone_dsp_service.py](backend/app/services/tone_dsp_service.py) trích F0 contour, dùng DTW căn khớp với khuôn thanh điệu Chao chuẩn, tính thêm fluency (tốc độ, số lượt dừng) và prosody (dải cao độ, xu hướng hạ giọng cuối câu).
+3. **Veto** — điểm cuối lấy giá trị **nhỏ hơn** giữa độ chính xác DSP và tỷ lệ thanh điệu đúng từ Gemini. Mục đích: một lớp bị nhiễu thì không tự nâng điểm được.
+
+Kiểm chứng:
+```bash
+cd backend && python -m pytest tests/test_pinyin_scorer.py tests/test_speech_demo.py -q
+```
+
+Nếu Praat/Parselmouth chưa cài được trên máy bạn, lớp âm học sẽ không chạy; hãy xác nhận điều đó bằng test thay vì đoán qua điểm số trên UI.
+
+### Giai đoạn 6 — Cổng chất lượng nội dung
+
+Chạy **trước mỗi lần commit dữ liệu**, không phải sau khi deploy:
+
+```bash
+# Cổng tất định (không cần DB, không gọi LLM) — chặn lỗi cấu trúc
+node scripts/validate-exam-passages.mjs
+node scripts/validate-conversation-bank.mjs
+node scripts/validate-grammar.mjs
+
+# Cổng có DB
+cd backend
+python -m pytest tests -q                     # toàn bộ test suite
+python -m app.scripts.audit_grammar           # kiểm ngữ pháp: rule-based + LLM
+python app/scripts/cron_qa_runner.py          # tổng hợp QA, exit != 0 nếu có lỗi nặng
+```
+
+`cron_qa_runner.py` chạy 4 nhóm kiểm tra: pinyin, ngữ pháp/nội dung, tính toàn vẹn & đa dạng câu hỏi, và health metrics của DB. Nó ghi kết quả ra `backend/app/data/qa_report.json` và **thoát khác 0 khi có vấn đề critical/high** — dùng được làm gate trong bất kỳ pipeline nào.
+
+Trên CI, [content-qa.yml](.github/workflows/content-qa.yml) chạy tự động **mỗi 8 giờ** và trên mỗi push đụng vào `backend/app/data/**`, `question_generator.py`, `template_engine.py`, `backend/app/scripts/**`, `backend/tests/**` hoặc `scripts/validate-*.mjs`. Báo cáo được upload làm artifact (giữ 30 ngày) và thất bại sẽ bắn Slack nếu có `SLACK_WEBHOOK_URL`.
+
+Lệnh `npm run build` cũng là một cổng: nó chạy `generate-hanzi-data` → `sync-exam-passages` → `validate-grammar` → `validate-conversation-bank` → `vite build`. Build đỏ vì dữ liệu là đúng thiết kế, đừng bỏ qua bằng cách gọi `vite build` trực tiếp.
+
+### Giai đoạn 7 — Đưa lên production
+
+```bash
+# Đồng bộ DB cục bộ lên Turso
+cd backend && python -m app.scripts.mirror_to_turso
+```
+
+Biến môi trường cần đặt trên Fly.io: `DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `GEMINI_API_KEYS`, `GEMINI_NATIVE_API_KEYS`. Trên Vercel: `VITE_API_BASE`.
+
+Danh sách kiểm tra cuối:
+
+- [ ] `JWT_SECRET` **không** còn là giá trị mặc định (settings sẽ chặn khởi động, nhưng hãy kiểm trước).
+- [ ] `ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH` đã đặt — bỏ trống thì mọi route `/api/admin/*` trả 503. Hash bằng bcrypt, **không** lưu mật khẩu thô:
+  ```bash
+  python -c "from passlib.context import CryptContext; print(CryptContext(schemes=['bcrypt']).hash('mat-khau-cua-ban'))"
+  ```
+- [ ] `CORS_ORIGINS` trỏ đúng domain frontend production.
+- [ ] `cron_qa_runner.py` exit 0 trên dữ liệu production.
+- [ ] Đã xác nhận quiz vẫn chạy khi cố tình bỏ trống key LLM (đường degrade về bank tĩnh còn nguyên).
+
+---
+
+## 🔁 Lộ trình tự học của AI
+
+"Tự học" ở đây không phải fine-tune model. Nó là **vòng phản hồi đóng**: hệ thống quan sát hành vi người học, phân loại lỗi, rồi thay đổi câu hỏi kế tiếp — và một phần của vòng đó cần **bạn** can thiệp định kỳ. Phần này nói rõ chỗ nào máy tự làm, chỗ nào bạn phải làm.
+
+### Trục thụ đắc: thay HSK level bằng trạng thái per-word
+
+Nền tảng của cả vòng học nằm ở [acquisition_service.py](backend/app/services/acquisition_service.py). Nó thay trục "HSK 1–6" bằng trạng thái thụ đắc của **từng từ**, tiến hóa theo mức người học thực sự **dùng được** từ, không theo lịch thi:
+
+```
+UNKNOWN → RECOGNIZED → UNDERSTOOD → USABLE → MASTERED
+ (chưa)    (nhận ra)    (hiểu nghĩa) (tự dùng) (thuần thục)
+```
+
+Nguyên tắc "tập nói như trẻ con": nghe/nhận diện **trước** → `RECOGNIZED`; hiểu nghĩa + gợi nhớ chủ động → `UNDERSTOOD`; sản sinh có hướng dẫn → `USABLE`; sản sinh tự do + trí nhớ ổn định → `MASTERED`.
+
+Trạng thái này quyết định độ khó của mọi thứ phía sau — kể cả đáp án sai.
+
+### Thang truy hồi L1–L8
+
+[retrieval_ladder_service.py](backend/app/services/retrieval_ladder_service.py) định nghĩa 8 bậc truy hồi tăng dần, theo nguyên tắc *retrieval over exposure* (truy hồi mạnh hơn đọc lại):
+
+| Bậc | Nhiệm vụ | Loại |
+| :--- | :--- | :--- |
+| L1 | hanzi → nghĩa | nhận diện (dễ nhất) |
+| L2 | audio → nghĩa | nghe |
+| L3 | pinyin → hanzi | nhận diện ngược |
+| L4 | nghĩa → hanzi/pinyin | gợi nhớ chủ động |
+| L5 | cloze trong câu | ngữ cảnh |
+| L6 | nghe hội thoại → ý chính | nghe + ngữ cảnh |
+| L7 | gõ pinyin / nói câu | sản sinh |
+| L8 | tạo câu ngắn | sản sinh tự do (khó nhất) |
+
+### Vòng 1 — Mỗi câu trả lời (máy tự làm, tức thời)
+
+1. **Ghi nhận** — `LearningEvent` được lưu kèm `error_tag` do `classify_error` gán (ví dụ `tone_error`, `hanzi_error`).
+2. **Cập nhật SRS** — [srs_service.py](backend/app/services/srs_service.py) đổi lịch ôn của từ đó.
+3. **Cập nhật EWMA hành vi** — [behavior_service.py](backend/app/services/behavior_service.py) và `src/behavior-engine.js` phía client.
+4. **Chọn độ khó câu kế** — [difficulty_service.py](backend/app/services/difficulty_service.py) không dùng ngưỡng cứng mà nhắm **luật 85%** (Wilson et al., 2019, *Nature Communications*): tốc độ học tối ưu khi tỉ lệ đúng quanh ~85%. Quá dễ (≈100%) là lãng phí lượt ôn; quá khó thì mất tín hiệu.
+5. **Chọn đáp án sai** — [distractor_policy.py](backend/app/services/distractor_policy.py) trượt cửa sổ theo nấc thụ đắc: mới `RECOGNIZED` thì distractor **xa** đáp án (dễ loại trừ, xây tự tin); `MASTERED` thì distractor **gần nhất** (đồng âm/đồng tự) để kiểm tra phân biệt thật. Luôn lấy distractor khó nhất cho người mới sẽ khiến họ sai vì *chưa phân biệt nổi* thay vì vì *chưa thuộc* — sai vì lý do sai thì tín hiệu học vô nghĩa.
+
+### Vòng 2 — Mỗi phiên học (máy tự làm, theo ngày)
+
+[priority_service.py](backend/app/services/priority_service.py) xếp hàng đợi từ cần học bằng công thức trọng số, thay cho cách sort thô theo `(accuracy, level)` trước đây:
+
+```
+priority = due_urgency          * 0.35
+         + forgetting_risk      * 0.20
+         + error_need           * 0.20
+         + goal_relevance       * 0.10
+         + novelty_need         * 0.05
+         + habit_fit            * 0.05
+         - recent_repeat_penalty * 0.05
+```
+
+Song song, [repair_service.py](backend/app/services/repair_service.py) gom các `error_tag` sai gần đây và áp **repair mapping**: mỗi loại lỗi có một cách sửa và một dạng bài tương ứng. Đây là nơi tiêu thụ error taxonomy — trước khi có service này, các tag được gán nhưng không ai đọc, mapping nằm chết.
+
+Kế hoạch ngày cuối cùng do `src/learning-session-planner.js` dựng, và [study_analysis_service.py](backend/app/services/study_analysis_service.py) sinh phần phân tích + đề xuất hiển thị trên dashboard.
+
+### Vòng 3 — Mỗi 8 giờ (CI tự chạy, bạn đọc kết quả)
+
+`content-qa.yml` chạy toàn bộ cổng chất lượng và ghi `qa_report.json`.
+
+**Việc bạn phải làm:**
+- [ ] Mở artifact `qa-report` khi CI đỏ, hoặc đọc thông báo Slack.
+- [ ] Phân biệt hai loại lỗi: **lỗi cấu trúc** (JSON sai schema → sửa dữ liệu ngay) và **lỗi nội dung** (LLM sinh câu không tự nhiên → sửa prompt spec trong `llm_generator_service.py`).
+- [ ] Nếu cùng một loại lỗi nội dung lặp lại nhiều chu kỳ, đó là tín hiệu sửa **spec**, không phải sửa từng câu.
+
+### Vòng 4 — Hằng tuần / khi bank cạn (bạn chủ động)
+
+Đây là phần vòng học **không** tự đóng được, cần bạn:
+
+| Việc | Lệnh / hành động | Vì sao cần người |
+| :--- | :--- | :--- |
+| Bổ sung câu hỏi cho level bị người học "vét sạch" | `python -m app.scripts.upgrade_quiz_bank_ai --levels N --count 20` | Hệ thống biết bank cạn nhưng không tự tiêu tiền API. |
+| Mở rộng ngân hàng đoạn văn | Viết tay vào `exam_passages.json` rồi chạy 3 cổng ở Giai đoạn 4 | Đoạn chuẩn đề thi cần phán đoán về độ tự nhiên mà validator không kiểm được. |
+| Rà soát từ sót sau enrichment | Đọc `backend/data/enrich_pipeline.log` | Từ fail validation nhiều lần cần câu ví dụ viết tay. |
+| Cân lại vị trí đáp án | `python -m app.scripts.rebalance_answer_positions` | Thiên lệch tích tụ dần theo mỗi đợt sinh mới. |
+| Soát prompt spec | Sửa `_CLOZE_SPEC` / `_READING_SPEC` trong `llm_generator_service.py` | Chất lượng đầu ra bám vào spec; đây là đòn điều khiển mạnh nhất bạn có. |
+
+### Bản đồ tín hiệu → engine
+
+Dùng bảng này khi cần biết "sửa hành vi học ở đâu":
+
+| Muốn thay đổi | Sửa ở |
+| :--- | :--- |
+| Chọn từ nào để học hôm nay | [priority_service.py](backend/app/services/priority_service.py) |
+| Câu dễ/khó ra sao | [difficulty_service.py](backend/app/services/difficulty_service.py), [item_difficulty.py](backend/app/services/item_difficulty.py) |
+| Đáp án sai gần/xa đáp án đúng | [distractor_policy.py](backend/app/services/distractor_policy.py), [viet_distractor.py](backend/app/services/viet_distractor.py) |
+| Khi nào lên nấc thụ đắc | [acquisition_service.py](backend/app/services/acquisition_service.py) |
+| Dạng bài nào cho bậc truy hồi nào | [retrieval_ladder_service.py](backend/app/services/retrieval_ladder_service.py) |
+| Lỗi nào sửa bằng bài gì | [repair_service.py](backend/app/services/repair_service.py) |
+| Lịch ôn tập | [srs_service.py](backend/app/services/srs_service.py), `src/vocab-srs.js` |
+| Chất lượng câu AI sinh | [llm_generator_service.py](backend/app/services/llm_generator_service.py), [question_generator.py](backend/app/services/question_generator.py) |
+| Ngữ liệu ví dụ & từ dễ nhầm | [enrichment_service.py](backend/app/services/enrichment_service.py) |
+
+> 📌 **Về nguồn nội dung:** đừng lấy ngân hàng đề của các site thương mại (MandarinBean, HSK Online…) làm hạt giống — nội dung đó có bản quyền, và đưa qua một bước AI không làm sạch được nguồn gốc. Vòng bootstrap đúng là dùng chính `exam_passages.json` của bạn làm few-shot: pool càng lớn thì few-shot càng đa dạng, đoạn sinh ra càng ít giống nhau. Nếu cần văn phong người thật, dùng nguồn có giấy phép mở (Tatoeba CC-BY 2.0, Wikinews tiếng Trung CC-BY-SA) và ghi credit đúng license.
 
 ---
 

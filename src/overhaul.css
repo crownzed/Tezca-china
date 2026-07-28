@@ -2791,3 +2791,56 @@ main.core-page {
 .readiness-cell strong {
   color: var(--jade) !important;
 }
+
+/* --- AI phân tích dữ liệu học tổng hợp (on-demand) --- */
+.ai-analysis-box {
+  margin-top: 16px !important;
+  padding: 20px !important;
+  background: var(--modern-zen-card) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.ai-analysis-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+.ai-analysis-head h3 {
+  margin: 2px 0 0 !important;
+}
+
+.ai-analysis-hint {
+  margin: 12px 0 0 !important;
+  opacity: 0.7 !important;
+  font-size: 0.9rem !important;
+}
+
+.ai-analysis-result {
+  margin-top: 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+.ai-analysis-summary {
+  margin: 0 !important;
+  line-height: 1.6 !important;
+  white-space: pre-line !important;
+}
+
+.ai-analysis-group ul,
+.ai-analysis-group ol {
+  margin: 6px 0 0 !important;
+  padding-left: 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.ai-analysis-group li {
+  line-height: 1.55 !important;
+}
