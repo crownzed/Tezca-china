@@ -1375,7 +1375,14 @@
 
 /* Giảm tải nền trên máy nhỏ: blur 26px full-screen là phép đắt nhất ở đây.
    Bỏ hạt phim (lớp repeat + blend overlay toàn khung) và hạ blur dải Ngân Hà.
-   Số sao/bloom đã tự giảm qua detectPerfTier() trong SpaceVortexBackground. */
+   Số sao/bloom đã tự giảm qua detectPerfTier() trong SpaceVortexBackground.
+
+   Vì sao 767px mà không gộp với 720px ở trên: hai điểm ngắt này trả lời hai
+   câu hỏi khác nhau. 720px là ngưỡng BỐ CỤC, và nó không phải số chọn tay —
+   đo được thanh nav cần đúng 711px nội dung, ở 721px nó vừa khít 722/722 còn
+   ở 720px thì xuống hàng. 767px là ngưỡng HIỆU NĂNG, mốc tablet dọc quen
+   dùng, chọn theo khả năng GPU chứ không theo chỗ nào bố cục vỡ. Gộp lại
+   thành một số thì một trong hai mục đích phải nhượng bộ. */
 @media (max-width: 767px) {
   .landing-cosmos__grain {
     display: none;
@@ -1400,6 +1407,26 @@
 @media (max-width: 420px) {
   .landing-stats {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Màn hình thấp: thôi dính thanh điều hướng.
+
+   Dưới 720px thanh nav xuống ba hàng và cao 127px. Trên điện thoại nằm ngang
+   (720x420) đó là 30.3% chiều cao màn hình, dính cứng ở đó suốt lúc cuộn —
+   chỉ còn 293px cho nội dung thật. Một thanh điều hướng ăn gần một phần ba
+   khung nhìn thì không còn là tiện lợi, nó là vật cản.
+
+   Ngưỡng 560px chọn theo chính con số đo được, không theo cảm giác: ở 560px
+   thanh nav 127px chiếm 22.7%, ngay dưới mốc một phần tư khung nhìn. Cao hơn
+   thế thì để dính vẫn được lợi hơn mất.
+
+   Dùng max-height chứ không phải orientation: landscape — cái quyết định ở
+   đây là CHIỀU CAO còn lại, không phải hướng máy. Cửa sổ desktop bị kéo thấp
+   cũng gặp đúng vấn đề này. */
+@media (max-height: 560px) {
+  .landing-nav {
+    position: static;
   }
 }
 
