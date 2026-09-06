@@ -65,6 +65,11 @@ _DEMO_ALLOWED_MIME = {"audio/wav", "audio/webm"}
 # lớp bảo vệ thật (in-memory, đủ cho deploy single-instance).
 _demo_rate_limiter = RateLimiter(max_hits=3, window_seconds=600)
 
+# Practice sentence: công khai, không auth, đọc random từ DB. Giới hạn theo IP
+# để chặn scraping/crawler cày endpoint mà không ảnh hưởng người học thật (một
+# phiên luyện phát âm bình thường hiếm khi vượt 10 câu/phút).
+_practice_sentence_limiter = RateLimiter(max_hits=30, window_seconds=60)
+
 # --- Giới hạn cho /transcribe và /chat (ĐÃ đăng nhập) -----------------------
 # Hai endpoint này tiêu quota GEMINI_NATIVE_API_KEYS — cùng bể key mà /tts và
 # /pronunciation đang dùng — nên một tài khoản gọi lặp vô hạn sẽ làm chết tính
@@ -96,13 +101,15 @@ def _client_ip(request: Request) -> str:
 
 
 @router.get("/practice-sentence", response_model=PracticeSentenceOut)
-def practice_sentence(level: int = 1, db: Session = Depends(get_db)):
+def practice_sentence(request: Request, level: int = 1, db: Session = Depends(get_db)):
     """Return a short word to read aloud, with its canonical pinyin from the DB.
 
     Words carry stored pinyin, so the pronunciation target is exact — the most
     reliable basis for scoring. Falls back across levels if the requested level
     has no words.
     """
+    if not _practice_sentence_limiter.allow(client_ip(request)):
+        raise HTTPException(status_code=429, detail="Quá nhiều yêu cầu, vui lòng thử lại sau.")
     level = max(1, min(int(level or 1), 6))
     for lvl in [level, *[x for x in range(1, 7) if x != level]]:
         count = db.scalar(
@@ -156,10 +163,10 @@ def pronunciation(
         raise
     except RuntimeError as e:
         logger.warning(f"Pronunciation scoring failed: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail="Không chấm được phát âm, thử lại sau.")
     except Exception as e:
         logger.error(f"Pronunciation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Lỗi máy chủ, thử lại sau.")
 
 
 @router.get("/scenarios", response_model=list[ConversationScenarioOut])
@@ -239,10 +246,10 @@ def transcribe(
         raise
     except RuntimeError as exc:
         logger.warning(f"Speech transcription failed: {exc}")
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="Không chép được âm thanh, thử lại sau.") from exc
     except Exception as exc:
         logger.error(f"Speech transcription error: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Lỗi máy chủ, thử lại sau.") from exc
 
 
 @router.post("/chat", response_model=VoiceChatOut)
@@ -279,10 +286,10 @@ def chat(
         raise
     except RuntimeError as e:
         logger.warning(f"Voice chat failed: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail="Không tạo được câu trả lời, thử lại sau.")
     except Exception as e:
         logger.error(f"Voice chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Lỗi máy chủ, thử lại sau.")
 
 
 @router.post("/chat/stream")
@@ -417,7 +424,7 @@ def demo_pronunciation(request: DemoPronunciationRequest, http_request: Request)
         return PronunciationScoreOut(**result)
     except RuntimeError as e:
         logger.warning(f"Demo pronunciation scoring failed: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail="Không chấm được phát âm, thử lại sau.")
     except HTTPException:
         raise
     except Exception as e:

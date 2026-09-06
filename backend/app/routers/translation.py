@@ -52,10 +52,10 @@ def items(
         picked = take_items(request.hsk_level, request.count, exclude=request.exclude)
     except RuntimeError as exc:
         logger.warning(f"Translation items generation failed: {exc}")
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="Không tạo được câu để dịch, thử lại sau.") from exc
     except Exception as exc:
         logger.error(f"Translation items error: {exc}")
-        raise HTTPException(status_code=500, detail="Không tạo được câu để dịch, thử lại sau.") from exc
+        raise HTTPException(status_code=500, detail="Lỗi máy chủ, thử lại sau.") from exc
 
     if not picked:
         raise HTTPException(status_code=502, detail="Chưa có câu nào để luyện dịch, thử lại sau.")

@@ -5,3 +5,13 @@ __pycache__
 .env
 server*.log
 README.md
+tests/
+*.log
+*.bak*
+fly.secrets
+.jwt_secret.local
+.turso.local
+.pytest_cache/
+create_fixed_account.py
+t_nonce.py
+run-quiz-bank-upgrade.ps1

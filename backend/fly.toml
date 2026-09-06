@@ -11,6 +11,7 @@ primary_region = "sin"  # Singapore — gần VN nhất
 
 [env]
   PORT = "8080"
+  ENV = "production"
 
 [http_service]
   internal_port = 8080

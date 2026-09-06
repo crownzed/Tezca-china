@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 # trước nhưng không được lan sang file này; đây là chỗ bị bỏ sót.
 _login_ip_limiter = RateLimiter(max_hits=10, window_seconds=300)
 _login_account_limiter = RateLimiter(max_hits=5, window_seconds=300)
+_register_ip_limiter = RateLimiter(max_hits=5, window_seconds=600)
 _forgot_ip_limiter = RateLimiter(max_hits=5, window_seconds=900)
 _reset_ip_limiter = RateLimiter(max_hits=10, window_seconds=900)
 
@@ -45,7 +46,8 @@ def _user_out(user: User) -> UserOut:
 
 
 @router.post("/register", response_model=AuthResponse)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    _enforce(_register_ip_limiter, client_ip(request))
     service = AuthService(db)
     try:
         user = service.register(

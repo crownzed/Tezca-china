@@ -264,11 +264,13 @@ def health():
                 level_dist[f"HSK_{level}"] = count
     except Exception as exc:
         # DB chưa sẵn sàng (đang warm-up hoặc DATABASE_URL sai) — vẫn trả 200
-        # nhưng nói rõ trạng thái thay vì treo/500.
+        # nhưng nói rõ trạng thái thay vì treo/500. KHÔNG leak chi tiết lỗi nội bộ
+        # (stack trace, connection string) ra public endpoint.
+        logger.warning("Health check DB error: %s", exc)
         return {
             "status": "starting",
             "db_connected": False,
-            "detail": str(exc)[:200],
+            "detail": "Database chưa sẵn sàng",
             "server_time": datetime.now(timezone.utc).isoformat(),
         }
 

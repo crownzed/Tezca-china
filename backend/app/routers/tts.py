@@ -581,7 +581,7 @@ def synthesize(
             detail="Tất cả key Gemini đều hết quota TTS phút này",
             headers={"Retry-After": str(wait)},
         )
-    raise HTTPException(status_code=502, detail=f"Gemini TTS lỗi: {last_error}")
+    raise HTTPException(status_code=502, detail="Tổng hợp giọng đọc thất bại, thử lại sau.")
 
 
 @router.get("/stream")
