@@ -28,11 +28,23 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-// Khóa ổn định cho một từ: ưu tiên word_id (db-<id> hoặc id file local), fallback
-// hanzi. Cùng shape với question.word mà App.jsx truyền vào recordLearningEvent.
+// Khóa ổn định cho một từ. Ưu tiên word_id, fallback hanzi.
+//
+// Cùng một từ đến từ hai nguồn với hai kiểu id: câu quiz từ backend mang word_id
+// dạng SỐ (WordFocusOut.word_id: int) còn kho thẻ mang 'db-<id>'
+// (vocab-loader.mapBackendWord). Không chuẩn hoá thì 42 và 'db-42' thành HAI record
+// cho MỘT từ — trả lời đúng từ đó trong quiz (lúc /api/session/event lỗi và rơi về
+// ghi local) nuôi một lịch, ôn thẻ/gõ lại nuôi lịch khác, và getDueWords đếm nó hai
+// lần. Chốt dạng 'db-<số>' làm dạng chuẩn vì kho thẻ đã dùng nó; chuẩn theo hướng
+// ngược lại sẽ làm mọi record đã lưu không tra được nữa.
+//
+// id không phải số (vd cloze đề thi: '<passage>-<blank>') giữ nguyên.
 export function wordKeyOf(word = {}) {
   const id = word.word_id ?? word.id;
-  if (id !== null && id !== undefined && id !== '') return String(id);
+  if (id !== null && id !== undefined && id !== '') {
+    const raw = String(id);
+    return /^\d+$/.test(raw) ? `db-${raw}` : raw;
+  }
   return word.hanzi || word.character || '';
 }
 
@@ -58,10 +70,44 @@ function emptyRecord() {
   };
 }
 
+// Các key kho đã chạy migrate khoá trong phiên này. Theo KEY (không phải một cờ
+// boolean) vì scopedKey đổi khi người dùng đăng nhập/đổi tài khoản giữa phiên —
+// một cờ chung sẽ bỏ qua migrate cho tài khoản thứ hai.
+const migratedStores = new Set();
+
+// Bản ghi cũ dùng khoá là SỐ TRẦN (trước khi wordKeyOf chuẩn hoá về 'db-<số>').
+// Gộp chúng sang khoá chuẩn để lịch ôn đã tích luỹ không bị mất. Trùng khoá thì
+// giữ bản có `seen` lớn hơn: đó là bản đã ôn nhiều lần hơn, tức nhiều dữ liệu hơn.
+function migrateLegacyKeys(store) {
+  const legacyKeys = Object.keys(store).filter(key => /^\d+$/.test(key));
+  if (!legacyKeys.length) return store;
+  const next = { ...store };
+  legacyKeys.forEach(key => {
+    const target = `db-${key}`;
+    const incoming = next[key];
+    const existing = next[target];
+    if (!existing || (incoming?.seen || 0) > (existing.seen || 0)) next[target] = incoming;
+    delete next[key];
+  });
+  return next;
+}
+
 export function readVocabSrs() {
+  const storageKey = scopedKey(STORAGE_KEY);
   try {
-    const data = JSON.parse(localStorage.getItem(scopedKey(STORAGE_KEY)));
-    return data && typeof data === 'object' ? data : {};
+    const data = JSON.parse(localStorage.getItem(storageKey));
+    if (!data || typeof data !== 'object') return {};
+    if (migratedStores.has(storageKey)) return data;
+    migratedStores.add(storageKey);
+    const migrated = migrateLegacyKeys(data);
+    if (migrated !== data) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(migrated));
+      } catch {
+        // Không ghi được thì vẫn trả bản đã gộp cho phiên này.
+      }
+    }
+    return migrated;
   } catch {
     return {};
   }
@@ -73,6 +119,16 @@ function writeVocabSrs(store) {
   } catch {
     // localStorage đầy/khoá → bỏ qua, tiến độ chỉ mất phiên này.
   }
+}
+
+// Record hiện tại của một từ (null nếu chưa từng ôn). Dùng cho auto-confidence.js
+// để đọc tiền sử lapses/repetition TRƯỚC khi ghi lượt mới — nhờ đó suy được từ
+// này có "mong manh" hay không, thay vì phải hỏi người học.
+export function getWordRecord(word) {
+  const key = wordKeyOf(word || {});
+  if (!key) return null;
+  const record = readVocabSrs()[key];
+  return record ? { ...emptyRecord(), ...record } : null;
 }
 
 // Suy quality (1..5) từ tín hiệu trả lời — mirror SRSService._quality.

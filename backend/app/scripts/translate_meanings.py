@@ -129,9 +129,9 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="Số từ tối đa xử lý (thử nghiệm)")
     args = parser.parse_args()
 
-    from app.settings import settings
+    from app.settings import NO_LLM_KEY_MESSAGE, settings
     if not settings.llm_keys_list:
-        print("ERROR: chưa cấu hình GEMINI_API_KEYS")
+        print(f"ERROR: {NO_LLM_KEY_MESSAGE}")
         return
 
     db = SessionLocal()

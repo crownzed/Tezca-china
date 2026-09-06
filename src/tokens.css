@@ -1,0 +1,210 @@
+/* ==========================================================================
+   TOKENS — NGUỒN DUY NHẤT cho màu, bóng, bo góc, chữ, chuyển động.
+   --------------------------------------------------------------------------
+   File này PHẢI nạp ĐẦU TIÊN trong main.jsx (trước index.css). Vì nạp đầu và
+   không còn khối token nào tranh chấp, ở đây KHÔNG dùng !important.
+
+   Sinh ra bằng cách giải cascade của 4 khối token cũ (index.css :root +
+   :root[data-theme=dark], overhaul.css :root + 2 khối [data-theme=dark]) nên
+   giá trị hiệu dụng GIỮ NGUYÊN so với trước. Dark mode giữ palette xanh xám
+   #93B4CC đang chạy — không quay về xanh ngọc.
+
+   Token namespace `--sh-*` (shell.css) và `--qz-*` (quiz.css) KHÔNG nằm ở đây,
+   chúng là biến cục bộ của hai file đó.
+
+   Breakpoint chuẩn của dự án — media query không đọc được var(), nên đây là
+   quy ước bằng văn bản, dùng đúng 3 mốc này cho code mới:
+     560px  — điện thoại hẹp
+     860px  — sidebar chuyển thành thanh dưới
+    1080px  — thu gọn còn rail icon
+   ========================================================================== */
+
+:root{
+  color-scheme: light;
+
+  /* Bảng màu gốc (modern-zen) */
+  --modern-zen-bg: #F8F6F0;
+  --modern-zen-card: #FFFFFF;
+  --modern-zen-chip: #EAE5DA;
+  --modern-zen-primary: #127a5d;
+  --modern-zen-success: #1E6B4E;
+  --modern-zen-text: #1a1e1c;
+
+  /* Chữ */
+  --danger-text: #b3261e;
+  --dim: #687076;
+  --ink: var(--modern-zen-text);
+  --logo-text: #FFFFFF;
+  --muted: #4B5563;
+  --primary-text: #FFFFFF;
+  --selected-text: var(--modern-zen-text);
+  --text: var(--modern-zen-text);
+
+  /* Chữ viết & tỉ lệ */
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-cn: 'LXGW WenKai', 'Noto Sans SC', 'Inter', sans-serif;
+  --line-compact: 1.32;
+  --line-readable: 1.62;
+  --measure: 68ch;
+  --phi-major: 0.618fr;
+  --phi-minor: 0.382fr;
+
+  /* Chuyển động */
+  --transition-bounce: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-fluid: 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-smooth: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Lớp kính / parallax / hoạ tiết */
+  --aurora-1: rgba(95, 214, 180, 0.30);
+  --aurora-2: rgba(15, 125, 140, 0.28);
+  --aurora-3: rgba(14, 42, 74, 0.30);
+  --bg-pattern: url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21.184 20c.392-5.33 4.28-9.8 9.86-11.56 3.146-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15zM50 20c.39-5.33 4.28-9.8 9.86-11.56 3.14-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15zM0 20c.39-5.33 4.28-9.8 9.86-11.56 3.14-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15z' fill='%23127a5d' fill-opacity='0.025' fill-rule='evenodd'/%3E%3C/svg%3E");
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-blur: 18px;
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --px: 0px;
+  --py: 0px;
+  --stream-color: rgba(95, 214, 180, 0.55);
+
+  /* Nhãn trạng thái */
+  --badge-strong-bg: #E6FCF5;
+  --badge-strong-text: #0CA678;
+  --badge-weak-bg: #FFF5F5;
+  --badge-weak-text: #FA5252;
+
+  /* Bóng & bo góc */
+  --focus-ring: rgba(18, 122, 93, 0.36);
+  --radius: 16px;
+  --radius-lg: 24px;
+  --radius-sm: 8px;
+  --shadow: 0 6px 28px rgba(20, 26, 24, 0.07);
+  --shadow-color: 20, 26, 24;
+  --shadow-lg: 0 24px 48px rgba(var(--shadow-color), 0.08), 0 8px 16px rgba(var(--shadow-color), 0.04);
+  --shadow-md: 0 8px 24px rgba(var(--shadow-color), 0.06), 0 2px 8px rgba(var(--shadow-color), 0.04);
+  --shadow-sm: 0 2px 8px rgba(var(--shadow-color), 0.04), 0 1px 2px rgba(var(--shadow-color), 0.02);
+
+  /* Màu nhấn */
+  --celadon: #5fd6b4;
+  --cinnabar: #C2402F;
+  --cinnabar-soft: rgba(194, 64, 47, 0.11);
+  --gold: #d4a359;
+  --gold-gradient: linear-gradient(135deg, #e3ba78, #d4a359);
+  --gold-soft: rgba(212, 163, 89, 0.12);
+  --jade: var(--modern-zen-primary);
+  --jade-gradient: linear-gradient(135deg, #189874, #127a5d);
+  --jade-soft: rgba(18, 122, 93, 0.12);
+  --porcelain: #3f7d9a;
+  --porcelain-soft: rgba(63, 125, 154, 0.1);
+  --primary-end: #127a5d;
+  --primary-start: #189874;
+  --teal: #0f7d8c;
+  --tech-blue: #0e2a4a;
+
+  /* Nền / lớp giấy / kẻ */
+  --bg-bottom: var(--modern-zen-bg);
+  --bg-top: var(--modern-zen-bg);
+  --bg-wash-1: rgba(211, 47, 47, 0);
+  --bg-wash-2: rgba(46, 139, 87, 0);
+  --control-bg: var(--modern-zen-chip);
+  --control-hover: #e5e0d4;
+  --grid-line: transparent;
+  --ink-800: #F4F1EA;
+  --ink-850: #FFFFFF;
+  --ink-900: #FBF9F6;
+  --ink-950: #e9e2d8;
+  --inner-line: rgba(44, 62, 80, 0.04);
+  --line: rgba(44, 62, 80, 0.08);
+  --line-soft: rgba(44, 62, 80, 0.06);
+  --nav-bg: var(--modern-zen-bg);
+  --paper: var(--modern-zen-card);
+  --paper-strong: var(--modern-zen-card);
+  --ring-track: rgba(44, 62, 80, 0.12);
+  --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96));
+  --surface-wash: linear-gradient(150deg, rgba(255, 255, 255, 0), transparent 34%);
+  --track-bg: #F1F3F5;
+
+  /* Thang khoảng cách — MỚI. Trước đây mọi padding/gap là px cứng.
+     Chưa đổi call-site nào; dùng dần cho code mới. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 40px;
+  --sp-8: 56px;
+}
+
+/* Chỉ liệt kê token có giá trị KHÁC light. Token dẫn xuất như
+   --jade: var(--modern-zen-primary) không cần lặp lại. */
+:root[data-theme='dark']{
+  color-scheme: dark;
+
+  /* Bảng màu gốc (modern-zen) */
+  --modern-zen-bg: #091320;
+  --modern-zen-card: #0f1c2d;
+  --modern-zen-chip: #15273d;
+  --modern-zen-primary: #93B4CC;
+  --modern-zen-success: #7da5bf;
+  --modern-zen-text: #e1edf8;
+
+  /* Chữ */
+  --danger-text: #FFB0A8;
+  --dim: #798d9f;
+  --logo-text: #0b1c2b;
+  --muted: #a4b7c8;
+  --primary-text: #0b1c2b;
+
+  /* Lớp kính / parallax / hoạ tiết */
+  --aurora-1: rgba(147, 180, 204, 0.22);
+  --aurora-2: rgba(36, 110, 150, 0.24);
+  --aurora-3: rgba(40, 80, 140, 0.22);
+  --bg-pattern: url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21.184 20c.392-5.33 4.28-9.8 9.86-11.56 3.146-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15zM50 20c.39-5.33 4.28-9.8 9.86-11.56 3.14-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15zM0 20c.39-5.33 4.28-9.8 9.86-11.56 3.14-1.01 6.64-1.02 9.77.01 5.56 1.83 9.42 6.27 9.81 11.55h2.02c-.39-6.38-4.88-11.45-11.19-13.52-3.6-1.18-7.66-1.16-11.24-.03-6.28 2-10.74 7.07-11.18 13.52h2.15z' fill='%23EBE5DB' fill-opacity='0.015' fill-rule='evenodd'/%3E%3C/svg%3E");
+  --glass-bg: rgba(15, 28, 45, 0.55);
+  --glass-blur: 20px;
+  --glass-border: rgba(147, 180, 204, 0.16);
+  --stream-color: rgba(147, 180, 204, 0.45);
+
+  /* Nhãn trạng thái */
+  --badge-strong-bg: rgba(61, 170, 107, 0.18);
+  --badge-strong-text: #7BE0A4;
+  --badge-weak-bg: rgba(224, 82, 82, 0.18);
+  --badge-weak-text: #FF9C9C;
+
+  /* Bóng & bo góc */
+  --focus-ring: rgba(147, 180, 204, 0.45);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.30);
+  --shadow-color: 0, 0, 0;
+  --shadow-lg: 0 24px 48px rgba(var(--shadow-color), 0.4), 0 8px 16px rgba(var(--shadow-color), 0.2);
+  --shadow-md: 0 8px 24px rgba(var(--shadow-color), 0.3), 0 2px 8px rgba(var(--shadow-color), 0.2);
+  --shadow-sm: 0 2px 8px rgba(var(--shadow-color), 0.2), 0 1px 2px rgba(var(--shadow-color), 0.1);
+
+  /* Màu nhấn */
+  --cinnabar: #E07A5F;
+  --cinnabar-soft: rgba(224, 122, 95, 0.16);
+  --gold: #E8C17A;
+  --gold-gradient: linear-gradient(135deg, #F2D299, #E8C17A);
+  --gold-soft: rgba(232, 193, 122, 0.16);
+  --jade-gradient: linear-gradient(135deg, #b2c9db, #93B4CC);
+  --jade-soft: rgba(147, 180, 204, 0.16);
+  --porcelain: #73a4cc;
+  --porcelain-soft: rgba(115, 167, 190, 0.14);
+  --primary-end: #93B4CC;
+  --primary-start: #b2c9db;
+
+  /* Nền / lớp giấy / kẻ */
+  --bg-wash-1: rgba(224, 82, 82, 0);
+  --bg-wash-2: rgba(61, 170, 107, 0);
+  --control-hover: #3D3832;
+  --ink-800: var(--modern-zen-chip);
+  --ink-850: var(--modern-zen-card);
+  --ink-900: var(--modern-zen-bg);
+  --ink-950: #0f0e0d;
+  --inner-line: rgba(247, 242, 234, 0.05);
+  --line: rgba(147, 180, 204, 0.10);
+  --line-soft: rgba(147, 180, 204, 0.07);
+  --ring-track: rgba(247, 242, 234, 0.12);
+  --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.03));
+  --track-bg: #2F3336;
+}

@@ -1,14 +1,31 @@
 """Tạo tài khoản cố định trong dev.db (local) và mirror sang Turso (remote).
 
+Thông tin đăng nhập KHÔNG được hardcode trong file này. Trước đây `USERNAME`,
+`EMAIL`, `PASSWORD` là hằng số ngay trong file (và file này được git track), nên
+bất kỳ ai đọc repo là có một cặp đăng nhập hợp lệ trên DB production — script
+UPSERT thẳng hàng đó sang Turso. Giờ cả ba đọc từ môi trường/argv.
+
 Chạy từ thư mục backend/ với venv của backend:
-    ./.venv/Scripts/python.exe create_fixed_account.py
+    FIXED_ACCOUNT_USERNAME=... FIXED_ACCOUNT_EMAIL=... FIXED_ACCOUNT_PASSWORD=... \
+        ./.venv/Scripts/python.exe create_fixed_account.py
+
+hoặc để trống PASSWORD rồi nhập khi được hỏi:
+    ./.venv/Scripts/python.exe create_fixed_account.py --username ... --email ...
+
+Mật khẩu CHỈ nhận qua biến môi trường hoặc prompt ẩn, có chủ ý không nhận qua
+argv: tham số dòng lệnh nằm trong shell history và trong danh sách tiến trình mà
+mọi user trên máy đọc được.
 
 - Tạo/cập nhật user trong dev.db qua AuthService (hash bcrypt chuẩn).
 - Đảm bảo bảng `users` tồn tại trên Turso rồi UPSERT đúng hàng đó qua HTTP pipeline.
 """
 from __future__ import annotations
 
+import argparse
+import getpass
 import json
+import os
+import sys
 import urllib.request
 
 from app.db import SessionLocal, init_db
@@ -16,9 +33,47 @@ from app.models import User
 from app.services.auth_service import AuthService
 from app.settings import settings
 
-USERNAME = "tezca"
-EMAIL = "tezca@tezca.com"
-PASSWORD = "123456"
+# Trần khớp schemas.RegisterRequest để script không tạo được hàng mà API từ chối.
+_MIN_PASSWORD_LEN = 6
+
+
+def _resolve_credentials() -> tuple[str, str, str, str | None, bool]:
+    """(username, email, password, display_name, reactivate) từ env/argv/prompt."""
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--username", default=os.getenv("FIXED_ACCOUNT_USERNAME", "").strip())
+    parser.add_argument("--email", default=os.getenv("FIXED_ACCOUNT_EMAIL", "").strip())
+    parser.add_argument(
+        "--display-name", default=os.getenv("FIXED_ACCOUNT_DISPLAY_NAME", "").strip() or None
+    )
+    parser.add_argument(
+        "--reactivate",
+        action="store_true",
+        help=(
+            "Đặt lại is_active=True cho tài khoản đã tồn tại. Mặc định KHÔNG làm: "
+            "bản cũ luôn force is_active=True, nên admin khoá tài khoản xong chỉ cần "
+            "ai chạy lại script là mở lại tài khoản đó."
+        ),
+    )
+    args = parser.parse_args()
+
+    missing = [
+        name
+        for name, value in (("FIXED_ACCOUNT_USERNAME", args.username), ("FIXED_ACCOUNT_EMAIL", args.email))
+        if not value
+    ]
+    if missing:
+        parser.error(
+            "thiếu " + ", ".join(missing) + " (đặt biến môi trường, hoặc dùng --username/--email)"
+        )
+
+    password = os.getenv("FIXED_ACCOUNT_PASSWORD", "")
+    if not password:
+        password = getpass.getpass("Mật khẩu cho tài khoản này (không hiện lên màn hình): ")
+    if len(password) < _MIN_PASSWORD_LEN:
+        print(f"Mật khẩu phải dài ít nhất {_MIN_PASSWORD_LEN} ký tự.", file=sys.stderr)
+        raise SystemExit(2)
+
+    return args.username, args.email, password, args.display_name, args.reactivate
 
 
 def _turso_http_url(raw: str) -> str:
@@ -59,19 +114,30 @@ def _named_arg(name: str, value):
     return {"name": name, "value": {"type": "text", "value": str(value)}}
 
 
-def create_local() -> User:
+def create_local(
+    username: str,
+    email: str,
+    password: str,
+    display_name: str | None = None,
+    reactivate: bool = False,
+) -> User:
     init_db()
     with SessionLocal() as db:
         auth = AuthService(db)
-        existing = auth.get_user_by_login(USERNAME) or auth.get_user_by_login(EMAIL)
+        existing = auth.get_user_by_login(username) or auth.get_user_by_login(email)
         if existing:
             print(f"[dev.db] User đã tồn tại (id={existing.id}), cập nhật mật khẩu.")
-            existing.password_hash = AuthService.hash_password(PASSWORD)
-            existing.is_active = True
+            existing.password_hash = AuthService.hash_password(password)
+            # Chỉ mở lại tài khoản khi được yêu cầu tường minh. Bản cũ luôn ghi
+            # is_active = True, nên script này vô hiệu hoá thao tác khoá của admin.
+            if reactivate:
+                existing.is_active = True
+            elif existing.is_active is False:
+                print("[dev.db] Tài khoản đang bị khoá — giữ nguyên. Thêm --reactivate để mở.")
             db.commit()
             db.refresh(existing)
             return existing
-        user = auth.register(USERNAME, EMAIL, PASSWORD, display_name="Tezca")
+        user = auth.register(username, email, password, display_name=display_name or username)
         print(f"[dev.db] Đã tạo user id={user.id}")
         return user
 
@@ -141,12 +207,14 @@ def mirror_to_turso(user: User) -> None:
 
 
 def main() -> None:
-    user = create_local()
+    username, email, password, display_name, reactivate = _resolve_credentials()
+    user = create_local(username, email, password, display_name, reactivate)
     mirror_to_turso(user)
     print("Hoàn tất.")
-    print(f"  username: {USERNAME}")
-    print(f"  email:    {EMAIL}")
-    print(f"  password: {PASSWORD}")
+    print(f"  username: {user.username}")
+    print(f"  email:    {user.email}")
+    # KHÔNG in mật khẩu: output của script này hay bị dán vào chat/issue/CI log.
+    print("  password: (đã đặt — không in ra)")
 
 
 if __name__ == "__main__":

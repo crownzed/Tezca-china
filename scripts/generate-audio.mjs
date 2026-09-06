@@ -11,9 +11,12 @@ const execFileAsync = promisify(execFile);
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'public', 'audio');
 
-// Backend Gemini TTS proxy (backend/app/routers/tts.py) — WAV 24kHz mono, giọng
-// Kore. Cần chạy backend + có GEMINI_NATIVE_API_KEYS trước khi chạy script này.
+// Backend TTS proxy (backend/app/routers/tts.py). Khi có STEPFUN_API_KEYS,
+// /tts ưu tiên StepFun Step Plan (MP3, voice zixinnansheng); nếu không
+// thì dùng provider fallback đã cấu hình. Cần chạy backend trước khi build.
 const API_BASE = process.env.VITE_API_BASE ?? process.env.TTS_API_BASE ?? 'http://127.0.0.1:8000';
+const AUDIO_FORCE_REGENERATE = process.env.AUDIO_FORCE_REGENERATE === '1';
+const AUDIO_SOURCE = process.env.AUDIO_SOURCE?.trim() || 'stepfun:zixinnansheng';
 
 // Gemini WAV 24kHz mono 16-bit = 48000 byte/giây + 44B header. Một âm tiết đơn
 // (~0.3s) đã ~14KB, nên clip thật luôn > vài KB. Chặn clip rỗng/hỏng dưới ngưỡng.
@@ -33,6 +36,27 @@ function isMp3(buf) {
   return buf.length >= MIN_MP3_BYTES
     && ((buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33)
       || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0));
+}
+
+// Vite/antivirus đôi khi giữ index.json vài chục mili-giây sau khi phát hiện
+// file đổi. Retry ngắn giúp build nhiều worker không dừng vì lỗi UNKNOWN trên
+// Windows; không thay đổi dữ liệu index, chỉ chờ lock nhả ra.
+function pauseSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function writeIndexWithRetry(path, snapshot) {
+  let lastError;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    try {
+      writeFileSync(path, snapshot);
+      return;
+    } catch (error) {
+      lastError = error;
+      pauseSync(50 * (attempt + 1));
+    }
+  }
+  throw lastError;
 }
 
 function audioKey(text) {
@@ -95,13 +119,13 @@ async function collectTexts() {
   return [...texts];
 }
 
-// Trả { wav } (Gemini) hoặc { mp3 } (ElevenLabs fallback) khi thành công,
+// Trả { wav } (Gemini) hoặc { mp3 } (StepFun/ElevenLabs) khi thành công,
 // { quota, retryAfter } khi mọi nguồn cạn quota (backend 429 kèm Retry-After
 // giây), hoặc { fail: true } cho lỗi tạm khác. Backend có thể trả WAV hoặc MP3
 // tùy nguồn — phân biệt bằng magic bytes.
 async function downloadAudio(text, keyIndex) {
-  // no_gemini=1: Gemini đã cạn quota cả ngày; bỏ qua để đi thẳng ElevenLabs,
-  // tránh thử 5 key Gemini (đều 429) vô ích trước mỗi clip — nhanh hơn nhiều.
+  // no_gemini=1: bỏ qua Gemini. Backend vẫn ưu tiên StepFun nếu đã cấu hình,
+  // sau đó mới dùng ElevenLabs; điều này giữ cho build audio dùng đúng provider.
   // key_index: ghim đúng 1 key ElevenLabs cho worker này → 3 worker/3 key chạy
   // song song, rate-limit độc lập theo từng tài khoản.
   const url = `${API_BASE}/tts?text=${encodeURIComponent(text)}&no_gemini=1&key_index=${keyIndex}`;
@@ -139,13 +163,13 @@ async function encodeMp3(wavBuf, key) {
   }
 }
 
-// Kho cũ (3586 clip) tải từ Youdao/Google — cũng là .mp3 nên isMp3() pass và sẽ
-// bị skip nhầm, giữ nguyên audio kém. Xóa MỘT LẦN để buộc tạo lại bằng Gemini.
-// Marker .source đánh dấu kho đã chuyển sang Gemini: lần chạy sau (resume khi hết
-// quota) đọc marker → KHÔNG xóa lại clip Gemini đã tạo.
+// MP3 cũ được giữ mặc định để tránh xóa kho audio ngoài ý muốn. Muốn đổi toàn
+// bộ kho sang voice/provider mới, chạy rõ ràng AUDIO_FORCE_REGENERATE=1; marker
+// .source giúp các lần resume sau không xóa lại clip vừa tạo.
 function purgeLegacyAudioOnce() {
   const marker = join(outDir, '.source');
-  if (existsSync(marker) && readFileSync(marker, 'utf8').trim() === 'gemini') return;
+  if (!AUDIO_FORCE_REGENERATE) return;
+  if (existsSync(marker) && readFileSync(marker, 'utf8').trim() === AUDIO_SOURCE) return;
   let removed = 0;
   for (const name of readdirSync(outDir)) {
     if (name.endsWith('.mp3') || name.endsWith('.wav')) {
@@ -153,8 +177,8 @@ function purgeLegacyAudioOnce() {
       removed += 1;
     }
   }
-  writeFileSync(marker, 'gemini');
-  console.log(`Đã xóa ${removed} clip cũ (Youdao/Google). Bắt đầu tạo lại bằng Gemini.`);
+  writeFileSync(marker, AUDIO_SOURCE);
+  console.log(`Đã xóa ${removed} clip cũ. Bắt đầu tạo lại bằng ${AUDIO_SOURCE}.`);
 }
 
 // Số worker song song = số key ElevenLabs ghim đầu danh sách (index 0..N-1).
@@ -175,7 +199,8 @@ async function main() {
   let skipped = 0;
 
   // Lưu index tăng dần để lần chạy sau resume được (script skip file mp3 hợp lệ).
-  const flushIndex = () => writeFileSync(join(outDir, 'index.json'), JSON.stringify(index));
+  const indexPath = join(outDir, 'index.json');
+  const flushIndex = () => writeIndexWithRetry(indexPath, JSON.stringify(index));
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   // Con trỏ chung: mỗi worker rút text kế tiếp. JS đơn luồng nên tăng cursor đồng

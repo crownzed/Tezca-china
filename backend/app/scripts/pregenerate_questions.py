@@ -1,6 +1,11 @@
 """Pre-generate a diverse question bank for all levels and quiz types.
 
-Run at startup to ensure every word has questions for every applicable quiz type.
+Run at startup to ensure every level+type has a usable baseline of questions.
+
+Chỉ đảm bảo NGƯỠNG SÀN (``TARGET_PER_TYPE`` câu mỗi cấp/dạng) để app chạy được
+ngay sau khi seed. Muốn bank phủ TOÀN BỘ từ vựng của từng cấp thì chạy
+``python -m app.scripts.cover_hsk_vocab`` — script đó lấy coverage theo TỪ làm
+mục tiêu, còn hàm này chỉ đếm số câu.
 """
 from __future__ import annotations
 
@@ -19,6 +24,7 @@ ALL_QUIZ_TYPES = [
     QuizType.translation,
     QuizType.drag_drop,
     QuizType.reading,
+    QuizType.dialogue,
 ]
 
 TARGET_PER_TYPE = 20  # questions per quiz_type per level

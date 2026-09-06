@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import Float, Integer, String, func, select
 from sqlalchemy.orm import Session
 
 from ..deps import resolve_user_id
@@ -155,183 +155,334 @@ def submit_session_output(payload: SessionOutputRequest, user_id: str = Depends(
 
 @router.get("/stats", response_model=StatsOut)
 def stats(user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
+    """Thống kê tóm tắt — TẤT CẢ tính bằng SQL aggregate, KHÔNG load ORM rows.
+
+    Bản cũ load TRỌN UserProgress vào RAM rồi sum/len trong Python. Với user có
+    vài nghìn từ đã học, việc đó tốn hàng chục ms serialize + transfer + iterate.
+    Chuyển sang SUM/COUNT/AVG trực tiếp trên DB: một query duy nhất, kết quả là
+    5 con số thay vì nghìn hàng ORM.
+    """
     attempts = db.scalar(select(func.count()).select_from(QuizAttempt).where(QuizAttempt.user_id == user_id)) or 0
-    progress = db.scalars(select(UserProgress).where(UserProgress.user_id == user_id)).all()
-    answered = sum(p.seen for p in progress)
-    correct = sum(p.correct for p in progress)
-    weak = len([p for p in progress if p.seen > 0 and p.correct / max(1, p.seen) < 0.6])
+
+    # Một query aggregate duy nhất thay vì load toàn bộ progress rows.
+    # CASE expression cho weak count: seen > 0 AND accuracy < 60%.
+    agg = db.execute(
+        select(
+            func.coalesce(func.sum(UserProgress.seen), 0).label("answered"),
+            func.coalesce(func.sum(UserProgress.correct), 0).label("correct"),
+            func.coalesce(func.avg(UserProgress.mastery), 0).label("mastery_avg"),
+            func.count().label("total_rows"),
+            func.sum(
+                func.cast(
+                    (UserProgress.seen > 0) & (UserProgress.correct * 100 < UserProgress.seen * 60),
+                    Integer,
+                )
+            ).label("weak"),
+        ).where(UserProgress.user_id == user_id)
+    ).one()
+
+    answered = int(agg.answered)
+    correct = int(agg.correct)
+    mastery_avg = round(float(agg.mastery_avg)) if agg.total_rows else 0
+    weak = int(agg.weak or 0)
     accuracy = round((correct / answered) * 100) if answered else 0
-    mastery_avg = round(sum(p.mastery for p in progress) / len(progress)) if progress else 0
-    memory_stability = mastery_avg
-    listening_readiness = round(sum(p.listening_score or 0 for p in progress) / len(progress)) if progress else 0
-    context_transfer = round(sum(p.context_score or 0 for p in progress) / len(progress)) if progress else 0
-    production_readiness = round(sum(p.production_score or 0 for p in progress) / len(progress)) if progress else 0
     label = "Bền vững" if mastery_avg >= 80 else "Ổn định" if mastery_avg >= 55 else "Đang xây" if mastery_avg else "Khởi động"
     return StatsOut(attempts=attempts, answered=answered, accuracy=accuracy, mastery_label=label, weak_words=weak)
 
 @router.get("/analytics", response_model=AnalyticsOut)
 def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
-    now = datetime.utcnow()
-    attempts = db.scalars(
-        select(QuizAttempt)
-        .where(QuizAttempt.user_id == user_id)
-        .order_by(QuizAttempt.created_at.asc())
-    ).all()
-    progress = db.scalars(select(UserProgress).where(UserProgress.user_id == user_id)).all()
-    event_rows = db.execute(
-        select(LearningEvent, Question)
-        .join(Question, LearningEvent.question_id == Question.id)
-        .where(LearningEvent.user_id == user_id)
-        .order_by(LearningEvent.created_at.asc())
-    ).all()
+    """Phân tích học tập chi tiết — tối ưu bằng SQL aggregation.
 
-    answered = sum(p.seen for p in progress)
-    correct = sum(p.correct for p in progress)
-    weak = len([p for p in progress if p.seen > 0 and p.correct / max(1, p.seen) < 0.6])
-    due_count = len([p for p in progress if p.seen > 0 and (p.next_review_at is None or p.next_review_at <= now)])
-    accuracy = round((correct / answered) * 100) if answered else 0
-    mastery_avg = round(sum(p.mastery for p in progress) / len(progress)) if progress else 0
+    Bản cũ load TRỌN 3 bảng (QuizAttempt, UserProgress, LearningEvent+Question)
+    vào RAM rồi iterate trong Python. Với user active (10k+ events), việc đó vượt
+    p95 < 200ms rất xa. Chuyển sang:
+      - Progress aggregates: 1 query SUM/COUNT/AVG (thay vì load nghìn ORM rows)
+      - Event aggregates: GROUP BY trên DB cho type/level breakdown + confidence/latency
+      - Weak words: ORDER BY + LIMIT 6 trên DB (thay vì sort toàn bộ trong Python)
+      - Recent trend: subquery GROUP BY session_id rồi LIMIT 8 (thay vì load all events)
+      - Type/level breakdown: GROUP BY trực tiếp (thay vì iterate all events)
+    Fallback QuizAttempt chỉ khi KHÔNG có event nào (user cũ chưa migrate sang event).
+    """
+    now = datetime.utcnow()
+
+    # --- 1. Progress aggregates (1 query thay vì load all rows) ----------------
+    prog_agg = db.execute(
+        select(
+            func.coalesce(func.sum(UserProgress.seen), 0).label("answered"),
+            func.coalesce(func.sum(UserProgress.correct), 0).label("correct"),
+            func.coalesce(func.avg(UserProgress.mastery), 0).label("mastery_avg"),
+            func.coalesce(func.avg(UserProgress.listening_score), 0).label("listening_avg"),
+            func.coalesce(func.avg(UserProgress.context_score), 0).label("context_avg"),
+            func.coalesce(func.avg(UserProgress.production_score), 0).label("production_avg"),
+            func.count().label("total_rows"),
+            func.sum(
+                func.cast(
+                    (UserProgress.seen > 0) & (UserProgress.correct * 100 < UserProgress.seen * 60),
+                    Integer,
+                )
+            ).label("weak"),
+            func.sum(
+                func.cast(
+                    (UserProgress.seen > 0) & (
+                        (UserProgress.next_review_at.is_(None)) | (UserProgress.next_review_at <= now)
+                    ),
+                    Integer,
+                )
+            ).label("due_count"),
+        ).where(UserProgress.user_id == user_id)
+    ).one()
+
+    answered = int(prog_agg.answered)
+    correct = int(prog_agg.correct)
+    weak = int(prog_agg.weak or 0)
+    due_count = int(prog_agg.due_count or 0)
+    mastery_avg = round(float(prog_agg.mastery_avg)) if prog_agg.total_rows else 0
     memory_stability = mastery_avg
-    listening_readiness = round(sum(p.listening_score or 0 for p in progress) / len(progress)) if progress else 0
-    context_transfer = round(sum(p.context_score or 0 for p in progress) / len(progress)) if progress else 0
-    production_readiness = round(sum(p.production_score or 0 for p in progress) / len(progress)) if progress else 0
-    confidence_values = [event.confidence for event, _ in event_rows if event.confidence]
-    latency_values = [event.latency_ms for event, _ in event_rows if event.latency_ms is not None]
-    confidence_avg = round(sum(confidence_values) / len(confidence_values), 2) if confidence_values else 0
-    latency_avg_ms = round(sum(latency_values) / len(latency_values)) if latency_values else 0
+    listening_readiness = round(float(prog_agg.listening_avg)) if prog_agg.total_rows else 0
+    context_transfer = round(float(prog_agg.context_avg)) if prog_agg.total_rows else 0
+    production_readiness = round(float(prog_agg.production_avg)) if prog_agg.total_rows else 0
+    accuracy = round((correct / answered) * 100) if answered else 0
     label = "Bền vững" if mastery_avg >= 80 else "Ổn định" if mastery_avg >= 55 else "Đang xây" if mastery_avg else "Khởi động"
 
+    # --- 2. Event-level aggregates (GROUP BY thay vì iterate all rows) ----------
+    # Confidence + latency averages
+    event_avgs = db.execute(
+        select(
+            func.avg(LearningEvent.confidence).label("confidence_avg"),
+            func.avg(LearningEvent.latency_ms).label("latency_avg"),
+            func.count().label("event_count"),
+        ).where(LearningEvent.user_id == user_id)
+    ).one()
+    confidence_avg = round(float(event_avgs.confidence_avg), 2) if event_avgs.confidence_avg else 0
+    latency_avg_ms = round(float(event_avgs.latency_avg)) if event_avgs.latency_avg else 0
+    event_count = int(event_avgs.event_count)
+
+    # Type breakdown via GROUP BY (1 query thay vì iterate all events)
+    type_rows = db.execute(
+        select(
+            Question.quiz_type,
+            func.count(func.distinct(LearningEvent.session_id)).label("attempts"),
+            func.count().label("answered"),
+            func.sum(LearningEvent.correct).label("correct"),
+        )
+        .join(Question, LearningEvent.question_id == Question.id)
+        .where(LearningEvent.user_id == user_id)
+        .group_by(Question.quiz_type)
+    ).all()
     type_map = {
-        quiz_type: {
-            "quiz_type": quiz_type,
-            "label": TYPE_LABELS[quiz_type],
-            "attempts": 0,
-            "answered": 0,
-            "correct": 0,
-        }
+        quiz_type: {"quiz_type": quiz_type, "label": TYPE_LABELS[quiz_type], "attempts": 0, "answered": 0, "correct": 0}
         for quiz_type in QuizType
     }
-    level_map = {
-        level: {"level": level, "attempts": 0, "answered": 0, "correct": 0}
-        for level in range(1, 7)
-    }
+    for row in type_rows:
+        item = type_map[row.quiz_type]
+        # session_id NULL → mỗi event là một "session" riêng (fallback cho data cũ)
+        # count(distinct session_id) bỏ qua NULL → cần cộng thêm số event có session_id NULL
+        item["attempts"] = row.attempts
+        item["answered"] = row.answered
+        item["correct"] = int(row.correct or 0)
 
-    event_groups = {}
-    type_sessions = {quiz_type: set() for quiz_type in QuizType}
-    level_sessions = {level: set() for level in range(1, 7)}
+    # Fix attempts count: distinct(session_id) ignores NULLs; add back NULL-session events
+    null_session_attempts = db.execute(
+        select(
+            Question.quiz_type,
+            func.count().label("null_sessions"),
+        )
+        .join(Question, LearningEvent.question_id == Question.id)
+        .where(LearningEvent.user_id == user_id, LearningEvent.session_id.is_(None))
+        .group_by(Question.quiz_type)
+    ).all()
+    for row in null_session_attempts:
+        type_map[row.quiz_type]["attempts"] += row.null_sessions
 
-    if event_rows:
-        for event, question in event_rows:
-            correct_value = 1 if event.correct else 0
-            group_key = event.session_id or f"event-{event.id}"
+    # Level breakdown via GROUP BY
+    level_rows = db.execute(
+        select(
+            Question.level,
+            func.count(func.distinct(LearningEvent.session_id)).label("attempts"),
+            func.count().label("answered"),
+            func.sum(LearningEvent.correct).label("correct"),
+        )
+        .join(Question, LearningEvent.question_id == Question.id)
+        .where(LearningEvent.user_id == user_id)
+        .group_by(Question.level)
+    ).all()
+    level_map = {level: {"level": level, "attempts": 0, "answered": 0, "correct": 0} for level in range(1, 7)}
+    for row in level_rows:
+        if row.level in level_map:
+            item = level_map[row.level]
+            item["attempts"] = row.attempts
+            item["answered"] = row.answered
+            item["correct"] = int(row.correct or 0)
 
-            type_item = type_map[question.quiz_type]
-            type_item["answered"] += 1
-            type_item["correct"] += correct_value
-            type_sessions[question.quiz_type].add(group_key)
+    # Fix NULL-session attempts for level
+    null_session_levels = db.execute(
+        select(
+            Question.level,
+            func.count().label("null_sessions"),
+        )
+        .join(Question, LearningEvent.question_id == Question.id)
+        .where(LearningEvent.user_id == user_id, LearningEvent.session_id.is_(None))
+        .group_by(Question.level)
+    ).all()
+    for row in null_session_levels:
+        if row.level in level_map:
+            level_map[row.level]["attempts"] += row.null_sessions
 
-            level_item = level_map[question.level]
-            level_item["answered"] += 1
-            level_item["correct"] += correct_value
-            level_sessions[question.level].add(group_key)
+    has_events = event_count > 0
 
-            group = event_groups.setdefault(group_key, {
-                "created_at": event.created_at,
-                "level": question.level,
-                "quiz_type": question.quiz_type,
-                "score": 0,
-                "total": 0,
-            })
-            group["score"] += correct_value
-            group["total"] += 1
-            if event.created_at < group["created_at"]:
-                group["created_at"] = event.created_at
+    # Fallback: nếu không có event nào, dùng QuizAttempt (data cũ trước khi migrate)
+    if not has_events:
+        attempt_rows = db.execute(
+            select(
+                QuizAttempt.quiz_type,
+                func.count().label("attempts"),
+                func.sum(QuizAttempt.total).label("answered"),
+                func.sum(QuizAttempt.score).label("correct"),
+            )
+            .where(QuizAttempt.user_id == user_id)
+            .group_by(QuizAttempt.quiz_type)
+        ).all()
+        for row in attempt_rows:
+            item = type_map[row.quiz_type]
+            item["attempts"] = row.attempts
+            item["answered"] = int(row.answered or 0)
+            item["correct"] = int(row.correct or 0)
 
-        for quiz_type, sessions in type_sessions.items():
-            type_map[quiz_type]["attempts"] = len(sessions)
-        for level, sessions in level_sessions.items():
-            level_map[level]["attempts"] = len(sessions)
-    else:
-        for attempt in attempts:
-            type_item = type_map[attempt.quiz_type]
-            type_item["attempts"] += 1
-            type_item["answered"] += attempt.total
-            type_item["correct"] += attempt.score
-
-            level_item = level_map[attempt.level]
-            level_item["attempts"] += 1
-            level_item["answered"] += attempt.total
-            level_item["correct"] += attempt.score
+        level_attempt_rows = db.execute(
+            select(
+                QuizAttempt.level,
+                func.count().label("attempts"),
+                func.sum(QuizAttempt.total).label("answered"),
+                func.sum(QuizAttempt.score).label("correct"),
+            )
+            .where(QuizAttempt.user_id == user_id)
+            .group_by(QuizAttempt.level)
+        ).all()
+        for row in level_attempt_rows:
+            if row.level in level_map:
+                item = level_map[row.level]
+                item["attempts"] = row.attempts
+                item["answered"] = int(row.answered or 0)
+                item["correct"] = int(row.correct or 0)
 
     type_breakdown = [
-        {
-            **item,
-            "accuracy": round((item["correct"] / item["answered"]) * 100) if item["answered"] else 0,
-        }
+        {**item, "accuracy": round((item["correct"] / item["answered"]) * 100) if item["answered"] else 0}
         for item in type_map.values()
     ]
     level_breakdown = [
-        {
-            **item,
-            "accuracy": round((item["correct"] / item["answered"]) * 100) if item["answered"] else 0,
-        }
+        {**item, "accuracy": round((item["correct"] / item["answered"]) * 100) if item["answered"] else 0}
         for item in level_map.values()
     ]
 
-    if event_rows:
-        recent_groups = sorted(event_groups.values(), key=lambda item: item["created_at"])[-8:]
-        first_recent_index = max(0, len(event_groups) - len(recent_groups))
+    # --- 3. Recent trend: GROUP BY session trên DB, LIMIT 8 ---------------------
+    if has_events:
+        # Subquery: aggregate per session (or per event if no session_id)
+        # Dùng COALESCE(session_id, 'event-' || id) làm group key
+        from sqlalchemy import case as sa_case
+        group_key = sa_case(
+            (LearningEvent.session_id.is_not(None), func.cast(LearningEvent.session_id, String)),
+            else_=func.concat("event-", func.cast(LearningEvent.id, String)),
+        ).label("gk")
+        recent_subq = (
+            select(
+                group_key,
+                func.min(LearningEvent.created_at).label("first_at"),
+                func.min(Question.level).label("level"),
+                func.min(Question.quiz_type).label("quiz_type"),
+                func.sum(LearningEvent.correct).label("score"),
+                func.count().label("total"),
+            )
+            .join(Question, LearningEvent.question_id == Question.id)
+            .where(LearningEvent.user_id == user_id)
+            .group_by(group_key)
+            .order_by(func.min(LearningEvent.created_at).desc())
+            .limit(8)
+        ).subquery()
+        recent_rows = db.execute(
+            select(recent_subq).order_by(recent_subq.c.first_at.asc())
+        ).all()
+        total_groups = db.scalar(
+            select(func.count(func.distinct(group_key)))
+            .select_from(LearningEvent)
+            .join(Question, LearningEvent.question_id == Question.id)
+            .where(LearningEvent.user_id == user_id)
+        ) or 0
+        first_recent_index = max(0, total_groups - len(recent_rows))
         recent_trend = [
             {
                 "label": f"S{first_recent_index + idx + 1}",
-                "level": group["level"],
-                "quiz_type": group["quiz_type"],
-                "score": group["score"],
-                "total": group["total"],
-                "accuracy": round((group["score"] / group["total"]) * 100) if group["total"] else 0,
+                "level": row.level,
+                "quiz_type": row.quiz_type,
+                "score": int(row.score or 0),
+                "total": int(row.total),
+                "accuracy": round((int(row.score or 0) / int(row.total)) * 100) if row.total else 0,
             }
-            for idx, group in enumerate(recent_groups)
+            for idx, row in enumerate(recent_rows)
         ]
-        attempt_count = len(event_groups)
+        attempt_count = total_groups
     else:
-        recent_attempts = attempts[-8:]
-        first_recent_index = max(0, len(attempts) - len(recent_attempts))
+        # Fallback: QuizAttempt gần nhất
+        recent_attempts = db.scalars(
+            select(QuizAttempt)
+            .where(QuizAttempt.user_id == user_id)
+            .order_by(QuizAttempt.created_at.desc())
+            .limit(8)
+        ).all()
+        total_attempts = db.scalar(
+            select(func.count()).select_from(QuizAttempt).where(QuizAttempt.user_id == user_id)
+        ) or 0
+        recent_attempts = list(reversed(recent_attempts))
+        first_recent_index = max(0, total_attempts - len(recent_attempts))
         recent_trend = [
             {
                 "label": f"P{first_recent_index + idx + 1}",
-                "level": attempt.level,
-                "quiz_type": attempt.quiz_type,
-                "score": attempt.score,
-                "total": attempt.total,
-                "accuracy": round((attempt.score / attempt.total) * 100) if attempt.total else 0,
+                "level": a.level,
+                "quiz_type": a.quiz_type,
+                "score": a.score,
+                "total": a.total,
+                "accuracy": round((a.score / a.total) * 100) if a.total else 0,
             }
-            for idx, attempt in enumerate(recent_attempts)
+            for idx, a in enumerate(recent_attempts)
         ]
-        attempt_count = len(attempts)
+        attempt_count = total_attempts
 
-    word_rows = db.execute(
-        select(UserProgress, Word)
+    # --- 4. Weak words: ORDER BY + LIMIT trên DB (thay vì sort toàn bộ) --------
+    weak_word_rows = db.execute(
+        select(
+            Word.hsk_level,
+            Word.hanzi,
+            Word.pinyin,
+            Word.meaning_vi,
+            UserProgress.seen,
+            UserProgress.wrong,
+            UserProgress.mastery,
+            (UserProgress.correct * 100 / func.cast(UserProgress.seen, Float)).label("word_accuracy"),
+        )
         .join(Word, UserProgress.word_id == Word.id)
         .where(UserProgress.user_id == user_id, UserProgress.seen > 0)
+        .order_by(
+            (UserProgress.correct * 100 / func.cast(UserProgress.seen, Float)).asc(),
+            UserProgress.mastery.asc(),
+            UserProgress.wrong.desc(),
+            UserProgress.seen.desc(),
+        )
+        .limit(6)
     ).all()
-    weak_word_candidates = []
-    for progress_row, word in word_rows:
-        word_accuracy = round((progress_row.correct / progress_row.seen) * 100) if progress_row.seen else 0
-        weak_word_candidates.append({
-            "level": word.hsk_level,
-            "hanzi": word.hanzi,
-            "pinyin": word.pinyin,
-            "meaning_vi": word.meaning_vi,
-            "seen": progress_row.seen,
-            "wrong": progress_row.wrong,
-            "accuracy": word_accuracy,
-            "mastery": progress_row.mastery,
-        })
-    weak_word_list = sorted(
-        weak_word_candidates,
-        key=lambda item: (item["accuracy"], item["mastery"], -item["wrong"], -item["seen"]),
-    )[:6]
+    weak_word_list = [
+        {
+            "level": row.hsk_level,
+            "hanzi": row.hanzi,
+            "pinyin": row.pinyin,
+            "meaning_vi": row.meaning_vi,
+            "seen": row.seen,
+            "wrong": row.wrong,
+            "accuracy": round(float(row.word_accuracy)) if row.word_accuracy is not None else 0,
+            "mastery": row.mastery,
+        }
+        for row in weak_word_rows
+    ]
 
+    # --- 5. Recommendation logic (giữ nguyên, chỉ dùng biến đã aggregate) ------
     practiced_types = [item for item in type_breakdown if item["answered"] > 0]
     practiced_levels = [item for item in level_breakdown if item["answered"] > 0]
     weakest_type = min(practiced_types, key=lambda item: (item["accuracy"], -item["answered"])) if practiced_types else None
@@ -339,7 +490,7 @@ def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get
 
     if weak or due_count or (confidence_avg and confidence_avg < 2.5):
         recommended_strategy = "repair"
-    elif event_rows and accuracy >= 70 and len(practiced_types) >= 2:
+    elif has_events and accuracy >= 70 and len(practiced_types) >= 2:
         recommended_strategy = "interleaved"
     else:
         recommended_strategy = "targeted"
@@ -377,7 +528,7 @@ def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get
         listening_readiness=listening_readiness,
         context_transfer=context_transfer,
         production_readiness=production_readiness,
-        event_count=len(event_rows),
+        event_count=event_count,
         due_count=due_count,
         confidence_avg=confidence_avg,
         latency_avg_ms=latency_avg_ms,

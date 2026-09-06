@@ -19,12 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.db import SessionLocal
 from app.services.enrichment_service import enrich_words, words_needing_enrichment
-from app.settings import settings
+from app.settings import NO_LLM_KEY_MESSAGE, settings
 
 
 def main() -> None:
     if not settings.llm_keys_list:
-        print("ERROR: chưa cấu hình GEMINI_API_KEYS — bỏ qua enrichment.")
+        print(f"ERROR: {NO_LLM_KEY_MESSAGE} Bỏ qua enrichment.")
         return
 
     grand = {"examples_added": 0, "confusables_added": 0, "words_done": 0}

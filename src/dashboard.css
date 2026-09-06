@@ -15,8 +15,10 @@
   --dash-lift: 0 10px 30px -22px rgba(35, 48, 46, 0.4);
   display: flex;
   flex-direction: column;
-  gap: 40px;
-  padding-bottom: 32px;
+  /* Dùng thang khoảng cách trong tokens.css. 40px -> 32px: ba panel gần nhau hơn
+     nên nhìn thành một trang liền mạch, không phải ba khối rời rạc. */
+  gap: var(--sp-6);
+  padding-bottom: var(--sp-6);
 }
 
 :root[data-theme="dark"] .dash-page {
@@ -75,10 +77,19 @@
 .dash-focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: center;
   gap: 24px 40px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--dash-hair);
+  padding: 28px 32px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.dash-focus:hover {
+  box-shadow: var(--shadow-md);
+  border-color: color-mix(in srgb, var(--jade) 25%, transparent);
 }
 
 .dash-focus-copy h1 {
@@ -117,18 +128,18 @@
   gap: 6px;
 }
 
-/* Bộ chọn cấp: viền mảnh, chỉ cấp đang chọn được tô — không phải 6 pill gradient */
+/* Bộ chọn cấp: viền mảnh, chỉ cấp đang chọn được tô */
 .dash-level {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
   border: 1px solid var(--dash-hair);
-  background: transparent;
+  background: var(--control-bg);
   color: var(--muted);
   border-radius: 10px;
-  padding: 7px 11px;
+  padding: 7px 13px;
   cursor: pointer;
-  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
 }
 
 .dash-level span {
@@ -149,12 +160,14 @@
 .dash-level:hover {
   color: var(--text);
   border-color: color-mix(in srgb, var(--jade) 40%, transparent);
+  transform: translateY(-1px);
 }
 
 .dash-level.active {
   color: var(--jade);
   border-color: var(--jade);
   background: var(--jade-soft);
+  box-shadow: 0 2px 8px rgba(18, 122, 93, 0.15);
 }
 
 .dash-focus-actions {
@@ -169,11 +182,17 @@
   display: flex;
   flex-direction: column;
   gap: 26px;
-  border: 1px solid var(--dash-hair);
-  border-radius: calc(var(--radius) + 4px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   background: var(--paper);
-  box-shadow: inset 0 1px 0 var(--dash-inner-light), var(--dash-lift);
-  padding: 26px 28px;
+  box-shadow: var(--shadow-sm);
+  padding: 28px 32px;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.dash-today:hover {
+  box-shadow: var(--shadow-md);
+  border-color: color-mix(in srgb, var(--jade) 25%, transparent);
 }
 
 .dash-today-head {
@@ -205,6 +224,7 @@
   border: 1px solid var(--dash-hair);
   border-radius: 12px;
   overflow: hidden;
+  background: var(--control-bg);
 }
 
 .dash-mode-switch button {
@@ -237,22 +257,26 @@
 }
 
 .dash-mode-switch button:hover {
-  background: var(--control-bg);
+  background: var(--control-hover);
   color: var(--text);
 }
 
 .dash-mode-switch button.is-active {
   background: var(--jade-soft);
   color: var(--jade);
+  font-weight: 700;
 }
 
-/* Nhắc hành vi: dải màu 3px bên trái thay vì thẻ tô nền đậm */
+/* Nhắc hành vi */
 .dash-nudge {
   display: grid;
   grid-template-columns: 3px minmax(0, 1fr) auto;
   align-items: start;
   gap: 0 16px;
-  padding: 2px 0;
+  padding: 12px 16px;
+  background: var(--control-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-soft);
 }
 
 .dash-nudge-mark {
@@ -300,27 +324,34 @@
   --nudge-tone: var(--jade);
 }
 
-/* Nhiệm vụ: 4 ô nhưng không phải 4 thẻ — chỉ kẻ dọc 1px phân tách */
+/* Nhiệm vụ: 4 thẻ riêng biệt với hiệu ứng nhấc nhẹ */
 .dash-mission-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  border-top: 1px solid var(--dash-hair);
-  border-bottom: 1px solid var(--dash-hair);
-  padding: 18px 0;
+  gap: 16px;
+  padding: 4px 0;
 }
 
 .dash-mission {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 0 18px;
-  border-left: 1px solid var(--dash-hair-soft);
+  gap: 6px;
+  padding: 18px 20px;
+  background: var(--control-bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.dash-mission:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: color-mix(in srgb, var(--jade) 30%, transparent);
 }
 
 .dash-mission:first-child {
-  border-left: 0;
-  padding-left: 0;
+  border-left: 1px solid var(--line-soft);
+  padding-left: 20px;
 }
 
 .dash-mission-label {
@@ -345,21 +376,10 @@
   color: var(--muted);
 }
 
-.dash-mission--gold .dash-figure {
-  color: var(--gold);
-}
-
-.dash-mission--jade .dash-figure {
-  color: var(--jade);
-}
-
-.dash-mission--cinnabar .dash-figure {
-  color: var(--cinnabar);
-}
-
-.dash-mission--blue .dash-figure {
-  color: var(--porcelain);
-}
+.dash-mission--gold .dash-figure { color: var(--gold); }
+.dash-mission--jade .dash-figure { color: var(--jade); }
+.dash-mission--cinnabar .dash-figure { color: var(--cinnabar); }
+.dash-mission--blue .dash-figure { color: var(--porcelain); }
 
 .dash-today-foot {
   display: grid;
@@ -379,6 +399,7 @@
   flex-direction: column;
   gap: 2px;
   border: 1px solid var(--dash-hair);
+  background: var(--control-bg);
   border-radius: 10px;
   padding: 8px 12px;
   min-width: 74px;
@@ -419,7 +440,7 @@
 .dash-word-stage-bar {
   display: block;
   margin-top: 3px;
-  height: 2px;
+  height: 3px;
   border-radius: 999px;
   background: var(--dash-hair);
   overflow: hidden;
@@ -460,7 +481,7 @@
 .dash-stats {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 24px;
 }
 
 .dash-stats-head {
@@ -468,8 +489,16 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 20px 24px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--dash-hair);
+  padding: 28px 32px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease;
+}
+
+.dash-stats-head:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .dash-ring {
@@ -561,17 +590,31 @@
   color: var(--text);
 }
 
-/* Độ sẵn sàng: 4 cột, thanh đo 3px sát chân */
+/* Độ sẵn sàng: 4 thẻ riêng biệt.
+   auto-fit thay cho repeat(4) cứng: khi cột nội dung hẹp lại, thẻ tự gom hàng
+   thay vì bị nén mỏng. Override 2 cột ở 860px bên dưới vẫn giữ nguyên. */
 .dash-readiness {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
 }
 
 .dash-readiness-cell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 20px 24px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.dash-readiness-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: color-mix(in srgb, var(--jade) 30%, transparent);
 }
 
 .dash-readiness-cell > span {
@@ -581,16 +624,16 @@
 }
 
 .dash-readiness-cell > strong {
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   font-weight: 700;
   line-height: 1;
   color: var(--text);
 }
 
 .dash-meter {
-  height: 3px;
+  height: 6px;
   border-radius: 999px;
-  background: var(--dash-hair);
+  background: var(--track-bg);
   overflow: hidden;
 }
 
@@ -622,11 +665,11 @@
   background: var(--cinnabar);
 }
 
-/* Lưới lệch ~3:2 — không phải 2 cột đều */
+/* Lưới lệch 3:2 */
 .dash-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-  gap: 28px 36px;
+  gap: 24px;
   align-items: start;
 }
 
@@ -635,13 +678,13 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  padding-bottom: 12px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--dash-hair);
 }
 
 .dash-block-head h3 {
   margin: 5px 0 0;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -669,19 +712,55 @@
   border-right-color: var(--cinnabar);
 }
 
-.dash-skills,
-.dash-trend,
-.dash-levels,
-.dash-ai,
-.dash-reco,
-.dash-recent {
+.dash-skills {
   display: flex;
   flex-direction: column;
+  padding: 28px 32px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease;
+}
+
+.dash-skills:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.dash-trend {
+  display: flex;
+  flex-direction: column;
+  padding: 28px 32px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease;
+}
+
+.dash-trend:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.dash-levels {
+  display: flex;
+  flex-direction: column;
+  padding: 28px 32px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease;
+}
+
+.dash-levels:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .dash-skill-list {
   display: flex;
   flex-direction: column;
+  margin-top: 8px;
 }
 
 .dash-skill-row {
@@ -689,12 +768,13 @@
   grid-template-columns: minmax(0, 1fr) minmax(90px, 2fr) auto;
   align-items: center;
   gap: 16px;
-  padding: 13px 0;
-  border-bottom: 1px solid var(--dash-hair-soft);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
 }
 
-.dash-skill-row:last-child {
-  border-bottom: 0;
+.dash-skill-row:hover {
+  background: var(--control-bg);
 }
 
 .dash-skill-name {
@@ -726,7 +806,7 @@
 .dash-side {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
 }
 
 .dash-trend-chart {
@@ -754,7 +834,7 @@
 .dash-trend-line {
   fill: none;
   stroke: var(--jade);
-  stroke-width: 2;
+  stroke-width: 2.2;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
@@ -762,7 +842,7 @@
 .dash-trend-dot {
   fill: var(--paper);
   stroke: var(--jade);
-  stroke-width: 1.6;
+  stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
 
@@ -841,10 +921,16 @@
 /* ---------------------------------------------------------- cố vấn AI ---- */
 .dash-ai {
   gap: 16px;
-  border: 1px solid var(--dash-hair);
-  border-radius: calc(var(--radius) + 2px);
-  padding: 22px 24px;
-  background: linear-gradient(180deg, var(--jade-soft), transparent 62%);
+  border: 1px solid color-mix(in srgb, var(--jade) 30%, transparent);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px;
+  background: linear-gradient(135deg, var(--jade-soft), var(--paper) 70%);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease;
+}
+
+.dash-ai:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .dash-ai .dash-block-head {

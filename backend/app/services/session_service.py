@@ -71,7 +71,6 @@ class SessionService:
             error_tag,
             session_id=session_id,
             item_type=item_type,
-            selected_index=selected_index,
         )
         self.db.commit()
         self.db.refresh(event)

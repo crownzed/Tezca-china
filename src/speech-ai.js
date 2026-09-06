@@ -5,7 +5,20 @@
 // layer (parselmouth F0 tracking) needs decodable WAV PCM, and Render's free
 // tier has no ffmpeg, so we hand it a clean WAV directly.
 
+import { createVadState, feedVad, isUtteranceUsable } from './voice-vad.js';
+
 const TARGET_SAMPLE_RATE = 16000; // 16 kHz mono is plenty for F0 + speech.
+
+// Trần thời lượng một lượt ghi âm, tính bằng giây.
+//
+// Phải khớp (và thấp hơn) `_CHAT_MAX_DURATION_SEC` = 15s ở backend
+// (`app/routers/speech.py`). Ở 16 kHz mono 16-bit, mọi trần backend đều quy ra
+// thời lượng: 500KB byte thật ≈ 16.0s, 700_000 ký tự base64 ≈ 16.4s. Nếu client
+// không tự dừng thì người học nói 30 giây, chờ upload xong mới nhận 413/422 và
+// toàn bộ đoạn ghi bị bỏ — mất công nói mà không biết vì sao.
+//
+// 14s để còn khoảng đệm cho sai số làm tròn của bộ resample.
+export const VOICE_MAX_RECORDING_SEC = 14;
 
 export function isRecordingSupported() {
   return (
@@ -191,6 +204,169 @@ export async function startRecording() {
     },
     cancel() {
       teardown();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Chế độ gọi thoại: mic mở liên tục, VAD tự chốt từng lượt.
+//
+// Tách hẳn khỏi startRecording (không sửa nó) vì ba khác biệt không dung hoà được:
+//
+//   1. AEC. startRecording TẮT echo cancellation vì nó méo đường F0 mà bộ chấm
+//      thanh điệu đo. Chế độ gọi KHÔNG chấm thanh điệu, và ngược lại BẮT BUỘC
+//      phải bật AEC — loa ngoài vọng tiếng AI vào mic sẽ tự kích barge-in liên
+//      tục, cuộc gọi thành vòng lặp AI cắt lời chính nó.
+//   2. Vòng đời AudioContext. startRecording tạo context SAU `await
+//      getUserMedia`, tức ngoài task của cú tap — trên iOS Safari context đó có
+//      thể ở trạng thái `suspended`, `onaudioprocess` không bao giờ chạy và
+//      stop() ném "Không ghi được âm thanh". Với một lượt bấm-để-nói thì người
+//      dùng bấm lại; với cuộc gọi 3 phút thì hỏng cả phiên. Ở đây gọi resume()
+//      tường minh và giữ MỘT context cho cả cuộc gọi.
+//   3. Buffer. startRecording gom vô hạn tới lúc stop(). Ở đây phải cắt theo
+//      từng lượt, nếu không thì 3 phút gọi là ~11MB Float32 không ai đọc.
+export async function startCallSession({ onUtterance, onState } = {}) {
+  if (!isRecordingSupported()) {
+    throw new Error('Trình duyệt không hỗ trợ ghi âm.');
+  }
+
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  // Tạo context TRƯỚC await: giữ nó trong cùng task với cú tap của người dùng,
+  // là điều kiện để iOS Safari cho phép chạy. Xem ghi chú (2) ở trên.
+  const audioCtx = new AudioCtx();
+  // Kể cả vậy Safari vẫn có thể trả context 'suspended' — resume() tường minh.
+  if (audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch { /* dưới sẽ báo lỗi nếu thật sự chết */ }
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        // Bật cả ba: đây là cuộc gọi, không phải bài chấm phát âm. Xem (1).
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+    });
+  } catch (err) {
+    audioCtx.close().catch(() => {});
+    throw err;
+  }
+
+  const source = audioCtx.createMediaStreamSource(stream);
+  const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+  const captureRate = audioCtx.sampleRate;
+  const vad = createVadState(captureRate);
+
+  let alive = true;
+  let ducked = false;    // AI đang phát tiếng?
+  let paused = false;    // tạm ngưng nhận lượt mới (đang gửi/đang chờ AI)
+  let buffer = [];
+  let bufferedSamples = 0;
+  const maxSamples = Math.round(captureRate * VOICE_MAX_RECORDING_SEC);
+
+  const reset = () => { buffer = []; bufferedSamples = 0; };
+
+  const emit = (samples) => {
+    try {
+      const mono = resampleToMono([samples], captureRate, TARGET_SAMPLE_RATE);
+      const conditioned = conditionSignal(mono, TARGET_SAMPLE_RATE);
+      const wav = encodeWav(conditioned, TARGET_SAMPLE_RATE);
+      onUtterance?.({
+        base64: arrayBufferToBase64(new Uint8Array(wav)),
+        mimeType: 'audio/wav',
+      });
+    } catch (err) {
+      // Một lượt lỗi encode không được giết cả cuộc gọi.
+      onState?.({ type: 'error', detail: err?.message || 'Không xử lý được đoạn ghi.' });
+    }
+  };
+
+  const flush = () => {
+    if (!bufferedSamples) return null;
+    const merged = new Float32Array(bufferedSamples);
+    let pos = 0;
+    for (const chunk of buffer) { merged.set(chunk, pos); pos += chunk.length; }
+    reset();
+    return merged;
+  };
+
+  processor.onaudioprocess = (event) => {
+    if (!alive) return;
+    const input = event.inputBuffer.getChannelData(0);
+    const result = feedVad(vad, input, { ducked });
+
+    if (result.action === 'calibrating') {
+      onState?.({ type: 'calibrating' });
+      return;
+    }
+
+    // Đang gửi lượt trước / đang chờ AI: vẫn chạy VAD (để nền nhiễu không trôi
+    // và để phát hiện barge-in) nhưng không thu lượt mới.
+    if (paused) {
+      if (ducked && (result.action === 'speech-start' || result.action === 'speech')) {
+        onState?.({ type: 'barge-in' });
+      }
+      return;
+    }
+
+    if (result.action === 'speech-start') {
+      reset();
+      onState?.({ type: 'speech-start' });
+    }
+
+    if (vad.speaking) {
+      buffer.push(new Float32Array(input));
+      bufferedSamples += input.length;
+      // Trần cứng: chốt lượt ngay cả khi người học chưa ngừng nói. Backend từ
+      // chối audio quá dài (413), nên thà gửi 14s đầu còn hơn mất trắng.
+      if (bufferedSamples >= maxSamples) {
+        const samples = flush();
+        onState?.({ type: 'utterance-end', reason: 'max-duration' });
+        if (samples) emit(samples);
+        return;
+      }
+    }
+
+    if (result.action === 'utterance-end') {
+      const samples = flush();
+      if (!samples) return;
+      if (!isUtteranceUsable(vad, result.utteranceMs)) {
+        // Quá ngắn: ho, click, "ừm". Bỏ im lặng, không báo lỗi cho người học.
+        onState?.({ type: 'utterance-dropped', utteranceMs: result.utteranceMs });
+        return;
+      }
+      onState?.({ type: 'utterance-end', utteranceMs: result.utteranceMs });
+      emit(samples);
+    }
+  };
+
+  source.connect(processor);
+  // Chrome dừng gọi onaudioprocess nếu node không nối tới đâu. Node này không
+  // ghi outputBuffer nên không phát ra tiếng gì — chỉ để giữ nó sống.
+  processor.connect(audioCtx.destination);
+
+  return {
+    /** AI bắt đầu/kết thúc phát tiếng: đổi ngưỡng VAD để chống vọng âm. */
+    setDucked(value) { ducked = Boolean(value); },
+    /** Ngưng/tiếp tục nhận lượt mới (VAD vẫn chạy để bắt barge-in). */
+    setPaused(value) {
+      paused = Boolean(value);
+      if (paused) reset();
+    },
+    /** Bỏ đoạn đang thu — dùng khi người học cắt lời AI và ta muốn thu lại từ đầu. */
+    discard() { reset(); },
+    get isSpeaking() { return vad.speaking; },
+    stop() {
+      alive = false;
+      reset();
+      try { processor.onaudioprocess = null; } catch { /* ignore */ }
+      try { processor.disconnect(); } catch { /* ignore */ }
+      try { source.disconnect(); } catch { /* ignore */ }
+      stream.getTracks().forEach((track) => track.stop());
+      audioCtx.close().catch(() => {});
     },
   };
 }

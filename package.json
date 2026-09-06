@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "audio": "node scripts/generate-audio.mjs",
-    "build": "node scripts/generate-hanzi-data.mjs && node scripts/sync-exam-passages.mjs && node scripts/validate-grammar.mjs && node scripts/validate-conversation-bank.mjs && vite build",
+    "build": "node scripts/generate-hanzi-data.mjs && node scripts/sync-exam-passages.mjs && node scripts/validate-grammar-pool.mjs && node scripts/sync-grammar-pool.mjs && node scripts/validate-grammar.mjs && node scripts/validate-conversation-bank.mjs && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "vercel --prod"

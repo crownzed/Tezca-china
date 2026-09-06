@@ -1,10 +1,11 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select, union_all
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..deps import client_ip
 from ..models import LearningEvent, QuizAttempt, User
 from ..schemas import (
     AdminConfigOut,
@@ -23,8 +24,33 @@ from ..services.admin_service import (
     verify_admin_credentials,
 )
 from ..services.auth_service import AuthService
+from ..services.rate_limiter import RateLimiter
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+# Chống brute-force vào credential admin. Trước đây route /login không có limiter
+# nào (cả file admin.py không import RateLimiter), nên kẻ tấn công lặp vô hạn:
+# bcrypt cost 12 ~219ms mỗi lượt, song song hoá được, và đây là credential duy
+# nhất mở được toàn bộ email người dùng + PATCH /config.
+#
+# Hai tầng, vì mỗi tầng bịt một đường khác nhau:
+#  - theo IP (5/15 phút): chặn kẻ dò từ một nguồn.
+#  - toàn cục (25/15 phút): chặn kẻ dò phân tán qua nhiều IP. Admin là tài khoản
+#    DUY NHẤT nên trần toàn cục không ảnh hưởng người dùng thường.
+#
+# Đánh đổi đã biết, ghi lại để không ai "sửa" nó thành lỗi: trần toàn cục cho
+# phép kẻ tấn công cố tình đốt hết quota để KHOÁ admin ra ngoài (DoS nhắm đích).
+# 25 lượt/15 phút được chọn đủ cao để việc đó phải liên tục và đủ thấp để
+# 25×219ms ≈ 5.5s CPU mỗi 15 phút, không đáng kể trên shared-cpu-1x. Nếu cần
+# chắc chắn vào được, đặt ADMIN_* mới rồi restart máy — trạng thái limiter nằm
+# trong RAM tiến trình nên restart là xoá sạch.
+_admin_login_ip_limiter = RateLimiter(max_hits=5, window_seconds=900)
+_admin_login_global_limiter = RateLimiter(max_hits=25, window_seconds=900)
+
+
+def _enforce(limiter: RateLimiter, key: str) -> None:
+    if not limiter.allow(key):
+        raise HTTPException(status_code=429, detail="Quá nhiều yêu cầu, vui lòng thử lại sau.")
 
 
 def _last_active_map(db: Session) -> dict[str, datetime]:
@@ -58,7 +84,11 @@ def _admin_user_out(user: User, last_active_at: datetime | None = None) -> Admin
 
 
 @router.post("/login", response_model=AdminLoginResponse)
-def admin_login(payload: AdminLoginRequest):
+def admin_login(payload: AdminLoginRequest, request: Request):
+    # Limiter chạy TRƯỚC mọi thứ khác, kể cả trước kiểm admin_configured: mục
+    # đích là không để bcrypt (219ms) chạy theo yêu cầu của kẻ gọi.
+    _enforce(_admin_login_ip_limiter, client_ip(request))
+    _enforce(_admin_login_global_limiter, "admin-login")
     # Chưa cấu hình admin -> 503 (đồng nhất với require_admin), tránh lộ việc
     # admin có tồn tại hay không qua thông báo lỗi khác nhau.
     from ..settings import settings

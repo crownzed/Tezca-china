@@ -1,4 +1,4 @@
-"""Quick fill HSK vocabulary gaps — gọi LLM qua relay vilao.ai."""
+"""Quick fill HSK vocabulary gaps — gọi LLM qua provider đang cấu hình."""
 import sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 
 def call_api(prompt):
-    # _call_api (relay vilao.ai) đã lo xoay vòng key + retry + bóc markdown
+    # _call_api đã lo chọn provider + xoay vòng key + retry + bóc markdown
     # fence. Trước đây script tự gọi ai-box/DeepSeek; provider đó đã bị bỏ.
     # Trả {} khi hết key để vòng lặp gọi tiếp tục như hành vi cũ.
     try:

@@ -1,10 +1,18 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Headphones, Star, RotateCcw, Check, AlertCircle, BookOpen, AlertTriangle, ChevronLeft, ChevronRight, Lightbulb, HelpCircle } from 'lucide-react';
+import { Headphones, Star, RotateCcw, Check, AlertCircle, BookOpen, AlertTriangle, ChevronLeft, ChevronRight, HelpCircle, Lightbulb } from 'lucide-react';
 import { speak } from '../speech.jsx';
 import { loadAllFlashcards } from '../vocab-loader.js';
 import { resolveDecompositions } from '../radicals-db.js';
+import { captureWordReview } from '../srs-capture.js';
+import { isStarred, setStarred, toggleStarred } from '../vocab-srs.js';
 import HskLevelPicker from './HskLevelPicker.jsx';
 import { normalizeLevels, levelMatches, levelsLabel } from '../hsk-levels.js';
+
+// Kho ★ cũ của riêng màn này: khoá theo `${level}-${hanzi}-${pinyin}` và KHÔNG
+// namespace theo user, nên hai tài khoản trên cùng máy dùng lẫn ghim của nhau.
+// Giờ ghim nằm chung record SRS (vocab-srs.setStarred, đã scope theo user); key
+// này chỉ còn để chuyển dữ liệu cũ sang một lần rồi xoá.
+const LEGACY_STAR_KEY = 'starredVocabKeys';
 
 // Helper to normalize pinyin to plain lowercase text without tone marks or spaces
 function stripPinyin(str) {
@@ -109,7 +117,39 @@ function normalizeCard(card) {
     example_pinyin: examples[0]?.pinyin || '',
     example_vi: examples[0]?.vi || '',
     source_quality: sourceQuality,
+    // Shape mà vocab-srs/srs-capture đọc. word_id dùng CHUNG với luồng quiz
+    // (card.id = 'db-<id>' từ vocab-loader) nên gõ đúng một từ ở đây và trả lời
+    // đúng từ đó trong quiz cùng cộng vào MỘT lịch ôn.
+    srsWord: {
+      word_id: card.id || `${level}-${hanzi}`,
+      hanzi,
+      pinyin,
+      meaning_vi: meaningVi,
+      level,
+    },
   };
+}
+
+// Chuyển kho ★ cũ (không scope theo user) sang record SRS một lần. Chạy sau khi
+// thẻ đã nạp vì setStarred cần hanzi/pinyin/level để lưu kèm record.
+function migrateLegacyStars(cards) {
+  let legacy;
+  try {
+    legacy = JSON.parse(window.localStorage.getItem(LEGACY_STAR_KEY));
+  } catch {
+    legacy = null;
+  }
+  if (!Array.isArray(legacy) || !legacy.length) return;
+  const byKey = new Map(cards.map(card => [card.key, card]));
+  legacy.forEach(key => {
+    const card = byKey.get(key);
+    if (card) setStarred(card.srsWord, true);
+  });
+  try {
+    window.localStorage.removeItem(LEGACY_STAR_KEY);
+  } catch {
+    /* bị chặn thì lần sau chuyển lại — setStarred idempotent nên không sao */
+  }
 }
 
 export default function VocabTypingMode({ focusLevels }) {
@@ -122,17 +162,20 @@ export default function VocabTypingMode({ focusLevels }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [inputValue, setInputValue] = useState('');
   const [showAnswer, setShowAnswer] = useState(false);
-  const [starredKeys, setStarredKeys] = useState(() => {
-    try {
-      return JSON.parse(window.localStorage.getItem('starredVocabKeys')) || [];
-    } catch {
-      return [];
-    }
-  });
+  // Ghim đọc từ kho SRS (đã scope theo user). starDirty buộc đọc lại localStorage
+  // sau khi bật/tắt — cùng cách FlashcardMode làm.
+  const [starDirty, setStarDirty] = useState(0);
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const [score, setScore] = useState(0);
-  
+
   const inputRef = useRef(null);
+  // Mốc lúc thẻ hiện ra → độ trễ thật cho auto-confidence. Không đo thì mọi câu
+  // đúng đều nhận cùng quality và lịch ôn mất độ phân giải.
+  const shownAtRef = useRef(0);
+  // Chặn ghi SRS hai lần cho cùng một thẻ: submitAnswer gọi được từ nút, Enter và
+  // listener toàn cục; ngoài ra người học bấm "Đáp án" rồi bấm "Kiểm tra" vẫn ở
+  // trên cùng thẻ đó.
+  const capturedRef = useRef(new Set());
 
   // Initialize/Restart session.
   //
@@ -150,6 +193,8 @@ export default function VocabTypingMode({ focusLevels }) {
     setShowAnswer(false);
     setSessionCompleted(false);
     setScore(0);
+    capturedRef.current = new Set();
+    shownAtRef.current = Date.now();
     setTimeout(() => {
       if (inputRef.current) inputRef.current.focus();
     }, 100);
@@ -175,6 +220,9 @@ export default function VocabTypingMode({ focusLevels }) {
       const loaded = Array.from(uniqueMap.values());
       setCards(loaded);
       setLoading(false);
+      // Chuyển kho ★ cũ sang record SRS trước khi màn hiển thị: nếu không, người
+      // đã ghim từ ở bản trước sẽ thấy tất cả biến mất.
+      migrateLegacyStars(loaded);
       // Mở phiên đầu tiên ngay tại đây thay vì qua useEffect: truyền thẳng
       // ``loaded`` vì state ``cards`` chưa commit ở thời điểm này.
       startSession(loaded);
@@ -197,26 +245,27 @@ export default function VocabTypingMode({ focusLevels }) {
     }
   }, [currentIndex, sessionCards]);
 
-  // Star / Favorite toggle
+  // Star / Favorite toggle — ghi vào record SRS của từ, không phải store riêng.
   const toggleStar = (card) => {
     if (!card) return;
-    const key = card.key;
-    let nextKeys;
-    if (starredKeys.includes(key)) {
-      nextKeys = starredKeys.filter(k => k !== key);
-    } else {
-      nextKeys = [...starredKeys, key];
-    }
-    setStarredKeys(nextKeys);
-    window.localStorage.setItem('starredVocabKeys', JSON.stringify(nextKeys));
+    toggleStarred(card.srsWord);
+    setStarDirty(value => value + 1);
   };
 
+  const currentStarred = useMemo(
+    () => (currentCard ? isStarred(currentCard.srsWord) : false),
+    // starDirty buộc đọc lại localStorage sau khi bật/tắt ★.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentCard, starDirty],
+  );
+
   // TTS audio playback
-  const playAudio = () => {
-    if (currentCard) {
+  // TTS audio playback
+  const playAudio = useCallback(() => {
+    if (currentCard?.hanzi) {
       speak(currentCard.hanzi, 0.85);
     }
-  };
+  }, [currentCard]);
 
   // Handle typing input
   const handleInputChange = (e) => {
@@ -225,7 +274,7 @@ export default function VocabTypingMode({ focusLevels }) {
   };
 
   // Determine whether input matches target (can be Hanzi or Pinyin)
-  const checkAnswerMatch = (input, card) => {
+  const checkAnswerMatch = useCallback((input, card) => {
     if (!card) return false;
     const cleanInput = cleanTypedInput(input);
     const cleanHanzi = cleanTypedInput(card.hanzi);
@@ -242,44 +291,149 @@ export default function VocabTypingMode({ focusLevels }) {
     if (inputWithoutNumbers === cleanPinyinStr) return true;
 
     return false;
-  };
+  }, []);
 
-  // Submit Answer
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      submitAnswer();
-    }
-  };
-
-  const submitAnswer = () => {
+  const submitAnswer = useCallback(() => {
     if (!currentCard) return;
     const isCorrect = checkAnswerMatch(inputValue, currentCard);
-    
+
     if (isCorrect) {
       setScore(prev => prev + 1);
     }
-    
+
+    // Ghi lịch ôn ngay tại lượt trả lời, không dồn về cuối phiên: thoát giữa phiên
+    // vẫn giữ được tiến độ. Gõ lại từ là GỢI LẠI CHỦ ĐỘNG (không có 4 lựa chọn để
+    // loại trừ) nên đây là tín hiệu mạnh hơn quiz — activity 'typing' để
+    // auto-confidence dùng ngân sách thời gian rộng hơn, có tính cả chi phí gõ.
+    if (!capturedRef.current.has(currentCard.key)) {
+      capturedRef.current.add(currentCard.key);
+      captureWordReview({
+        word: currentCard.srsWord,
+        correct: isCorrect,
+        latencyMs: shownAtRef.current ? Date.now() - shownAtRef.current : null,
+        activity: 'typing',
+      });
+    }
+
     setShowAnswer(true);
     playAudio();
-  };
+  }, [currentCard, inputValue, checkAnswerMatch, playAudio]);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (currentIndex + 1 < sessionCards.length) {
       setCurrentIndex(prev => prev + 1);
       setInputValue('');
       setShowAnswer(false);
+      shownAtRef.current = Date.now();
+      setTimeout(() => {
+        if (inputRef.current) inputRef.current.focus();
+      }, 50);
     } else {
       setSessionCompleted(true);
     }
-  };
+  }, [currentIndex, sessionCards.length]);
 
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       setInputValue('');
       setShowAnswer(false);
+      shownAtRef.current = Date.now();
+      setTimeout(() => {
+        if (inputRef.current) inputRef.current.focus();
+      }, 50);
+    }
+  }, [currentIndex]);
+
+  // "Xem đáp án" trước khi nộp = KHÔNG gợi lại được. Ghi luôn một lượt sai cho từ
+  // đó rồi chốt (capturedRef) để cú "Kiểm tra" sau khi đã đọc đáp án không ghi đè
+  // thành đúng — nếu không, nhìn đáp án rồi gõ lại là cách vô tình giãn lịch ôn
+  // của đúng những từ chưa nhớ.
+  const revealAnswer = useCallback(() => {
+    if (showAnswer) {
+      setShowAnswer(false);
+      return;
+    }
+    if (currentCard && !capturedRef.current.has(currentCard.key)) {
+      capturedRef.current.add(currentCard.key);
+      captureWordReview({
+        word: currentCard.srsWord,
+        correct: false,
+        latencyMs: shownAtRef.current ? Date.now() - shownAtRef.current : null,
+        activity: 'typing',
+      });
+    }
+    setShowAnswer(true);
+  }, [currentCard, showAnswer]);
+
+  // Xử lý phím Enter / Space trong ô nhập liệu
+  const handleInputKeyDown = (e) => {
+    // Không can thiệp khi bộ gõ tiếng Trung (IME) đang chọn chữ
+    if (e.nativeEvent?.isComposing || e.isComposing) return;
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showAnswer) {
+        handleNext();
+      } else {
+        submitAnswer();
+      }
+      return;
+    }
+
+    if (e.key === ' ' || e.code === 'Space') {
+      if (showAnswer) {
+        e.preventDefault();
+        handleNext();
+        return;
+      }
+      // Nếu đã gõ đúng từ, phím Space lập tức xác nhận kiểm tra
+      if (checkAnswerMatch(inputValue, currentCard)) {
+        e.preventDefault();
+        submitAnswer();
+        return;
+      }
     }
   };
+
+  // Lắng nghe phím Space / Enter toàn cục để chuyển từ nhanh
+  useEffect(() => {
+    const onGlobalKeyDown = (e) => {
+      if (sessionCompleted || !currentCard) return;
+      if (e.nativeEvent?.isComposing || e.isComposing) return;
+
+      const activeEl = document.activeElement;
+      const isOurInput = activeEl === inputRef.current;
+      const isOtherInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable) && !isOurInput;
+      if (isOtherInput) return;
+
+      // Khi đã hiện đáp án: Space, Enter hoặc Mũi tên phải sẽ chuyển sang từ tiếp theo
+      if (showAnswer) {
+        if (e.key === 'Enter' || e.code === 'Space' || e.key === ' ' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleNext();
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          handlePrev();
+          return;
+        }
+      } else if (!isOurInput) {
+        // Khi focus nằm ngoài ô input
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitAnswer();
+        } else if ((e.code === 'Space' || e.key === ' ') && checkAnswerMatch(inputValue, currentCard)) {
+          e.preventDefault();
+          submitAnswer();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onGlobalKeyDown);
+    return () => window.removeEventListener('keydown', onGlobalKeyDown);
+  }, [showAnswer, sessionCompleted, currentCard, inputValue, handleNext, handlePrev, submitAnswer, checkAnswerMatch]);
 
   // Build live character-by-character coloring
   const characterAlignment = useMemo(() => {
@@ -438,9 +592,9 @@ export default function VocabTypingMode({ focusLevels }) {
                 className={`typing-input ${showAnswer ? (checkAnswerMatch(inputValue, currentCard) ? 'input-correct' : 'input-incorrect') : ''}`}
                 value={inputValue}
                 onChange={handleInputChange}
-                onKeyPress={handleKeyPress}
-                placeholder="Gõ pinyin hoặc chữ Hán tại đây..."
-                disabled={showAnswer}
+                onKeyDown={handleInputKeyDown}
+                placeholder={showAnswer ? "Nhấn phím Cách (Space) hoặc Enter để sang từ tiếp theo..." : "Gõ pinyin hoặc chữ Hán tại đây..."}
+                readOnly={showAnswer}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -451,6 +605,7 @@ export default function VocabTypingMode({ focusLevels }) {
                   className="btn-primary btn-submit-ans" 
                   onClick={submitAnswer}
                   disabled={!inputValue.trim()}
+                  title="Nhấn Enter để kiểm tra"
                 >
                   Kiểm tra
                 </button>
@@ -463,7 +618,7 @@ export default function VocabTypingMode({ focusLevels }) {
                 className="btn-secondary action-btn" 
                 onClick={handlePrev}
                 disabled={currentIndex === 0}
-                title="Quay lại từ trước"
+                title="Quay lại từ trước (Mũi tên trái)"
               >
                 <ChevronLeft size={16} /> Trước
               </button>
@@ -476,18 +631,19 @@ export default function VocabTypingMode({ focusLevels }) {
                 <Headphones size={16} /> Nghe
               </button>
 
-              <button 
-                className={`btn-secondary action-btn ${starredKeys.includes(currentCard.key) ? 'starred-active' : ''}`} 
+              <button
+                className={`btn-secondary action-btn ${currentStarred ? 'starred-active' : ''}`}
                 onClick={() => toggleStar(currentCard)}
                 title="Lưu từ yêu thích"
+                aria-pressed={currentStarred}
               >
-                <Star size={16} fill={starredKeys.includes(currentCard.key) ? '#ffb020' : 'none'} stroke={starredKeys.includes(currentCard.key) ? '#ffb020' : 'currentColor'} />
-                {starredKeys.includes(currentCard.key) ? ' Đã lưu' : ' Lưu'}
+                <Star size={16} fill={currentStarred ? '#ffb020' : 'none'} stroke={currentStarred ? '#ffb020' : 'currentColor'} />
+                {currentStarred ? ' Đã lưu' : ' Lưu'}
               </button>
 
-              <button 
-                className="btn-secondary action-btn" 
-                onClick={() => setShowAnswer(prev => !prev)}
+              <button
+                className="btn-secondary action-btn"
+                onClick={revealAnswer}
                 title="Xem đáp án và bộ thủ"
               >
                 <HelpCircle size={16} /> Đáp án
@@ -496,8 +652,9 @@ export default function VocabTypingMode({ focusLevels }) {
               <button 
                 className="btn-primary action-btn next-btn" 
                 onClick={showAnswer ? handleNext : submitAnswer}
+                title={showAnswer ? "Chuyển sang từ tiếp theo (Space hoặc Enter)" : "Kiểm tra đáp án (Enter)"}
               >
-                {showAnswer ? <>Tiếp <ChevronRight size={16} /></> : 'Kiểm tra'}
+                {showAnswer ? <>Tiếp (Space / Enter) <ChevronRight size={16} /></> : 'Kiểm tra (Enter)'}
               </button>
             </div>
 
@@ -539,7 +696,7 @@ export default function VocabTypingMode({ focusLevels }) {
                 {currentCard.mnemonic && (
                   <div className="answer-section mnemonic-section">
                     <h4 className="section-title">Mẹo nhớ chữ Hán:</h4>
-                    <p className="mnemonic-text">💡 {currentCard.mnemonic}</p>
+                    <p className="mnemonic-text"><Lightbulb size={16} /> {currentCard.mnemonic}</p>
                   </div>
                 )}
 

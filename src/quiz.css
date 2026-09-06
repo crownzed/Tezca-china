@@ -21,8 +21,10 @@
   --qz-surface: var(--modern-zen-card, #FFFDFA);
   --qz-accent: var(--jade, #1F8A70);
   --qz-accent-soft: color-mix(in srgb, var(--jade, #1F8A70) 9%, transparent);
-  --qz-warn: var(--cinabar, #C2402F);
-  --qz-warn-soft: color-mix(in srgb, var(--cinabar, #C2402F) 9%, transparent);
+  /* Tên token là --cinnabar (hai chữ n). Trước đây viết thiếu một chữ n nên
+     var() luôn rơi về fallback, khiến màu cảnh báo không đổi theo dark mode. */
+  --qz-warn: var(--cinnabar, #C2402F);
+  --qz-warn-soft: color-mix(in srgb, var(--cinnabar, #C2402F) 9%, transparent);
   --qz-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -300,61 +302,16 @@
   opacity: 0.4 !important;
 }
 
-/* ------------------------------------------------------- mức tự tin ------- */
-.qz .confidence-panel{
-  gap: 12px;
+/* --------------------------------------------- tự đánh giá của thuật toán --
+   Panel "Mức tự tin?" (4 nút người học tự bấm) đã bỏ. Thay bằng một dòng kết
+   luận trong feedback-panel: hệ thống tự đo từ đúng/sai + tốc độ trả lời.
+   Selector gồm .feedback-panel để thắng `.qz .feedback-panel p` phía dưới. */
+.qz .feedback-panel .feedback-assess{
   margin: 0;
-  padding: 16px 0 0;
-  border: 0;
-  border-top: 1px solid var(--qz-hair-soft);
-  border-radius: 0;
-  background: none;
-}
-
-.qz .confidence-panel p,
-.qz .confidence-label{
-  margin: 0 0 12px;
-  color: var(--qz-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.qz .confidence-grid{
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.qz .confidence-grid button{
-  padding: 12px 10px;
-  border: 1px solid var(--qz-hair);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--qz-ink);
-  transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease);
-}
-
-.qz .confidence-grid button:hover{
-  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent);
-  background: var(--qz-accent-soft);
-  transform: none;
-}
-
-.qz .confidence-grid button strong{
-  font-family: var(--qz-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.02rem;
-  color: var(--qz-ink);
-}
-
-.qz .confidence-grid button span{
-  color: var(--qz-muted);
-  font-size: 0.76rem;
-}
-
-.qz .confidence-grid button small{
-  color: var(--qz-dim);
-  font-size: 0.7rem;
+  color: var(--qz-accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 /* -------------------------------------------------------- phản hồi ------- */
@@ -855,6 +812,219 @@
   gap: 10px;
 }
 
+/* -------------------------------------- bảng đáp án chi tiết (gõ từ) ---- */
+/* Đây là phần đọc sau khi trả lời: ưu tiên đọc được, nên bỏ các nền màu và
+   thanh accent bên trái, chỉ dùng kẻ mảnh để chia tầng thông tin. */
+.qz .detailed-answer-panel{
+  padding: 20px 0 0;
+  border-top: 1px solid var(--qz-hair-soft);
+  gap: 18px;
+}
+
+.qz .answer-header{
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--qz-hair-soft);
+  border-radius: 0;
+  background: none;
+}
+
+/* Nhãn đúng/sai: chữ thường, màu nói hết ý, không cần viền dày. */
+.qz .accuracy-stamp span{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.qz .accuracy-stamp .stamp-correct{
+  border: 1px solid color-mix(in srgb, var(--qz-accent) 30%, transparent);
+  background: var(--qz-accent-soft);
+  color: var(--qz-accent);
+}
+
+.qz .accuracy-stamp .stamp-incorrect{
+  border: 1px solid color-mix(in srgb, var(--qz-warn) 30%, transparent);
+  background: var(--qz-warn-soft);
+  color: var(--qz-warn);
+}
+
+.qz .correct-hanzi{
+  color: var(--qz-ink);
+  font-size: 1.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.qz .correct-pinyin{
+  color: var(--qz-muted);
+  font-family: var(--qz-mono);
+  font-size: 0.94rem;
+}
+
+/* Tiêu đề từng mục là nhãn dẫn đường, không phải eyebrow trang trí. */
+.qz .answer-section .section-title{
+  margin: 0 0 10px;
+  color: var(--qz-dim);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.qz .radicals-container{
+  gap: 8px;
+}
+
+/* Bộ thủ theo cùng bán kính 10px và cùng accent ngọc như các ô lựa chọn. */
+.qz .radical-item-badge{
+  border: 1px solid var(--qz-hair);
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease);
+}
+
+.qz .radical-item-badge:hover{
+  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent);
+  background: var(--qz-accent-soft);
+  transform: none;
+}
+
+.qz .radical-char{
+  color: var(--qz-ink);
+}
+
+.qz .radical-mean{
+  color: var(--qz-muted);
+}
+
+.qz .no-data-text{
+  color: var(--qz-dim);
+  font-size: 0.9rem;
+}
+
+/* Mẹo nhớ: bỏ nền vàng, giữ vàng cho chỗ thật sự cần nhấn. */
+.qz .mnemonic-section{
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.qz .mnemonic-text{
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--qz-muted);
+  font-style: normal;
+  line-height: var(--line-readable, 1.62);
+}
+
+.qz .mnemonic-text svg{
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--qz-accent);
+}
+
+.qz .example-item{
+  padding: 14px 16px;
+  border: 1px solid var(--qz-hair-soft);
+  border-radius: 12px;
+  background: none;
+  box-shadow: none;
+}
+
+.qz .example-cn{
+  color: var(--qz-ink);
+}
+
+.qz .example-py{
+  color: var(--qz-muted);
+  font-family: var(--qz-mono);
+}
+
+.qz .example-vi{
+  color: var(--qz-muted);
+}
+
+/* -------------------------------------- ô gõ và đối chiếu từng ký tự ---- */
+.qz .meaning-prompt{
+  color: var(--qz-ink);
+  font-size: clamp(1.5rem, 4vw, 1.9rem);
+  font-weight: 600;
+  line-height: 1.24;
+}
+
+.qz .pos-badge{
+  border-radius: 999px;
+  background: var(--qz-accent-soft);
+  color: var(--qz-accent);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.qz .alignment-display{
+  padding: 14px;
+  border: 1px solid var(--qz-hair-soft);
+  border-radius: 12px;
+  background: none;
+  gap: 8px;
+}
+
+/* Ô ký tự dùng chung bán kính 10px, trạng thái nói bằng viền + nền nhạt
+   thay vì đổ bóng màu. */
+.qz .align-char{
+  border: 1px solid var(--qz-hair);
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--qz-ink);
+}
+
+.qz .align-correct{
+  border-color: color-mix(in srgb, var(--qz-accent) 40%, transparent);
+  background: var(--qz-accent-soft);
+  box-shadow: none;
+  color: var(--qz-accent);
+  animation: none;
+}
+
+.qz .align-wrong{
+  border-color: color-mix(in srgb, var(--qz-warn) 40%, transparent);
+  background: var(--qz-warn-soft);
+  box-shadow: none;
+  color: var(--qz-warn);
+  animation: none;
+}
+
+.qz .align-pending{
+  border-style: dashed;
+  border-color: var(--qz-hair);
+  background: transparent;
+  color: var(--qz-dim);
+}
+
+.qz .typing-card-actions .next-btn{
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+/* Nút phụ có icon: canh icon với chữ, không để lệch baseline. */
+.qz .typing-card-actions button{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ------------------------------------------------------ chuyển động ----- */
 /* Vào câu mới: fade + nhấc nhẹ, chỉ transform/opacity. Mục đích là báo
    "đã sang câu khác", không phải trang trí. */
@@ -874,8 +1044,7 @@
   .qz .option-grid button:nth-child(3){ --qz-i: 3; }
   .qz .option-grid button:nth-child(4){ --qz-i: 4; }
 
-  .qz .feedback-panel,
-  .qz .confidence-panel{
+  .qz .feedback-panel{
     animation: qzEnter 240ms var(--qz-ease) both;
   }
 }
@@ -896,8 +1065,7 @@
   .qz.chinese-practice-card,
   .qz .option-grid button,
   .qz .tone-option-grid button,
-  .qz .feedback-panel,
-  .qz .confidence-panel{
+  .qz .feedback-panel{
     animation: none !important;
   }
 
@@ -923,10 +1091,6 @@
   .qz .session-result-grid span,
   .qz .session-result-grid span + span{
     padding: 12px;
-  }
-
-  .qz .confidence-grid{
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .qz .option-grid button{

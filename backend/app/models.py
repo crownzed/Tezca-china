@@ -189,4 +189,10 @@ class UserProgress(Base):
     latency_avg: Mapped[int] = mapped_column(Integer, default=0)
     error_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
-    __table_args__ = (UniqueConstraint("user_id", "word_id", name="uq_progress_user_word"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "word_id", name="uq_progress_user_word"),
+        # Composite index cho due-word queries: WHERE user_id=X AND next_review_at <= NOW()
+        # Single-column index trên next_review_at không hiệu quả vì phải scan toàn bộ
+        # rows rồi filter user_id. Composite index cho phép range scan trực tiếp.
+        Index("ix_progress_user_next_review", "user_id", "next_review_at"),
+    )

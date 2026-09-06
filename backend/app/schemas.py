@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from .models import QuizType
@@ -507,7 +509,11 @@ class PracticeSentenceOut(BaseModel):
 
 
 class PronunciationScoreRequest(BaseModel):
-    audio_base64: str = Field(min_length=16)
+    # ``max_length`` khớp DemoPronunciationRequest bên dưới: base64 phình ~33%
+    # nên 700K ký tự ≈ 525KB audio, và router còn siết số byte THẬT + thời lượng
+    # qua ``_guard_chat_audio``. Thiếu trần này thì Pydantic nhận chuỗi base64
+    # dài tuỳ ý vào RAM trước khi bất kỳ lớp kiểm nào chạy.
+    audio_base64: str = Field(min_length=16, max_length=700_000)
     mime_type: str = "audio/webm"
     target_hanzi: str = Field(min_length=1, max_length=200)
     target_pinyin: str = Field(default="", max_length=400)
@@ -593,28 +599,47 @@ class PronunciationScoreOut(BaseModel):
     tip: str = ""
 
 
+# Trần dùng chung cho mọi tin nhắn hội thoại. Phải >= maxLength của textarea
+# trong VoiceChat.jsx (1200), nếu không tin nhắn UI cho gõ lại bị 422 ở backend.
+_CHAT_TEXT_MAX = 1_200
+# Trần số lượt lịch sử. Client chỉ gửi 8 lượt gần nhất, service còn tự cắt tiếp
+# (``speech_ai_service`` lấy [-6:]), nên trần này chỉ để chặn payload khổng lồ
+# — đặt rộng hơn hẳn phần client gửi để đừng 422 oan.
+_CHAT_HISTORY_MAX = 40
+
+
 class VoiceChatTurn(BaseModel):
     role: str = "user"  # "user" | "model"
-    text: str = ""
+    # Có trần: ``VoiceChatRequest.history`` từng không giới hạn cả số lượt lẫn độ
+    # dài mỗi lượt, tức một request hợp lệ có thể mang payload tuỳ ý.
+    text: str = Field(default="", max_length=_CHAT_TEXT_MAX)
+
+
+class SpeechTranscriptionRequest(BaseModel):
+    audio_base64: str = Field(min_length=16, max_length=700_000)
+    mime_type: str = "audio/webm"
+
+
+class SpeechTranscriptionOut(BaseModel):
+    user_text: str = ""
 
 
 class VoiceChatRequest(BaseModel):
-    audio_base64: str = Field(min_length=16)
+    # Composer có thể gửi văn bản hoặc audio từ mic. Giữ trần base64 để không
+    # biến endpoint hội thoại thành nơi nhận payload không giới hạn.
+    audio_base64: str = Field(default="", max_length=700_000)
     mime_type: str = "audio/webm"
-    history: list[VoiceChatTurn] = Field(default_factory=list)
-    # Kịch bản hội thoại (conversation_bank_service). scenario_id ưu tiên; nếu
-    # rỗng thì hsk_level chọn giúp một kịch bản đúng cấp. Cả hai rỗng -> prompt
-    # chung như trước.
-    scenario_id: str = ""
-    hsk_level: int = Field(default=0, ge=0, le=6)
+    # 1_200 chứ không phải 1_000: textarea trong VoiceChat.jsx cho gõ tới 1200 ký
+    # tự, nên trần 1_000 khiến tin nhắn dài bị 422 trước cả khi gọi AI, và lỗi
+    # Pydantic thô hiện nguyên văn qua ``setError``.
+    text: str = Field(default="", max_length=_CHAT_TEXT_MAX)
+    history: list[VoiceChatTurn] = Field(default_factory=list, max_length=_CHAT_HISTORY_MAX)
 
 
 class VoiceChatOut(BaseModel):
     user_text: str = ""
     reply_cn: str = ""
     reply_vi: str = ""
-    # Kịch bản thực sự được dùng — client gửi lại ở lượt sau để giữ nguyên vai.
-    scenario_id: str = ""
 
 
 class ConversationOpeningOut(BaseModel):
@@ -682,6 +707,61 @@ class WordsOut(BaseModel):
     counts: dict[str, int] = Field(default_factory=dict)
 
 
+# --- Thư viện ngữ pháp (577 mục từ PDF) --------------------------------------
+
+class GrammarEntrySummaryOut(BaseModel):
+    """Thẻ tóm tắt cho danh sách/tìm kiếm.
+
+    KHÔNG chứa ``raw_text`` (trung bình ~1.1k ký tự, tối đa ~3.6k): trả kèm
+    trong danh sách 24 mục sẽ phình payload vô ích khi client chỉ cần tiêu đề +
+    một dòng mô tả. Nội dung đầy đủ lấy qua endpoint chi tiết.
+    """
+
+    id: str
+    number: int
+    title: str
+    page_start: int
+    page_end: int
+    meaning: str = ""
+    usage: str = ""
+
+
+class GrammarEntryOut(GrammarEntrySummaryOut):
+    """Nội dung đầy đủ của một mục: bốn phần đã tách sẵn từ PDF.
+
+    KHÔNG trả ``raw_text``: đó là khối văn bản thô chưa tách (trung bình ~1.1k
+    ký tự, tối đa ~3.6k) mà ``ReferenceView`` không đọc — nó chỉ render bốn
+    trường dưới đây. Cả 577 mục đều có ít nhất một trường không rỗng nên không
+    cần ``raw_text`` làm phương án dự phòng. Bản thô vẫn nằm trong
+    ``grammar_pool.json`` và được validator ép non-empty; ai cần đối chiếu
+    nguyên văn thì đọc từ pool, không phải qua API.
+    """
+
+    notes: str = ""
+    examples: str = ""
+
+
+class GrammarPoolSourceOut(BaseModel):
+    filename: str = ""
+    sha256: str = ""
+    pages: int = 0
+    item_count: int = 0
+    scope: str = ""
+    extraction: str = ""
+
+
+class GrammarReferenceListOut(BaseModel):
+    """Một trang kết quả. ``total`` là số mục khớp truy vấn, không phải 577."""
+
+    items: list[GrammarEntrySummaryOut] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 24
+    page_count: int = 1
+    query: str = ""
+    source: GrammarPoolSourceOut = Field(default_factory=GrammarPoolSourceOut)
+
+
 # --- Admin (single admin) ----------------------------------------------------
 
 class AdminLoginRequest(BaseModel):
@@ -735,4 +815,55 @@ class StudyAnalysisOut(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     weaknesses: list[str] = Field(default_factory=list)
     roadmap: list[str] = Field(default_factory=list)
+
+
+# --- Luyện dịch câu hai chiều (VI↔CN) ---------------------------------------
+# ``direction`` là Literal chứ không str: sai chính tả (vd "cn2v") sẽ thành 422 tại
+# biên thay vì âm thầm rơi về chiều mặc định rồi chấm sai tập đáp án.
+
+class TranslationItemsRequest(BaseModel):
+    hsk_level: int = Field(default=1, ge=1, le=6)
+    count: int = Field(default=5, ge=1, le=15)
+    # Các câu vừa gặp, để phiên kế tiếp không lặp lại. Giới hạn để payload không
+    # phình theo lịch sử học của người dùng.
+    exclude: list[str] = Field(default_factory=list, max_length=60)
+
+
+class TranslationItemOut(BaseModel):
+    """Một CẶP câu, dùng được cho cả hai chiều.
+
+    Trả kèm đáp án mẫu vì client cần hiện đối chiếu ngay sau khi chấm — không có
+    bí mật nào để giữ: đây là bài luyện tự chấm, không phải đề thi tính điểm.
+    """
+
+    sentence_cn: str
+    sentence_vi: str
+    pinyin: str = ""
+    alt_cn: list[str] = Field(default_factory=list)
+    alt_vi: list[str] = Field(default_factory=list)
+    key_words: list[str] = Field(default_factory=list)
+    hsk_level: int = 1
+
+
+class TranslationItemsOut(BaseModel):
+    items: list[TranslationItemOut] = Field(default_factory=list)
+    hsk_level: int = 1
+
+
+class TranslationGradeRequest(BaseModel):
+    item: TranslationItemOut
+    user_answer: str = Field(default="", max_length=400)
+    direction: Literal["vi2cn", "cn2vi"]
+    session_id: int | None = None
+    latency_ms: int | None = Field(default=None, ge=0)
+
+
+class TranslationGradeOut(BaseModel):
+    correct: bool
+    score: int = 0
+    matched_reference: str = ""
+    missing_key_words: list[str] = Field(default_factory=list)
+    error_tag: str = ""
+    feedback: str = ""
+    event_id: int | None = None
 

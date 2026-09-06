@@ -83,6 +83,22 @@ async function loadFromBackend() {
   return cards;
 }
 
+// Khoá SRS của một từ suy từ card.id (vocab-srs.wordKeyOf). Ba nguồn file local
+// đánh id độc lập nhau và đều là số đếm từ 1 (data.js: 1..30, mega-vocab: 1..5000,
+// vocab-bank: không có id) nên id trần KHÔNG định danh được từ: data.js#5 và
+// mega-vocab#5 là hai từ khác nhau mà cùng khoá, còn từ trong vocab-bank thì không
+// có khoá. Nặng hơn: số trần trùng luôn với word_id của DB backend, tức lịch ôn của
+// một từ local có thể bị gộp vào một từ backend hoàn toàn khác.
+//
+// Đặt lại id theo (cấp, chữ) — đúng cặp mà dedupeCards dùng làm khoá trùng — nên id
+// ổn định giữa các phiên và không đụng key space 'db-<id>' của backend.
+function withLocalIds(cards) {
+  return cards.map(card => ({
+    ...card,
+    id: `local-${card.hskLevel ?? card.level ?? 'x'}-${card.character}`,
+  }));
+}
+
 async function _loadAllFlashcards() {
   try {
     const backendCards = await loadFromBackend();
@@ -113,7 +129,7 @@ async function _loadAllFlashcards() {
       console.warn('Mega vocab failed, using smaller pool:', e.message);
     }
 
-    return dedupeCards([...richCards, ...bankCards, ...megaCards]);
+    return dedupeCards(withLocalIds([...richCards, ...bankCards, ...megaCards]));
   } catch (err) {
     console.error('Vocab loader error:', err);
     return [];

@@ -41,6 +41,13 @@ __pycache__/
 .obsidian/cache
 
 # Secrets / local env
+# Bắt MỌI .env ở mọi tầng thay vì liệt kê từng đường dẫn: bản cũ chỉ có
+# `backend/.env` và `.env.production.local`, nên một file `.env` ở gốc repo
+# (đường mà Vite đọc VITE_*) lọt qua hoàn toàn.
+.env
+.env.*
+!.env.example
+!backend/.env.example
 backend/.env
 .env.production.local
 
@@ -49,6 +56,17 @@ backend/fly.secrets
 # Local pipeline artifacts + large media
 backend/data/
 public/grok-video.mp4
+
+# Cache runtime cạnh dữ liệu có commit: phình dần theo mỗi phiên người dùng nên
+# commit vào repo chỉ tạo diff không ai đọc. Mất file thì code tự gọi lại LLM.
+backend/app/data/grammar_cache.json
+backend/app/data/translation_pool.json
+
+# Bản sao frontend của kho ngữ pháp (~2MB), sinh lại mỗi lần build bởi
+# scripts/sync-grammar-pool.mjs từ backend/app/data/grammar_pool.json (đã commit).
+# Khác src/data/exam-passages.js (73KB, có commit) là do kích thước: commit file
+# này biến mỗi lần re-import PDF thành diff 2MB JSON không ai đọc được.
+src/data/grammar-pool.js
 
 # Agent tooling: chứa token thật (ANTHROPIC_AUTH_TOKEN / API_KEY) -> không commit
 .claude/settings.local.json

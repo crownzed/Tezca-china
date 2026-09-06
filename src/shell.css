@@ -263,10 +263,16 @@
   bottom: 10px;
 }
 
-/* --- Cột nội dung --- */
+/* --- Cột nội dung ---
+   Có max-width: trước đây cột này giãn vô hạn nên trên màn rộng mọi khối bị kéo
+   dẹt ra, trang trông trống. 1240px giữ dòng chữ trong khoảng đọc được, phần dư
+   thành lề hai bên thay vì khoảng trắng giữa các ô. */
 .sh-shell {
   min-width: 0;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
   padding: 14px clamp(16px, 2.6vw, 36px) 36px;
   background: transparent;
 }

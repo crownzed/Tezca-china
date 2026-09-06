@@ -9,11 +9,11 @@
 // tự suy theo mặt chữ / âm / nghĩa). Kết quả drill ghi vào kho SRS per-word như
 // mọi hoạt động khác — trả lời sai một từ ở đây thì từ đó bị kéo lên hạn ôn sớm.
 // ============================================================
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowLeft, BookOpen, Check, GitCompare, RotateCcw, Volume2, X } from 'lucide-react';
 import { speak } from '../speech.jsx';
 import { loadAllFlashcards } from '../vocab-loader.js';
-import { recordWordReview } from '../vocab-srs.js';
+import { captureWordReview } from '../srs-capture.js';
 import { buildConfusablePairs, buildPairDrill } from '../confusable-pairs.js';
 import HskLevelPicker from './HskLevelPicker.jsx';
 import { levelMatches, levelsLabel, normalizeLevels } from '../hsk-levels.js';
@@ -25,6 +25,11 @@ const REASON_FILTERS = [
   { id: 'sound', label: 'Gần âm' },
   { id: 'meaning', label: 'Gần nghĩa' },
 ];
+
+// Đồng hồ để ngoài phạm vi component, giống App.jsx: lint purity của React chặn
+// đọc hàm bất tịnh trong lúc render, còn ở đây nó chỉ được gọi trong effect và
+// trong handler sau khi người học bấm.
+const clockNow = () => Date.now();
 
 // Bảng so sánh 2 cột cho một cặp — cùng cấu trúc thông tin ở cả hai bên để mắt
 // so ngang được: chữ, pinyin, nghĩa, cấp, từ loại, một câu ví dụ.
@@ -67,8 +72,18 @@ function PairDrill({ pair, onExit }) {
   const [picked, setPicked] = useState(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
+  // Mốc lúc câu hiện ra → độ trễ thật cho auto-confidence. Chọn giữa hai từ na ná
+  // mà chọn NHANH là tín hiệu khác hẳn với chọn sau khi cân nhắc mười giây. Khởi
+  // tạo 0 rồi đặt mốc thật trong effect: không đọc đồng hồ lúc render.
+  const shownAtRef = useRef(0);
 
   const current = rows[index];
+
+  // Đặt mốc cho câu đang hiện. Chạy lại theo `index` và theo `rows` (đổi cặp thì
+  // rows mới, index về 0 nhưng đó là một câu khác).
+  useEffect(() => {
+    shownAtRef.current = clockNow();
+  }, [index, rows]);
 
   const choose = (option) => {
     if (picked || !current) return;
@@ -76,13 +91,16 @@ function PairDrill({ pair, onExit }) {
     setPicked(option);
     if (correct) setScore(value => value + 1);
 
-    // Ghi SRS cho TỪ ĐÍCH của câu. Cặp dễ nhầm là chỗ đo trí nhớ chính xác nhất:
-    // chọn đúng giữa hai từ na ná khó hơn nhớ nghĩa đơn lẻ, nên confidence cao hơn.
+    // Ghi SRS cho TỪ ĐÍCH của câu. Trước đây mức chắc bị đóng cứng (đúng→4, sai→3)
+    // nên mọi lượt đúng đều giãn lịch bằng nhau. Giờ đi qua cùng một đường suy như
+    // quiz/thẻ: đúng/sai + độ trễ + tiền sử của chính từ đó.
     const target = current.answer === pair.a.hanzi ? pair.a : pair.b;
-    recordWordReview(
-      { word_id: target.id, hanzi: target.hanzi, pinyin: target.pinyin, meaning_vi: target.meaning, level: target.level },
-      { correct, confidence: correct ? 4 : 3 },
-    );
+    captureWordReview({
+      word: { word_id: target.id, hanzi: target.hanzi, pinyin: target.pinyin, meaning_vi: target.meaning, level: target.level },
+      correct,
+      latencyMs: shownAtRef.current ? clockNow() - shownAtRef.current : null,
+      activity: 'vocab',
+    });
     speak(current.sentence.split('____').join(current.answer), 0.8);
   };
 
@@ -100,6 +118,7 @@ function PairDrill({ pair, onExit }) {
     setPicked(null);
     setScore(0);
     setDone(false);
+    shownAtRef.current = clockNow();
   };
 
   if (!rows.length) {

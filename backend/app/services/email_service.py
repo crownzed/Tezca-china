@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import smtplib
 from email.message import EmailMessage
@@ -19,13 +20,33 @@ class EmailService:
     @staticmethod
     def send(to: str, subject: str, body_text: str, body_html: str | None = None) -> bool:
         if not EmailService.is_configured():
-            # Ở production KHÔNG log nội dung: body chứa link reset kèm token,
-            # đổ ra log là rò rỉ đường đặt lại mật khẩu cho ai đọc được log.
-            # Chỉ dev (SMTP chưa cấu hình) mới in link ra console cho tiện thử.
-            if settings.is_production:
-                logger.error("SMTP chưa cấu hình ở production — KHÔNG gửi được mail tới %s.", to)
+            # KHÔNG bao giờ log body theo mặc định: body chứa link reset kèm token
+            # thô, đổ ra log là trao đường đặt lại mật khẩu cho ai đọc được log.
+            #
+            # Điều kiện trước đây là ``not settings.is_production`` — fail-OPEN, và
+            # nó đã mở thật: ``ENV`` không được đặt trên Fly nên ``is_production``
+            # là False ngay trên production. Giờ mốc là cờ riêng ``EMAIL_DEBUG_LOG``,
+            # mặc định tắt, nên gõ sai/thiếu biến môi trường vẫn ra kết quả an toàn.
+            #
+            # ``body_hash`` là 8 hex đầu của SHA-256 body: đủ để đối chiếu "mail nào
+            # ứng với request nào" khi debug, không đảo ngược được ra token.
+            body_hash = hashlib.sha256(body_text.encode("utf-8")).hexdigest()[:8]
+            if settings.email_debug_log:
+                logger.warning(
+                    "SMTP chưa cấu hình — bỏ qua gửi mail tới %s. EMAIL_DEBUG_LOG đang BẬT, "
+                    "in nguyên nội dung (chỉ dùng ở máy dev):\n%s",
+                    to,
+                    body_text,
+                )
             else:
-                logger.warning("SMTP chưa cấu hình — bỏ qua gửi mail tới %s. Nội dung:\n%s", to, body_text)
+                logger.error(
+                    "SMTP chưa cấu hình — KHÔNG gửi được mail tới %s (subject=%r, body_hash=%s, "
+                    "%d ký tự). Bật EMAIL_DEBUG_LOG=1 ở máy dev nếu cần xem link.",
+                    to,
+                    subject,
+                    body_hash,
+                    len(body_text),
+                )
             return False
 
         message = EmailMessage()

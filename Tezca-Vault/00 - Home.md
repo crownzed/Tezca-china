@@ -26,7 +26,7 @@ Nền tảng luyện thi HSK thích ứng: DSP chấm phát âm + Gemini AI. Vau
 | Frontend | React 19, Vite 8, Hanzi Writer, Lucide |
 | Backend | FastAPI, Python 3.10+ |
 | DSP | NumPy, Praat / Parselmouth |
-| AI | Gemini Native API (giọng nói), relay vilao.ai (sinh câu hỏi) |
+| AI | StepFun Step Plan (sinh câu hỏi + TTS), Gemini Native API (giọng nói) |
 | DB | SQLite / SQLAlchemy, Turso (libSQL) cho prod |
 
 > [!note] Cách dùng vault

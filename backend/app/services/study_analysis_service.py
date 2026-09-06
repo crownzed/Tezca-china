@@ -4,7 +4,8 @@ Gom số liệu học đã có (AnalyticsOut từ router quiz + streak/động l
 ProfileService) rồi nhờ LLM viết nhận xét tổng hợp và lộ trình các bước tiếp
 theo. Chỉ gọi khi khách bấm nút (on-demand), không chạy nền.
 
-Dùng _call_api (llm_generator_service): relay vilao.ai, xoay vòng key, ép JSON. Trả về dict {summary, strengths[], weaknesses[], roadmap[]}; nếu LLM fail
+Dùng _call_api (llm_generator_service): provider theo ``settings.llm_provider``,
+xoay vòng key, ép JSON. Trả về dict {summary, strengths[], weaknesses[], roadmap[]}; nếu LLM fail
 hoặc trả JSON méo, raise RuntimeError để router map 502 (giống mẫu speech).
 """
 import json
@@ -100,12 +101,18 @@ def _coerce_str_list(value) -> list[str]:
 
 
 def analyze_study_data(db: Session, user_id: str, analytics: dict) -> dict:
-    """Gọi LLM phân tích dữ liệu học. Raise RuntimeError nếu LLM fail/JSON méo."""
+    """Gọi LLM phân tích dữ liệu học. Raise RuntimeError nếu LLM fail/JSON méo.
+
+    Timeout 60s (thay vì 240s mặc định của _call_api): endpoint này on-demand,
+    người dùng chờ trực tiếp. Prompt ngắn (~800 token input, ~300 output) nên
+    60s đủ rộng; quá 60s nghĩa là provider đang có vấn đề và giữ kết nối chỉ
+    làm tăng thời gian chờ tổng cộng.
+    """
     stats = ProfileService(db).get_stats(user_id)
     prompt = _build_prompt(analytics, stats)
 
     try:
-        raw = _call_api(prompt)
+        raw = _call_api(prompt, timeout=60)
     except Exception as e:  # noqa: BLE001 — mọi lỗi LLM gộp thành RuntimeError
         logger.warning("Study analysis LLM failed: %s", e)
         raise RuntimeError(str(e)) from e

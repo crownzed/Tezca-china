@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..deps import get_current_user
+from ..deps import client_ip, get_current_user
 from ..models import User
 from ..schemas import AuthResponse, ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, MessageResponse, ProfileOut, ProfileStatsOut, RegisterRequest, ResetPasswordRequest, TitleOut, UpdateProfileRequest, UserOut
 from ..services.auth_service import AuthService
@@ -15,18 +15,17 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Chống brute-force / spam trên bề mặt mật khẩu. Giới hạn theo IP; login còn
 # giới hạn thêm theo tài khoản để một IP không thể dò mật khẩu nhiều tài khoản.
+#
+# Khoá IP lấy từ ``deps.client_ip``, KHÔNG phải helper riêng của file này nữa.
+# Bản cũ ở đây đọc thẳng ``X-Forwarded-For`` phần tử đầu — header mà client GỬI
+# ĐƯỢC và Fly chỉ nối thêm chứ không xoá — nên cả bốn limiter dưới đây có thể bị
+# vượt vô hạn bằng cách xoay vòng một header. ``deps.client_ip`` ưu tiên
+# ``Fly-Client-IP`` (Fly tự ghi đè, không giả mạo được). Bản fix đó đã có từ
+# trước nhưng không được lan sang file này; đây là chỗ bị bỏ sót.
 _login_ip_limiter = RateLimiter(max_hits=10, window_seconds=300)
 _login_account_limiter = RateLimiter(max_hits=5, window_seconds=300)
 _forgot_ip_limiter = RateLimiter(max_hits=5, window_seconds=900)
 _reset_ip_limiter = RateLimiter(max_hits=10, window_seconds=900)
-
-
-def _client_ip(request: Request) -> str:
-    # Sau proxy (Render) client thật nằm ở X-Forwarded-For (IP đầu tiên).
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 
 def _enforce(limiter: RateLimiter, key: str) -> None:
@@ -72,7 +71,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=AuthResponse)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    _enforce(_login_ip_limiter, _client_ip(request))
+    _enforce(_login_ip_limiter, client_ip(request))
     _enforce(_login_account_limiter, payload.login.strip().lower())
     service = AuthService(db)
     try:
@@ -155,7 +154,7 @@ def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Sessio
     # Luôn trả cùng một thông điệp bất kể email có tồn tại hay không, để không
     # tiết lộ email nào đã đăng ký (chống enumeration). Chỉ khi tìm được user
     # mới thực sự sinh token + gửi mail.
-    _enforce(_forgot_ip_limiter, _client_ip(request))
+    _enforce(_forgot_ip_limiter, client_ip(request))
     service = AuthService(db)
     # Chỉ tra theo email (không theo username) — tránh gửi link reset qua username
     # và giảm bề mặt enumeration.
@@ -173,7 +172,7 @@ def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Sessio
 
 @router.post("/reset-password", response_model=MessageResponse)
 def reset_password(payload: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
-    _enforce(_reset_ip_limiter, _client_ip(request))
+    _enforce(_reset_ip_limiter, client_ip(request))
     try:
         AuthService(db).reset_password(payload.token, payload.new_password)
     except ValueError as exc:

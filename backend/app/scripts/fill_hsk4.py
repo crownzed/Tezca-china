@@ -1,4 +1,4 @@
-"""Fill HSK 4 vocabulary to 600 words — gọi LLM qua relay vilao.ai."""
+"""Fill HSK 4 vocabulary to 600 words — gọi LLM qua provider đang cấu hình."""
 import sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 
 def ask(prompt):
-    # _call_api (relay vilao.ai) lo xoay vòng key + retry + bóc markdown fence.
+    # _call_api lo chọn provider + xoay vòng key + retry + bóc markdown fence.
     # Trước đây script tự gọi ai-box/DeepSeek; provider đó đã bị bỏ khỏi cấu hình.
     try:
         return _call_api(prompt)

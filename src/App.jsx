@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, Clock3, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, Clock3, Ear, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, XCircle } from 'lucide-react';
 import { analyzeStudyData, completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -13,12 +13,15 @@ const CustomVocabInput = lazy(() => import('./components/CustomVocabInput.jsx'))
 const PronunciationPractice = lazy(() => import('./components/PronunciationPractice.jsx'));
 const VoiceChat = lazy(() => import('./components/VoiceChat.jsx'));
 const GrammarLab = lazy(() => import('./components/GrammarLab.jsx'));
+const TranslationPractice = lazy(() => import('./components/TranslationPractice.jsx'));
 const VocabTypingMode = lazy(() => import('./components/VocabTypingMode.jsx'));
 const FlashcardMode = lazy(() => import('./components/FlashcardMode.jsx'));
 const ConfusablePairs = lazy(() => import('./components/ConfusablePairs.jsx'));
+const DictationMode = lazy(() => import('./components/DictationMode.jsx'));
 import { notificationPermission, requestNotificationPermission, scheduleDailyReminder, cancelReminder, showNotification } from './notifications.js';
 import { resolveDecompositions } from './radicals-db.js';
 import { loadAllFlashcards } from './vocab-loader';
+import { captureWordReview } from './srs-capture.js';
 import { ClickableChineseText, TonedPinyin } from './components/chinese-text.jsx';
 import HskLevelPicker from './components/HskLevelPicker.jsx';
 import { primaryLevel, normalizeLevels, levelMatches, levelsLabel, readStoredLevels } from './hsk-levels.js';
@@ -116,6 +119,11 @@ const NAV = [
     items: [
       { id: 'quiz', label: 'Luyện tập', icon: Play },
       { id: 'grammar', label: 'Ngữ pháp', icon: Blocks },
+      // id 'translate' chứ không 'translation': 'translation' đã là một QuizType
+      // (dạng trắc nghiệm "Dịch đoạn" bên trong Quiz), trùng id sẽ gây nhầm khi
+      // đọc code và khi ghi log theo tab.
+      { id: 'translate', label: 'Dịch câu', icon: Languages },
+      { id: 'dictation', label: 'Nghe viết', icon: Ear },
     ],
   },
   {
@@ -133,7 +141,7 @@ const NAV = [
     icon: Search,
     items: [
       { id: 'vocab', label: 'Từ vựng', icon: Search },
-      { id: 'flashcard', label: 'Thẻ lật', icon: Layers },
+      { id: 'flashcard', label: 'Ôn thẻ', icon: Layers },
       { id: 'vocab-typing', label: 'Gõ từ vựng', icon: Keyboard },
       { id: 'confusable', label: 'Dễ nhầm', icon: GitCompare },
       { id: 'custom', label: 'Tự tạo', icon: PenTool },
@@ -455,7 +463,7 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
         <dl className="dash-kpis">
           <div><dt>Đúng</dt><dd className="dash-figure">{analytics?.accuracy || 0}<i>%</i></dd></div>
           <div><dt>Ôn</dt><dd className="dash-figure">{dueCount}</dd></div>
-          <div className="hide-mobile"><dt>Tự tin</dt><dd className="dash-figure">{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</dd></div>
+          <div className="hide-mobile"><dt>Độ vững</dt><dd className="dash-figure">{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</dd></div>
           <div className="hide-mobile"><dt>Lượt</dt><dd className="dash-figure">{eventCount || analytics?.attempts || 0}</dd></div>
         </dl>
       </div>
@@ -469,6 +477,14 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
           </div>
         ))}
       </div>
+
+      {/* Chưa có dữ liệu: bốn ô trên đều hiện '-', nên nói rõ cần làm gì để có số
+          thay vì để người mới nhìn một hàng ô rỗng. */}
+      {!hasData && (
+        <p className="dash-ai-hint">
+          Bốn chỉ số trên cần dữ liệu thật. Làm một phiên bất kỳ là chúng bắt đầu hiện.
+        </p>
+      )}
 
       {/* Hai cột lệch 3:2 thay vì lưới đều — cột trái là bảng kỹ năng, cột phải
           xếp dọc xu hướng và phổ HSK. */}
@@ -821,7 +837,7 @@ const QUIZ_STRATEGY_MODES = [
     id: 'targeted',
     label: 'Tập trung',
     title: 'Retrieval cùng kỹ năng',
-    detail: 'Một dạng bài, feedback tức thì, confidence và lịch ôn từng câu.',
+    detail: 'Một dạng bài, feedback tức thì, hệ thống tự đo độ chắc và xếp lịch ôn từng câu.',
   },
   {
     id: 'interleaved',
@@ -869,9 +885,12 @@ function buildQuizStrategySummary(answerRows) {
   const repairs = answerRows.filter(item => item.is_repair);
   const total = primary.length;
   const correct = primary.filter(item => item.correct).length;
+  // confidence giờ do thuật toán suy (auto-confidence.js), không phải người học
+  // khai. <=2 = đúng nhưng chậm / sai chậm → cần gặp lại sớm. 4 = đúng ở nhịp
+  // nhanh → đã thành phản xạ, dùng làm chỉ số thay cho "độ chắc TB" tự khai cũ.
   const lowConfidence = primary.filter(item => item.confidence <= 2).length;
+  const fastCorrect = primary.filter(item => item.correct && item.confidence >= 4).length;
   const repairSuccess = repairs.filter(item => item.correct).length;
-  const confidenceTotal = primary.reduce((sum, item) => sum + (Number(item.confidence) || 0), 0);
   const errorBreakdown = {};
   primary.filter(item => !item.correct && item.error_tag).forEach(item => {
     errorBreakdown[item.error_tag] = (errorBreakdown[item.error_tag] || 0) + 1;
@@ -882,10 +901,10 @@ function buildQuizStrategySummary(answerRows) {
     correct,
     accuracy: total ? Math.round((correct / total) * 100) : 0,
     lowConfidence,
+    fastCorrect,
     repairCount: repairs.length,
     repairSuccess,
     nextReviewCount: primary.filter(item => !item.correct || item.confidence <= 2).length,
-    avgConfidence: total ? Number((confidenceTotal / total).toFixed(1)) : 0,
     dominantError: dominantError ? { tag: dominantError[0], count: dominantError[1] } : null,
   };
 }
@@ -1122,33 +1141,33 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     }
   }, [level, primaryQuestions, refreshStats, session]);
 
-  const answerQuestion = (choiceIndex, eventTimeStamp) => {
+  const answerQuestion = useCallback(async (choiceIndex, eventTimeStamp) => {
     if (!question || selected !== null || submitting || feedback || loading) return;
     setSelected(choiceIndex);
-    setPendingLatency(Math.max(0, eventTimeStamp - questionStartedAtRef.current));
-  };
-
-  const chooseConfidence = async (confidenceValue) => {
-    if (!question || selected === null || submitting) return;
+    const latency = Math.max(0, eventTimeStamp - questionStartedAtRef.current);
+    setPendingLatency(latency);
     setSubmitting(true);
     try {
       const itemType = isRepair ? 'repair_card' : sessionItemType(question, false);
+      // confidence KHÔNG còn do người học bấm: recordLearningEvent tự suy từ
+      // đúng/sai + độ trễ so với ngân sách dạng bài + tiền sử SRS của từ, rồi trả
+      // về trong review để lịch ôn và tổng kết dùng chung một con số.
       const review = await recordLearningEvent({
         user_id: userId,
         session_id: session?.id,
         question_id: question.id,
-        selected_index: selected,
-        confidence: confidenceValue,
-        latency_ms: pendingLatency,
+        selected_index: choiceIndex,
+        latency_ms: latency,
         item_type: itemType,
       }, question);
+      const confidenceValue = review.confidence ?? (review.correct ? 3 : 2);
       const answerRecord = {
         question_id: question.id,
         quiz_type: activeQuizType,
         item_type: itemType,
-        selected_index: selected,
+        selected_index: choiceIndex,
         confidence: confidenceValue,
-        latency_ms: pendingLatency,
+        latency_ms: latency,
         correct: review.correct,
         correct_index: review.correct_index,
         explanation: review.explanation || question.explanation || '',
@@ -1162,15 +1181,15 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
       answersRef.current = nextAnswers;
       setAnswers(nextAnswers);
       if (!isRepair && (!review.correct || confidenceValue <= 2)) {
-        queueRepairItem(review, selected, confidenceValue);
+        queueRepairItem(review, choiceIndex, confidenceValue);
       }
-      setFeedback({ review, confidence: confidenceValue, selectedIndex: selected });
+      setFeedback({ review, confidence: confidenceValue, selectedIndex: choiceIndex });
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [activeQuizType, feedback, isRepair, loading, question, selected, session?.id, submitting, userId]);
 
-  const continueQuiz = () => {
+  const continueQuiz = useCallback(() => {
     if (index + 1 >= quizItems.length) {
       finishQuiz();
       return;
@@ -1183,7 +1202,42 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     setAudioPlayed(false);
     setDragOrder([]);
     setVoiceDone(false);
-  };
+  }, [finishQuiz, index, quizItems.length]);
+
+  // Phím tắt bàn phím: Enter / Space để qua câu tiếp theo khi có feedback (hoặc chọn 1..4 / A..D)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) {
+        return;
+      }
+      if (e.nativeEvent?.isComposing || e.isComposing) return;
+
+      if ((e.key === 'Enter' || e.code === 'Space' || e.key === ' ') && !submitting && !loading) {
+        if (feedback) {
+          e.preventDefault();
+          continueQuiz();
+          return;
+        }
+      }
+
+      if (!feedback && selected === null && !submitting && !loading && activeQuizType !== 'drag_drop' && activeQuizType !== 'voice') {
+        const key = e.key.toUpperCase();
+        let optIndex = -1;
+        if (key === 'A' || key === '1') optIndex = 0;
+        else if (key === 'B' || key === '2') optIndex = 1;
+        else if (key === 'C' || key === '3') optIndex = 2;
+        else if (key === 'D' || key === '4') optIndex = 3;
+        if (optIndex >= 0 && question?.options && optIndex < question.options.length) {
+          e.preventDefault();
+          answerQuestion(optIndex, performance.now());
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [feedback, submitting, loading, continueQuiz, selected, activeQuizType, question, answerQuestion]);
 
   // ---- Drag-drop handlers ----
   const dragSegments = question?.metadata_json?.segments || [];
@@ -1207,22 +1261,23 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     setTimeout(() => handleQuizAnswer(isCorrect), 300);
   };
 
-  // Unified answer submission
+  // Unified answer submission — dùng cho drag_drop và voice (tự chấm ở client,
+  // không có selected_index thật). directResult là kết quả đã chấm; confidence do
+  // recordLearningEvent suy, không hardcode theo đúng/sai nữa.
   const handleQuizAnswer = async (directResult = null) => {
     if (!question || submitting) return;
     setSubmitting(true);
     try {
-      const confidenceValue = directResult !== null ? (directResult ? 3 : 2) : null;
       const selectedIndex = directResult !== null ? (directResult ? 0 : 1) : selected;
       const review = await recordLearningEvent({
         user_id: userId,
         session_id: session?.id,
         question_id: question.id,
         selected_index: selectedIndex,
-        confidence: confidenceValue,
         latency_ms: pendingLatency,
         item_type: sessionItemType(question, isRepair),
       }, question);
+      const confidenceValue = review.confidence ?? (review.correct ? 3 : 2);
       const answerRecord = {
         question_id: question.id,
         quiz_type: activeQuizType,
@@ -1242,8 +1297,8 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
       const nextAnswers = [...answersRef.current, answerRecord];
       answersRef.current = nextAnswers;
       setAnswers(nextAnswers);
-      if (!isRepair && (!review.correct || (confidenceValue || 0) <= 2)) {
-        queueRepairItem(review, selectedIndex, confidenceValue || 0);
+      if (!isRepair && (!review.correct || confidenceValue <= 2)) {
+        queueRepairItem(review, selectedIndex, confidenceValue);
       }
       setFeedback({ review, confidence: confidenceValue, selectedIndex });
     } finally {
@@ -1268,7 +1323,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
             <span><ShieldCheck size={18} /><strong>{result.correct}/{result.total}</strong><small>retrieval đúng</small></span>
             <span><Wrench size={18} /><strong>{result.repairSuccess}/{result.repairCount}</strong><small>repair thành công</small></span>
             <span><Clock3 size={18} /><strong>{result.nextReviewCount}</strong><small>gặp lại sớm</small></span>
-            <span><LineChart size={18} /><strong>{result.avgConfidence}</strong><small>độ chắc TB</small></span>
+            <span><LineChart size={18} /><strong>{result.fastCorrect}/{result.correct}</strong><small>đúng ở nhịp nhanh</small></span>
           </div>
           <div className="result-summary">
             <strong>{result.accuracy}%</strong>
@@ -1291,7 +1346,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
                 </div>
                 <strong>{rowIndex + 1}. {row.prompt}</strong>
                 <p>{review?.explanation || row.explanation || 'Câu này đã được đưa vào lịch ôn.'}</p>
-                <small>Confidence {review?.confidence || 0}/4 · {nextReviewText(review?.next_review_at)}</small>
+                <small>{assessmentText(review?.correct, review?.confidence)} · {nextReviewText(review?.next_review_at)}</small>
               </article>
             );
           })}
@@ -1528,20 +1583,6 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
             </div>
           )}
 
-          {selected !== null && !feedback && activeQuizType !== 'drag_drop' && activeQuizType !== 'voice' && (
-            <div className="confidence-panel">
-              <p className="confidence-label">Mức tự tin?</p>
-              <div className="confidence-grid">
-                {CONFIDENCE_LEVELS.map(row => (
-                  <button key={row.value} type="button" onClick={() => chooseConfidence(row.value)} disabled={submitting} title={row.label}>
-                    <strong>{row.value}</strong>
-                    <span>{row.label}</span>
-                    <small className="hide-mobile">{row.detail}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {feedback && (
             <div className={`feedback-panel ${feedback.review.correct ? 'feedback-panel--correct' : 'feedback-panel--wrong'}`}>
@@ -1550,6 +1591,9 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
                 <strong>{feedback.review.correct ? 'Đúng' : 'Cần sửa'}</strong>
                 <span className="hide-mobile">{nextReviewText(feedback.review.next_review_at)}</span>
               </div>
+              {/* Thay panel "Mức tự tin?" cũ: thuật toán tự đánh giá từ đúng/sai +
+                  tốc độ trả lời rồi nói ra kết luận, người học không phải khai báo. */}
+              <p className="feedback-assess">{assessmentText(feedback.review.correct, feedback.confidence)}</p>
               <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
               {!feedback.review.correct && (
                 <small>Đáp án: {
@@ -1565,7 +1609,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
                 </div>
               )}
               <WordEncodeCard word={question.word} />
-              <button className="btn-primary" type="button" onClick={continueQuiz} disabled={loading}>{index + 1 >= quizItems.length ? 'Xong' : 'Tiếp'}</button>
+              <button className="btn-primary" type="button" onClick={continueQuiz} disabled={loading}>{index + 1 >= quizItems.length ? 'Xong (Enter)' : 'Tiếp (Enter)'}</button>
             </div>
           )}
         </section>
@@ -1573,12 +1617,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     </main>
   );
 }
-const CONFIDENCE_LEVELS = [
-  { value: 1, label: 'Đoán', detail: 'Ôn lại sớm' },
-  { value: 2, label: 'Chưa chắc', detail: 'Giữ nhịp nhẹ' },
-  { value: 3, label: 'Khá chắc', detail: 'Lịch chuẩn' },
-  { value: 4, label: 'Rất chắc', detail: 'Có thể giãn lịch' },
-];
+
 
 function sessionModeMinutes(mode) {
   if (mode?.id === 'micro') return 5;
@@ -1601,6 +1640,21 @@ function nextReviewText(value) {
   return `Gặp lại ${date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}.`;
 }
 
+// Diễn giải mức tự chắc mà THUẬT TOÁN suy ra (auto-confidence.js), thay cho nhãn
+// người học tự bấm trước đây. Hiện chữ thay vì "3/4" vì con số chỉ có nghĩa với
+// người biết thang SM-2; người học cần biết vì sao câu này bị xếp ôn sớm hay giãn.
+function assessmentText(correct, confidence) {
+  const value = Number(confidence) || 0;
+  if (correct) {
+    if (value >= 4) return 'Trả lời nhanh, đã thành phản xạ';
+    if (value <= 2) return 'Đúng nhưng còn chậm, chưa vững';
+    return 'Đúng ở nhịp bình thường';
+  }
+  // Sai nhanh (confidence 3) khác sai chậm (2): một cái là nhớ lệch, một cái là
+  // chưa nhớ ra — hai đường phục hồi khác nhau nên nói rõ.
+  return value >= 3 ? 'Sai dứt khoát, đang nhớ lệch' : 'Chưa nhớ ra kịp';
+}
+
 // Nhãn loại lỗi (doc 4.6/5.3): mỗi lỗi nói rõ "sai kiểu gì" + cách sửa ngắn.
 const ERROR_TAG_INFO = {
   tone_error: { label: 'Lỗi thanh điệu', hint: 'Đúng âm nhưng sai thanh. Nghe lại cặp thanh tối thiểu.' },
@@ -1610,7 +1664,7 @@ const ERROR_TAG_INFO = {
   context_error: { label: 'Lỗi ngữ cảnh', hint: 'Dùng sai tình huống. Luyện điền khuyết trong câu.' },
   production_error: { label: 'Lỗi sản sinh', hint: 'Đặt câu chưa đạt. Bám khung câu mẫu.' },
   speed_error: { label: 'Lỗi tốc độ', hint: 'Đúng nhưng chậm. Luyện vòng phản xạ nhanh.' },
-  confidence_error: { label: 'Chưa chắc', hint: 'Đúng nhưng thiếu tự tin. Gặp lại sớm để củng cố.' },
+  confidence_error: { label: 'Chưa vững', hint: 'Đúng nhưng còn chậm. Gặp lại sớm để thành phản xạ.' },
 };
 
 function errorTagInfo(tag) {
@@ -1693,13 +1747,28 @@ function isPracticeItem(item) {
   return ['character_card', 'tone_drill', 'confusion_card', 'pinyin_typing', 'micro_reading', 'guided_output'].includes(item?.type);
 }
 
+// Các mục luyện tập CÓ CHẤM ĐIỂM thật trên một từ cụ thể → được ghi vào lịch ôn.
+// Ba mục còn lại (character_card, confusion_card, micro_reading) chỉ có nút "Đã
+// rõ / Tiếp tục" và luôn trả correct=true: đó là hành vi bấm qua, không phải bằng
+// chứng về trí nhớ. Ghi chúng vào SRS sẽ giãn lịch của từ chỉ vì người học đã
+// cuộn qua thẻ giới thiệu.
+const GRADED_PRACTICE_TYPES = new Set(['tone_drill', 'pinyin_typing', 'guided_output']);
+
+// Ngân sách thời gian cho từng mục luyện: gõ pinyin có tone số tốn thời gian như
+// gõ từ, chọn tone pattern nhanh như một câu vocab, còn đặt cả một câu thì đo theo
+// nhịp dịch câu.
+const PRACTICE_ACTIVITY = {
+  tone_drill: 'vocab',
+  pinyin_typing: 'typing',
+  guided_output: 'translation',
+};
+
 function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
   const { userId } = useAuth();
   const [session, setSession] = useState(null);
   const [items, setItems] = useState([]);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
-  const [pendingLatency, setPendingLatency] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [textAnswer, setTextAnswer] = useState('');
   const [practiceFeedback, setPracticeFeedback] = useState(null);
@@ -1712,6 +1781,11 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
   const answersRef = useRef([]);
   const finishedRef = useRef(false);
   const questionStartedAtRef = useRef(0);
+  // Mốc riêng cho các mục luyện tập (tone_drill / pinyin_typing / guided_output).
+  // Không dùng chung questionStartedAtRef: ref đó chỉ được đặt lại trong effect
+  // của `question`, mà các mục này KHÔNG có question nên mốc sẽ đứng ở câu trắc
+  // nghiệm trước đó và độ trễ đo ra là tổng của cả hai mục.
+  const practiceStartedAtRef = useRef(0);
   // Typing tracker: gom lỗi gõ thật (backspace/sửa/độ dài) để gửi usage signal.
   const typingRef = useRef({ keystrokes: 0, backspaces: 0, corrections: 0, prevLength: 0 });
 
@@ -1762,7 +1836,6 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     setItems([]);
     setIndex(0);
     setSelected(null);
-    setPendingLatency(null);
     setFeedback(null);
     setTextAnswer('');
     resetTyping();
@@ -1845,14 +1918,15 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     };
   }, [activeQuizType, isListeningMode, playAudio, question, showAudioPanel]);
 
+  // Đặt mốc thời gian cho mục luyện tập đang hiện. Theo item.id (không theo index)
+  // để mục sửa lỗi chèn giữa phiên cũng được tính lại từ đầu.
+  useEffect(() => {
+    if (!isPractice) return;
+    practiceStartedAtRef.current = now();
+  }, [isPractice, item?.id]);
+
   const startChallenge = () => {
     setIndex(1);
-  };
-
-  const answerQuestion = (choiceIndex, eventTimeStamp) => {
-    if (!question || selected !== null || submitting || feedback) return;
-    setSelected(choiceIndex);
-    setPendingLatency(Math.max(0, eventTimeStamp - questionStartedAtRef.current));
   };
 
   const queueRepairItem = (review, selectedIndex) => {
@@ -1875,25 +1949,28 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     });
   };
 
-  const chooseConfidence = async (confidenceValue) => {
-    if (!question || selected === null || submitting) return;
+  const answerQuestion = useCallback(async (choiceIndex, eventTimeStamp) => {
+    if (!question || selected !== null || submitting || feedback) return;
+    setSelected(choiceIndex);
+    const latency = Math.max(0, eventTimeStamp - questionStartedAtRef.current);
     setSubmitting(true);
     try {
+      // Không hỏi mức tự tin: recordLearningEvent tự suy và trả về trong review.
       const review = await recordLearningEvent({
         user_id: userId,
         session_id: session?.id,
         question_id: question.id,
-        selected_index: selected,
-        confidence: confidenceValue,
-        latency_ms: pendingLatency,
+        selected_index: choiceIndex,
+        latency_ms: latency,
         item_type: sessionItemType(question, isRepair),
       }, question);
+      const confidenceValue = review.confidence ?? (review.correct ? 3 : 2);
       const answerRecord = {
         question_id: question.id,
         item_type: sessionItemType(question, isRepair),
-        selected_index: selected,
+        selected_index: choiceIndex,
         confidence: confidenceValue,
-        latency_ms: pendingLatency,
+        latency_ms: latency,
         correct: review.correct,
         explanation: review.explanation,
         next_review_at: review.next_review_at,
@@ -1901,29 +1978,28 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       };
       answersRef.current = [...answersRef.current, answerRecord];
       if (!review.correct && !isRepair) {
-        queueRepairItem(review, selected);
+        queueRepairItem(review, choiceIndex);
       }
-      setFeedback({ review, confidence: confidenceValue, selectedIndex: selected });
+      setFeedback({ review, confidence: confidenceValue, selectedIndex: choiceIndex });
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [feedback, isRepair, question, selected, session?.id, submitting, userId]);
 
-  const continueSession = () => {
+  const continueSession = useCallback(() => {
     if (index + 1 >= items.length) {
       finishSession();
       return;
     }
     setIndex(current => current + 1);
     setSelected(null);
-    setPendingLatency(null);
     setFeedback(null);
     setTextAnswer('');
     resetTyping();
     setPracticeFeedback(null);
     setAudioPlaying(false);
     setAudioPlayed(false);
-  };
+  }, [finishSession, index, items.length]);
 
   const completePracticeItem = async (payload = {}) => {
     if (!item || submitting) return;
@@ -1956,6 +2032,19 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
         word: item.word || null,
       };
       answersRef.current = [...answersRef.current, answerRecord];
+      // Ghi lịch ôn cho các mục CÓ chấm điểm. Trước đây cả lớp "chinese layer" của
+      // phiên học không nuôi SRS: gõ sai pinyin hay chọn sai tone của một từ vẫn
+      // không kéo từ đó về hạn ôn sớm, dù đó chính là bằng chứng rõ nhất rằng từ
+      // chưa vững. Mục guided_output chấm ở mức CÂU (dùng đúng từ mục tiêu trong
+      // câu tự đặt) nên ghi cho chính từ mục tiêu, không cắt cả câu.
+      if (GRADED_PRACTICE_TYPES.has(item.type) && item.word) {
+        captureWordReview({
+          word: item.word,
+          correct: Boolean(result.correct ?? true),
+          latencyMs: practiceStartedAtRef.current ? now() - practiceStartedAtRef.current : null,
+          activity: PRACTICE_ACTIVITY[item.type] || 'vocab',
+        });
+      }
       if (result.errorTag === 'tone_error' && item.word) {
         setItems(currentItems => {
           const nextItems = [...currentItems];
@@ -1977,6 +2066,46 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     const result = assessPinyinInput(textAnswer, item?.word?.pinyin);
     completePracticeItem({ ...result, feedback: result.message });
   };
+
+  // Phím tắt bàn phím: Enter / Space để qua câu tiếp theo khi có feedback (hoặc chọn 1..4 / A..D)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) {
+        return;
+      }
+      if (e.nativeEvent?.isComposing || e.isComposing) return;
+
+      if ((e.key === 'Enter' || e.code === 'Space' || e.key === ' ') && !submitting && !loading) {
+        if (feedback || practiceFeedback) {
+          e.preventDefault();
+          continueSession();
+          return;
+        }
+        if (item?.type === 'character_card' && !practiceFeedback) {
+          e.preventDefault();
+          completePracticeItem({ correct: true, feedback: 'Đã xem character family và collocation.' });
+          return;
+        }
+      }
+
+      if (!feedback && selected === null && !submitting && !loading && question?.options) {
+        const key = e.key.toUpperCase();
+        let optIndex = -1;
+        if (key === 'A' || key === '1') optIndex = 0;
+        else if (key === 'B' || key === '2') optIndex = 1;
+        else if (key === 'C' || key === '3') optIndex = 2;
+        else if (key === 'D' || key === '4') optIndex = 3;
+        if (optIndex >= 0 && optIndex < question.options.length) {
+          e.preventDefault();
+          answerQuestion(optIndex, performance.now());
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [feedback, practiceFeedback, submitting, loading, item, question, selected, continueSession, completePracticeItem, answerQuestion]);
 
   // Theo dõi gõ: đếm phím + backspace + lần sửa (độ dài giảm) để đo usage signal.
   const trackTyping = event => {
@@ -2161,11 +2290,11 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
                 {practiceFeedback.score !== undefined && <span>Production {practiceFeedback.score}%</span>}
               </div>
               <p>{practiceFeedback.feedback || practiceFeedback.message}</p>
-              <button className="btn-primary" type="button" onClick={continueSession}>{index + 1 >= items.length ? 'Hoàn thành' : 'Tiếp tục'}</button>
+              <button className="btn-primary" type="button" onClick={continueSession}>{index + 1 >= items.length ? 'Hoàn thành (Enter)' : 'Tiếp tục (Enter)'}</button>
             </div>
           )}
 
-          {!practiceFeedback && item.type === 'character_card' && <button className="btn-primary" type="button" onClick={() => completePracticeItem({ correct: true, feedback: 'Đã xem character family và collocation.' })}>Tiếp tục</button>}
+          {!practiceFeedback && item.type === 'character_card' && <button className="btn-primary" type="button" onClick={() => completePracticeItem({ correct: true, feedback: 'Đã xem character family và collocation.' })}>Tiếp tục (Enter)</button>}
         </section>
       )}
 
@@ -2215,20 +2344,6 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
             ))}
           </div>
 
-          {selected !== null && !feedback && (
-            <div className="confidence-panel">
-              <p className="confidence-label">Mức tự tin?</p>
-              <div className="confidence-grid">
-                {CONFIDENCE_LEVELS.map(row => (
-                  <button key={row.value} type="button" onClick={() => chooseConfidence(row.value)} disabled={submitting} title={row.label}>
-                    <strong>{row.value}</strong>
-                    <span>{row.label}</span>
-                    <small className="hide-mobile">{row.detail}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {feedback && (
             <div className={`feedback-panel ${feedback.review.correct ? 'feedback-panel--correct' : 'feedback-panel--wrong'}`}>
@@ -2237,6 +2352,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
                 <strong>{feedback.review.correct ? 'Đúng' : 'Cần sửa'}</strong>
                 <span className="hide-mobile">{nextReviewText(feedback.review.next_review_at)}</span>
               </div>
+              <p className="feedback-assess">{assessmentText(feedback.review.correct, feedback.confidence)}</p>
               <p>{feedback.review.explanation || question.explanation || 'Đã ghi vào lịch ôn.'}</p>
               {!feedback.review.correct && <small>Đáp án: {question.options[feedback.review.correct_index] || '-'}</small>}
               {!feedback.review.correct && errorTagLabel(feedback.review.error_tag) && (
@@ -2246,7 +2362,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
                 </div>
               )}
               <WordEncodeCard word={question.word} />
-              <button className="btn-primary" type="button" onClick={continueSession} disabled={loading}>{index + 1 >= items.length ? 'Xong' : 'Tiếp'}</button>
+              <button className="btn-primary" type="button" onClick={continueSession} disabled={loading}>{index + 1 >= items.length ? 'Xong (Enter)' : 'Tiếp (Enter)'}</button>
             </div>
           )}
         </section>
@@ -2382,6 +2498,18 @@ function GeneralCheck({ level, onExit, onComplete }) {
     const nextAnswers = [...answers, { question_id: question.id, quiz_type: question.quiz_type, selected_index: choiceIndex, latency_ms: latencyMs }];
     setSelected(choiceIndex);
     setAdvancing(true);
+    // Kiểm tra tổng quát đi qua submitQuiz (chấm cả loạt ở cuối), KHÔNG qua
+    // recordLearningEvent, nên trước đây toàn bộ bài kiểm tra đầu vào không tạo
+    // một lịch ôn nào: người học làm xong 30 câu mà "Học hôm nay" vẫn báo chưa có
+    // từ đến hạn. Ghi ngay tại lượt trả lời — đây chính là đường chuẩn mà SRS cần.
+    if (question.word?.hanzi) {
+      captureWordReview({
+        word: question.word,
+        correct: choiceIndex === question.correct_index,
+        latencyMs,
+        activity: question.quiz_type,
+      });
+    }
     window.setTimeout(() => {
       if (index + 1 >= questions.length) {
         setAnswers(nextAnswers);
@@ -2944,6 +3072,26 @@ function VocabLibrary({ focusLevels, theme }) {
   );
 }
 
+// Viết đúng một chữ từ trí nhớ (hanzi-writer chấm từng nét) là bằng chứng mạnh
+// nhất trong app về việc nhớ MẶT CHỮ — mạnh hơn nhận ra chữ trong 4 lựa chọn. Nên
+// nó cũng phải nuôi lịch ôn, nhưng chấm theo SỐ LẦN SAI NÉT chứ không theo thời
+// gian: viết chậm mà đúng nét là viết cẩn thận, không phải quên.
+//
+//   0 lần sai          → đúng, mức chắc 4 (giãn lịch mạnh)
+//   1-2 lần sai        → đúng, mức chắc 3 (giãn lịch chuẩn)
+//   3-5 lần sai        → sai, mức chắc 2 (nhớ lờ mờ, reset nhẹ)
+//   > 5 lần sai        → sai, mức chắc 3 (gần như dò từng nét, reset mạnh)
+//
+// Từ nhiều chữ: chỉ ghi khi viết XONG chữ CUỐI, và cộng tổng số lần sai của cả từ.
+// Ghi từng chữ một sẽ khiến một từ 3 chữ nhận 3 lượt ôn cho cùng một lịch.
+function handwritingGrade(mistakes) {
+  const misses = Number(mistakes) || 0;
+  if (misses === 0) return { correct: true, confidence: 4 };
+  if (misses <= 2) return { correct: true, confidence: 3 };
+  if (misses <= 5) return { correct: false, confidence: 2 };
+  return { correct: false, confidence: 3 };
+}
+
 function HandwritingPad({ targetWord, theme }) {
   const containerRef = useRef(null);
   const writerRef = useRef(null);
@@ -2956,6 +3104,15 @@ function HandwritingPad({ targetWord, theme }) {
   const [strokeProgress, setStrokeProgress] = useState({ done: 0, total: 0 });
   const [mistakes, setMistakes] = useState(0);
   const [completed, setCompleted] = useState(false);
+  // Số lần sai nét của từng chữ đã viết XONG, khoá theo vị trí chữ trong từ. Dùng
+  // Map thay vì một biến dồn vì người học chọn tab chữ theo thứ tự bất kỳ và có thể
+  // viết lại một chữ — lần viết xong sau ghi đè lần trước, không cộng chồng lên.
+  // Không cần reset khi đổi từ: chỗ gọi đặt key={selectedWord.key} nên component
+  // remount, ref sinh lại từ đầu.
+  const charMistakesRef = useRef(new Map());
+  // Đã ghi SRS cho từ này chưa. Viết lại (restart) không mở lại: lượt đầu tiên là
+  // lượt duy nhất phản ánh trí nhớ, các lượt sau đã thấy đáp án.
+  const capturedRef = useRef(false);
 
   const activeChar = chars[charIndex];
 
@@ -2973,11 +3130,19 @@ function HandwritingPad({ targetWord, theme }) {
       onMistake(data) {
         setMistakes(data.totalMistakes);
       },
-      onComplete() {
+      onComplete(data) {
         setCompleted(true);
+        charMistakesRef.current.set(charIndex, Number(data?.totalMistakes) || 0);
+        // Chỉ ghi khi đã viết xong MỌI chữ của từ: ghi từng chữ một sẽ khiến một từ
+        // 3 chữ nhận 3 lượt ôn cho cùng một lịch.
+        if (capturedRef.current || charMistakesRef.current.size < chars.length) return;
+        capturedRef.current = true;
+        const total = [...charMistakesRef.current.values()].reduce((sum, value) => sum + value, 0);
+        const { correct, confidence } = handwritingGrade(total);
+        captureWordReview({ word: targetWord, correct, activity: 'typing', confidence });
       },
     });
-  }, []);
+  }, [charIndex, chars.length, targetWord]);
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -3475,13 +3640,15 @@ export default function App() {
           {!generalCheckLevel && activeTab === 'dashboard' && <Dashboard analytics={analytics} focusLevel={level} focusLevels={levels} todayPlan={todayPlan} selectedSessionMode={selectedSessionMode} showFirstRun={Boolean(analytics && !generalCheckState && !stats.answered)} onSelectLevel={selectFocusLevel} onOpenLessons={openFocusedLessons} onStartGeneralCheck={startGeneralCheck} onSkipFirstRun={skipGeneralCheck} onStartRecommended={startRecommendedQuiz} onSelectSessionMode={setSelectedSessionMode} onStartToday={startTodaySession} />}
           {!generalCheckLevel && activeTab === 'quiz' && <Quiz key={`${quizStrategyHint}-${autoStartKey}`} levels={levels} setLevels={selectFocusLevel} quizType={quizType} setQuizType={setQuizType} refreshStats={refreshStats} autoStartKey={autoStartKey} limit={quizLimit} strategyHint={quizStrategyHint} />}
           {!generalCheckLevel && activeTab === 'grammar' && <GrammarLab focusLevels={levels} />}
+          {!generalCheckLevel && activeTab === 'translate' && <TranslationPractice focusLevels={levels} />}
+          {!generalCheckLevel && activeTab === 'dictation' && <DictationMode focusLevels={levels} />}
           {!generalCheckLevel && activeTab === 'vocab' && <VocabLibrary focusLevels={levels} theme={theme} />}
           {!generalCheckLevel && activeTab === 'vocab-typing' && <VocabTypingMode focusLevels={levels} />}
           {!generalCheckLevel && activeTab === 'flashcard' && <FlashcardMode focusLevels={levels} />}
           {!generalCheckLevel && activeTab === 'confusable' && <ConfusablePairs focusLevels={levels} />}
           {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
           {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevels={levels} />}
-          {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat focusLevels={levels} />}
+          {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />}
           {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
           {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
           </Suspense>

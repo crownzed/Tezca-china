@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.db import SessionLocal
 from app.models import Example, Word
 from app.services.llm_generator_service import _call_api
-from app.settings import settings
+from app.settings import NO_LLM_KEY_MESSAGE, settings
 from sqlalchemy import func, select
 
 # Official HSK 2.0 word counts
@@ -24,9 +24,9 @@ WORDS_PER_CALL = 50
 
 
 def _call_llm(prompt: str) -> dict:
-    # Dùng chung _call_api (relay vilao.ai) thay vì gọi thẳng ai-box/DeepSeek:
-    # provider đó đã bị bỏ khỏi cấu hình, và _call_api lo sẵn xoay vòng key,
-    # retry, bóc markdown fence.
+    # Dùng chung _call_api thay vì gọi thẳng ai-box/DeepSeek: provider đó đã bị bỏ
+    # khỏi cấu hình, và _call_api lo sẵn việc chọn provider (StepFun/vilao/custom
+    # theo settings.llm_provider), xoay vòng key, retry, bóc markdown fence.
     return _call_api(prompt)
 
 
@@ -127,7 +127,7 @@ def fill_level(level: int) -> int:
 
 def main():
     if not settings.llm_keys_list:
-        print("ERROR: GEMINI_API_KEYS not set")
+        print(f"ERROR: {NO_LLM_KEY_MESSAGE}")
         return
 
     # Check current state

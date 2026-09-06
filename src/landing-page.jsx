@@ -9,14 +9,15 @@ import useRevealOnScroll from './components/useRevealOnScroll.js';
 // MỌI CON SỐ dưới đây là số thật, đếm từ repo — sửa tính năng thì sửa cả đây:
 //   5.851 từ HSK 1–6 ....... backend/app/data/words_export.json
 //   3.015 từ có câu ví dụ ... cùng file
-//   35 cấu trúc / 3.460 câu . src/grammar-specs/ (log validate-grammar.mjs)
+//   577 điểm tham khảo + 35 cấu trúc luyện tập / 3.460 câu
+//   . backend/app/data/grammar_pool.json + src/grammar-specs/
 //   24 đoạn 选词填空 / 87 chỗ trống, 24 đoạn đọc hiểu / 48 câu hỏi
 //                           ... backend/app/data/exam_passages.json
 //   11 dạng bài ............. enum QuizType, backend/app/models.py
 
 const STATS = [
   { value: '5.851', label: 'từ vựng HSK 1-6' },
-  { value: '35', label: 'cấu trúc ngữ pháp' },
+  { value: 'Đầy đủ', label: 'thư viện ngữ pháp HSK 1-6' },
   { value: '11', label: 'dạng bài luyện thi' },
   { value: '3.015', label: 'từ kèm câu ví dụ' },
 ];
@@ -37,13 +38,13 @@ const PILLARS = [
   },
   {
     icon: Blocks,
-    title: 'Ngữ pháp sinh câu từ mẫu',
-    body: '35 cấu trúc, mỗi cấu trúc nở ra khoảng 100 câu khác nhau từ template thay vì một bộ câu cố định. Học lần hai không gặp lại đúng câu cũ nên không nhớ vẹt được đáp án.',
+    title: 'Thư viện ngữ pháp và luyện tập',
+    body: 'Tra cứu thư viện ngữ pháp HSK 1-6 từ tài liệu nguồn, kèm 35 cấu trúc luyện tập sinh khoảng 100 câu khác nhau từ template để tránh nhớ vẹt đáp án.',
   },
   {
     icon: Layers,
     title: 'Từ vựng bốn chế độ',
-    body: 'Tra cứu, thẻ lật tự đánh giá, gõ lại từ, và phân biệt cặp dễ nhầm. Bốn chế độ ghi vào cùng một lịch ôn cho mỗi từ, nên học kiểu nào cũng cộng dồn.',
+    body: 'Tra cứu, ôn thẻ nhanh, gõ lại từ, và phân biệt cặp dễ nhầm. Bốn chế độ ghi vào cùng một lịch ôn cho mỗi từ, nên học kiểu nào cũng cộng dồn.',
   },
 ];
 
@@ -70,7 +71,7 @@ const METHOD = [
   {
     icon: LineChart,
     title: 'Lịch ôn riêng cho từng từ',
-    body: 'Thuật toán SM-2 lite giữ một lịch ôn độc lập cho mỗi từ, với hệ số ease dao động trong khoảng 1,3 đến 3,2 tuỳ độ nhớ của bạn. Trả lời đúng thì giãn khoảng cách ôn, sai thì đặt lại. Ôn bằng thẻ lật hay bằng quiz đều ghi vào cùng một lịch của từ đó.',
+    body: 'Thuật toán SM-2 lite giữ một lịch ôn độc lập cho mỗi từ, với hệ số ease dao động trong khoảng 1,3 đến 3,2 tuỳ độ nhớ của bạn. Trả lời đúng thì giãn khoảng cách ôn, sai thì đặt lại. Bạn không phải tự chấm điểm mình: hệ thống suy từ kết quả và tốc độ trả lời, và mọi chế độ luyện tập đều ghi vào cùng một lịch của từ đó.',
   },
   {
     icon: BarChart3,
@@ -99,7 +100,7 @@ const FAQ = [
   },
   {
     q: 'Học được tới HSK mấy?',
-    a: 'Kho từ vựng phủ HSK 1 đến 6 với 5.851 từ. Phần ngữ pháp hiện có 35 cấu trúc, tập trung nhiều nhất ở HSK 1 đến 3.',
+    a: 'Kho từ vựng phủ HSK 1 đến 6 với 5.851 từ. Phần ngữ pháp có thư viện tham khảo HSK 1-6 và 35 cấu trúc luyện tập tương tác.',
   },
   {
     q: 'Tiến độ học lưu ở đâu?',
@@ -262,7 +263,7 @@ export default function LandingPage({ onEnter }) {
             </p>
             <ul className="landing-points">
               <li>Chấm điểm thanh điệu theo đường F0 thật, không chỉ đúng/sai</li>
-              <li>Lộ trình HSK 1-6 kèm quiz, ngữ pháp và thẻ lật ghi nhớ</li>
+              <li>Lộ trình HSK 1-6 kèm quiz, ngữ pháp và ôn thẻ ghi nhớ</li>
               <li>Ôn tập giãn cách (SRS) tự nhắc đúng từ bạn hay quên</li>
             </ul>
           </div>

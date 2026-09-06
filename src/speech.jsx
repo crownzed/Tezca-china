@@ -4,6 +4,7 @@ let speechUnlocked = false;
 let activeAudio = null;
 let audioIndex = null;
 let cachedVoices = null;
+let speechPaused = false;
 
 // Số/ký hiệu -> dạng đọc tiếng Trung, để engine không tự đoán. Corpus hiện
 // thuần Trung nhưng custom-vocab có thể chèn số/ký hiệu. Port từ
@@ -160,6 +161,7 @@ export function getLocalAudioSrc(text) {
 }
 
 function stopActiveAudio() {
+  speechPaused = false;
   if (!activeAudio) return;
   activeAudio.pause();
   activeAudio.currentTime = 0;
@@ -171,12 +173,46 @@ const TTS_API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? ''
 function geminiTtsUrl(text) {
   return `${TTS_API_BASE}/tts?text=${encodeURIComponent(text)}`;
 }
+
+// Kéo tốc độ ở BROWSER, dùng khi nguồn audio không nhận tham số tốc độ (clip
+// local đã ghi sẵn, Gemini TTS, ElevenLabs).
+//
+// Sàn 0.85 là có lý do: dưới mức đó browser resample một luồng ĐÃ NÉN và nghe
+// nhòe. Nhưng nó cũng là cái bẫy — SPEECH_RATES của hội thoại có 0.72 và 0.82,
+// cả hai đều bị kẹp lên 0.85, nên hai lựa chọn đó từng cho ra audio Y HỆT NHAU.
+// Đường StepFun không còn đi qua đây nữa (tốc độ vào query ``speed``), nên sàn
+// này chỉ còn áp cho các nguồn thật sự không điều được tốc độ.
+function clampPlaybackRate(rate, min = 0.85, max = 1.1) {
+  return Math.max(min, Math.min(max, rate));
+}
+
 function tryPlayUrl(url, rate, runId, onDone, fallback) {
   const audio = new Audio(url);
   audio.preload = 'auto';
   audio.volume = 1;
-  // Clip đã ghi sẵn: kéo dưới 0.85 làm nhòe/méo âm mà không giúp nghe rõ hơn.
-  audio.playbackRate = Math.max(0.85, Math.min(1.1, rate));
+  audio.playbackRate = clampPlaybackRate(rate);
+  activeAudio = audio;
+
+  let resolved = false;
+  audio.onended = () => {
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) onDone(true); }
+  };
+  audio.onerror = () => {
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) fallback(); }
+  };
+  audio.play().catch(() => {
+    if (!resolved) { resolved = true; activeAudio = null; if (runId === speechRunId) fallback(); }
+  });
+}
+
+// Phát audio đã được tổng hợp SẴN ở đúng tốc độ (StepFun nhận ``speed``), nên
+// playbackRate phải là 1.0 — kéo thêm ở browser là chậm/nhanh hai lần và mất công
+// resample vô ích. Đây là điểm khác duy nhất so với tryPlayUrl.
+function playAtNativeRate(url, runId, onDone, fallback) {
+  const audio = new Audio(url);
+  audio.preload = 'auto';
+  audio.volume = 1;
+  audio.playbackRate = 1;
   activeAudio = audio;
 
   let resolved = false;
@@ -257,6 +293,54 @@ export function stopSpeech() {
   if (hasSpeechSupport()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
 }
 
+// --- Tạm dừng / tiếp tục (dùng cho nghe viết theo câu) ----------------------
+//
+// stopSpeech() tăng speechRunId + đưa currentTime về 0, tức nó HUỶ chứ không
+// dừng: bấm phát lại là đọc từ đầu. Chính tả cần dừng giữa câu rồi tiếp đúng
+// chỗ, nên phải giữ nguyên activeAudio và runId — không được stopActiveAudio().
+//
+// Vì activeAudio là biến private của module, component KHÔNG thể tự làm việc
+// này bằng một `new Audio()` riêng: audio đó nằm ngoài hàng đợi nên stopSpeech()
+// sẽ không dọn được, và nó sẽ phát chồng lên câu do speak() phát.
+export function pauseSpeech() {
+  if (activeAudio && !activeAudio.paused) {
+    activeAudio.pause();
+    speechPaused = true;
+    return true;
+  }
+  // Nhánh browser TTS (không có activeAudio): SpeechSynthesis pause/resume
+  // được ở phần lớn engine. Không đo được vị trí nhưng vẫn dừng đúng chỗ.
+  if (hasSpeechSupport() && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+    try {
+      window.speechSynthesis.pause();
+      speechPaused = true;
+      return true;
+    } catch { /* engine không hỗ trợ → coi như không dừng được */ }
+  }
+  return false;
+}
+
+export function resumeSpeech() {
+  if (activeAudio && activeAudio.paused) {
+    speechPaused = false;
+    activeAudio.play().catch(() => { /* mất quyền phát → caller phát lại từ đầu */ });
+    return true;
+  }
+  if (hasSpeechSupport() && window.speechSynthesis.paused) {
+    try {
+      window.speechSynthesis.resume();
+      speechPaused = false;
+      return true;
+    } catch { /* ignore */ }
+  }
+  speechPaused = false;
+  return false;
+}
+
+export function isSpeechPaused() {
+  return speechPaused;
+}
+
 export function speak(text, rate = 0.82, onDone) {
   const clean = normalizeForTts(String(text || '').trim());
   if (!clean) { onDone?.(false); return ''; }
@@ -310,10 +394,11 @@ export function speak(text, rate = 0.82, onDone) {
   return src;
 }
 
-// Đọc câu tiếng Trung qua ElevenLabs (/tts?no_gemini=1, giọng đa ngôn ngữ mặc
-// định). Dùng cho Voice Chat: Gemini nghe + sinh câu trả lời, ElevenLabs đọc.
-// Nếu ElevenLabs lỗi/hết quota (429), fallback sang Gemini TTS -> browser TTS
-// qua playOnlineTts để câu trả lời luôn được phát.
+// Đọc câu tiếng Trung qua /tts?no_gemini=1. Tên hàm là di sản: nhánh
+// ``no_gemini`` từng đi thẳng ElevenLabs, nhưng tts.py kiểm StepFun TRƯỚC nhánh
+// đó, nên khi có STEPFUN_API_KEYS thì giọng thật là StepFun (zixinnansheng).
+// ElevenLabs chỉ vào khi StepFun không khả dụng. Lỗi cả hai → playOnlineTts
+// (Gemini TTS → browser TTS) để câu trả lời luôn được phát.
 export function speakEleven(text, rate = 0.9, onDone) {
   const clean = normalizeForTts(String(text || '').trim());
   if (!clean) { onDone?.(false); return; }
@@ -321,18 +406,146 @@ export function speakEleven(text, rate = 0.9, onDone) {
   const runId = ++speechRunId;
   stopActiveAudio();
   if (hasSpeechSupport()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+  playEleven(clean, rate, runId, onDone);
+}
 
-  const url = `${TTS_API_BASE}/tts?text=${encodeURIComponent(clean)}&no_gemini=1`;
-  tryPlayUrl(url, rate, runId, (success) => {
+// Phần phát thật, tách khỏi speakEleven để hàng đợi dùng lại được mà KHÔNG tăng
+// speechRunId — tăng runId giữa hàng đợi sẽ tự hủy chính câu vừa xếp trước đó.
+//
+// ``streaming`` chọn /tts/stream (MP3 theo khối, byte đầu ~2.1s) thay cho /tts
+// (trọn file, ~3.0s). Chỉ chế độ gọi bật nó: ở đó thời gian tới TIẾNG ĐẦU TIÊN là
+// thứ người học cảm nhận. Với flashcard/quiz thì tổng thời gian mới quan trọng và
+// kho MP3 tĩnh phục vụ phần lớn, nên giữ /tts.
+//
+// Tốc độ đi vào QUERY ``speed``, không qua playbackRate: StepFun tổng hợp lại từ
+// đầu ở nhịp đó, còn browser thì resample luồng đã nén. Đo trên key thật:
+// speed=0.72 -> 340ms/chữ, 0.82 -> 293, 0.95 -> 202 (đơn điệu, ASR khớp 3/3,
+// bitrate vẫn 128kbps). Trước đây 0.72 và 0.82 đều bị sàn playbackRate kẹp lên
+// 0.85 nên cho ra audio y hệt nhau — bộ chọn tốc độ coi như vô tác dụng.
+function playEleven(clean, rate, runId, onDone, { streaming = false } = {}) {
+  const speedParam = `&speed=${encodeURIComponent(rate)}`;
+  const url = streaming
+    ? `${TTS_API_BASE}/tts/stream?text=${encodeURIComponent(clean)}${speedParam}`
+    : `${TTS_API_BASE}/tts?text=${encodeURIComponent(clean)}&no_gemini=1${speedParam}`;
+  playAtNativeRate(url, runId, (success) => {
     if (runId !== speechRunId) return;
     onDone?.(success);
   }, () => {
     if (runId !== speechRunId) return;
+    // Fallback (Gemini TTS / browser TTS) KHÔNG nhận tham số tốc độ, nên ở đó phải
+    // quay lại kéo playbackRate — kèm cả sàn 0.85 của nó.
     playOnlineTts(clean, rate, runId, (success) => {
       if (runId !== speechRunId) return;
       onDone?.(success);
     });
   });
+}
+
+// --- Hàng đợi phát nối tiếp (dùng cho SSE hội thoại theo câu) ---------------
+//
+// Vì sao cần: /chat/stream phát từng CÂU ngay khi model chốt, nên câu 2 thường
+// tới khi câu 1 còn đang phát. Gọi speakEleven thẳng thì mỗi lần gọi sẽ tăng
+// speechRunId và stopActiveAudio() — tức câu mới CẮT NGANG câu đang đọc, và
+// người học chỉ nghe được câu cuối. Hàng đợi giữ đúng thứ tự và chỉ phát tiếp
+// khi câu trước kết thúc.
+//
+// Chia sẻ speechRunId với phần còn lại của module: stopSpeech() tăng runId nên
+// mọi câu còn trong hàng đợi tự bị loại ở nhánh kiểm runId dưới đây.
+let queueRunId = 0;
+let queueItems = [];
+let queuePlaying = false;
+// Chặn cứng: khi người học CẮT LỜI, mọi câu tới sau phải bị bỏ.
+//
+// Vì sao cần cờ riêng mà không chỉ stopSpeech(): stopSpeech() tăng speechRunId,
+// và nhánh "lượt phát MỚI" dưới đây thấy queueRunId !== speechRunId nên nó XOÁ
+// hàng đợi rồi MỞ một lượt mới — tức câu kế tiếp của stream SSE còn đang mở lại
+// được phát, AI nói tiếp lên đầu người học. Chỉ beginSpeechQueue() (một lượt trả
+// lời mới thật sự) mới hạ được cờ này.
+let queueSuspended = false;
+
+export function speakQueued(text, rate = 0.9) {
+  const clean = normalizeForTts(String(text || '').trim());
+  if (!clean) return;
+  if (queueSuspended) return;
+  unlockSpeech();
+  // Lượt phát MỚI: runId của module đã đổi kể từ lần xếp hàng trước (do
+  // stopSpeech hoặc một speak() khác) → hàng đợi cũ thuộc lượt đã chết, bỏ đi.
+  if (queueRunId !== speechRunId) {
+    queueItems = [];
+    queuePlaying = false;
+    queueRunId = ++speechRunId;
+  }
+  queueItems.push({ text: clean, rate });
+  if (!queuePlaying) drainSpeechQueue();
+}
+
+function drainSpeechQueue() {
+  const item = queueItems.shift();
+  if (!item) { queuePlaying = false; notifyQueueIdle(); return; }
+  queuePlaying = true;
+  const runId = queueRunId;
+  playEleven(item.text, item.rate, runId, () => {
+    // stopSpeech() hoặc một lượt phát khác đã xen vào giữa: dừng, đừng đọc nốt.
+    if (runId !== speechRunId) { queueItems = []; queuePlaying = false; return; }
+    // Cắt lời giữa lúc câu này đang phát: cờ được bật trong khi ta chờ callback,
+    // nên phải kiểm lại ở đây chứ không chỉ ở speakQueued.
+    if (queueSuspended) { queueItems = []; queuePlaying = false; return; }
+    drainSpeechQueue();
+  }, { streaming: queueStreaming });
+}
+
+// Thông báo "hàng đợi vừa cạn" cho chế độ gọi, để nó quay lại nghe.
+//
+// CẢNH BÁO cho caller: hàng đợi cạn KHÔNG có nghĩa lượt trả lời đã xong. Câu 1
+// hay phát hết trước khi câu 2 kịp tới từ stream, nên sự kiện này có thể nổ giữa
+// lượt. Caller PHẢI tự kiểm rằng stream đã ``done`` trước khi chuyển trạng thái.
+let queueIdleCallback = null;
+
+export function onSpeechQueueIdle(fn) {
+  queueIdleCallback = typeof fn === 'function' ? fn : null;
+}
+
+function notifyQueueIdle() {
+  queueIdleCallback?.();
+}
+
+export function isSpeechQueueBusy() {
+  return queuePlaying || queueItems.length > 0;
+}
+
+// Bắt đầu một lượt phát theo hàng đợi: dừng âm đang phát và cấp runId mới.
+// Gọi TRƯỚC câu đầu tiên của một lượt trả lời để lượt trước không lẫn vào.
+export function beginSpeechQueue() {
+  queueItems = [];
+  queuePlaying = false;
+  queueSuspended = false;  // lượt trả lời mới -> hạ chặn của lần cắt lời trước
+  stopSpeech();            // tăng speechRunId + dừng audio đang phát
+  queueRunId = speechRunId;
+}
+
+// Cắt lời: dừng ngay và CHẶN mọi câu tới sau của cùng lượt trả lời.
+//
+// Khác stopSpeech(): stopSpeech chỉ dừng thứ đang phát, còn câu kế tiếp mà stream
+// SSE sắp đẩy tới vẫn được speakQueued nhận và phát. Trong chế độ gọi, đó đúng là
+// hành vi sai — người học vừa cắt lời thì AI phải im tới hết lượt.
+export function interruptSpeech() {
+  queueItems = [];
+  queuePlaying = false;
+  queueSuspended = true;
+  stopSpeech();
+}
+
+export function isSpeechQueueSuspended() {
+  return queueSuspended;
+}
+
+// Chế độ gọi phát qua /tts/stream (MP3 theo khối) thay vì /tts (trọn file). Đo
+// thật: byte đầu về sau ~2.1s so với ~3.0s, tức nhanh hơn ~0.9s mỗi câu. Chỉ đổi
+// URL, phần phát vẫn là tryPlayUrl như mọi đường khác.
+let queueStreaming = false;
+
+export function setSpeechQueueStreaming(value) {
+  queueStreaming = Boolean(value);
 }
 
 // Đọc phản hồi tiếng Việt qua ElevenLabs (/tts/feedback). Tách khỏi speak():

@@ -89,7 +89,7 @@ Hệ thống hỗ trợ cơ chế hoạt động offline thông minh, tự độ
 | **Thiết kế & Icon** | Lucide React, CSS | Giao diện tối giản mang phong cách Zen hiện đại, hỗ trợ Dark/Light mode. |
 | **Backend API** | FastAPI, Python 3.10+ | RESTful API hiệu năng cao, xử lý đa luồng bất đồng bộ. |
 | **Xử lý tín hiệu (DSP)** | NumPy, Praat / Parselmouth | Trích xuất F0, tính toán sai lệch DTW thanh điệu và các chỉ số lưu loát. |
-| **Trí tuệ nhân tạo (AI)** | Gemini Native API (giọng nói), relay vilao.ai (sinh câu hỏi) | Nhận diện giọng nói, trò chuyện ngôn ngữ tự nhiên, chẩn đoán ngữ âm và sinh câu hỏi luyện tập. |
+| **Trí tuệ nhân tạo (AI)** | StepFun Step Plan (sinh câu hỏi + TTS), Gemini Native API (giọng nói) | Nhận diện giọng nói, trò chuyện ngôn ngữ tự nhiên, chẩn đoán ngữ âm và sinh câu hỏi luyện tập. |
 | **Cơ sở dữ liệu** | SQLite, SQLAlchemy (ORM) | Lưu trữ tiến trình cục bộ, hỗ trợ Turso (libSQL) cho môi trường production. |
 
 ---
@@ -162,6 +162,7 @@ uvicorn app.main:app --reload --port 8000
     *   `TURSO_AUTH_TOKEN`: Token xác thực Turso.
     *   `JWT_SECRET`: Khóa bảo mật để ký và xác thực token JWT người dùng.
     *   `GEMINI_NATIVE_API_KEYS`: Danh sách API Key của Google Gemini phục vụ các tính năng Speech AI (phân tách bằng dấu phẩy).
+    *   `STEPFUN_API_KEYS`: API Key StepFun Step Plan cho TTS tiếng Trung (khuyến nghị khi cần giọng đọc rõ cho học tập).
 
 ---
 
@@ -182,20 +183,30 @@ Toàn bộ tính năng sinh nội dung đi qua một provider duy nhất. Khi kh
 
    | Biến | Bắt buộc | Ý nghĩa & lưu ý |
    | :--- | :---: | :--- |
-   | `GEMINI_API_KEYS` | ✅ | Danh sách key relay vilao.ai, phân tách bằng dấu phẩy. Mỗi key là một "lượt": key cạn quota thì service tự chuyển sang key kế tiếp. Để trống → mọi tính năng sinh nội dung tự tắt. |
+   | `STEPFUN_API_KEYS` | ✅ | Key StepFun Step Plan, phân tách bằng dấu phẩy. **Provider AI chính**: dùng chung một bộ key cho cả chat (sinh câu hỏi, model `step-3.7-flash`) và TTS (`stepaudio-2.5-tts`, voice `zixinnansheng`). Chỉ cần đặt biến này là xong, không phải khai URL/model. **Không commit key.** |
+   | `STEPFUN_CHAT_URL` | — | Mặc định `https://api.stepfun.ai/step_plan/v1/chat/completions`. Path `/step_plan/v1` là **bắt buộc** với key Step Plan: đo trên key thật, `/step_plan/v1` trả 200 còn `/v1` (trả tiền theo token) trả 402 `quota_exceeded`. |
+   | `STEPFUN_CHAT_MODEL` | — | Mặc định `step-3.7-flash`. Các lựa chọn khác trong Step Plan: `step-3.5-flash`, `step-3.5-flash-2603` (model này chỉ nhận effort `low`/`high`). |
+   | `STEPFUN_TTS_VOICE` | — | Mặc định `zixinnansheng` — giọng nam rõ, phù hợp đọc nội dung học tiếng Trung. Đã dò 9 giọng khác trong tài liệu StepFun: **tất cả trả 400 `voice_id does not exist`** trên Step Plan, và `GET /audio/voices` trả danh sách rỗng — đây là giọng duy nhất khả dụng, đừng mất công thử đổi. |
+   | `STEPFUN_TTS_INSTRUCTION` | — | Chỉ dẫn giọng đọc cho câu ĐỌC LẺ (flashcard, quiz, luyện nghe); mặc định trung tính: rõ, tự nhiên, hơi chậm, đúng thanh điệu. Giữ trung tính có chủ ý — ở đó câu được nghe lặp nhiều lần nên đều đặn là ưu điểm. |
+   | `STEPFUN_TTS_INSTRUCTION_CHAT` | — | Chỉ dẫn RIÊNG cho hội thoại (`/tts/stream`), sinh động hơn. Đo trên key thật so với chuỗi trung tính: **F0 trung vị 116→129Hz (+11%), cường độ +2.0dB**, ASR chép lại vẫn khớp nên thanh điệu không méo. Nếu sửa: phải dùng từ **dứt khoát** (`音调偏高`, `重音明显`) — mô tả mơ hồ kiểu `语调有自然起伏` đo ra không khác bản trung tính, và cụm `语速稍慢` còn đẩy giọng về kiểu phát thanh **phẳng hơn** cả mặc định. Luôn giữ `声调准确清晰` ở cuối. |
+   | `STEPFUN_TTS_WS_URL` | — | Mặc định `wss://api.stepfun.ai/step_plan/v1/realtime/audio`. TTS streaming cho chế độ gọi: byte đầu ~0.65s so với ~3.0s của HTTP. Host `.ai` chứ không `.com` như tài liệu (đo thật: `.com` trả 401). |
+   | `STEPFUN_TTS_SPEED` | — | Mặc định `0.9` — chỉ là **giá trị dự phòng** khi request không truyền `speed`; client hội thoại luôn truyền (bộ chọn 0.72/0.82/0.95). Tốc độ đi vào **request** để provider tổng hợp lại từ đầu, KHÔNG dùng `playbackRate` của browser (browser resample luồng đã nén). Đo trên key thật: 0.72 → 301ms/chữ, 0.82 → 261, 0.95 → 204, ASR khớp 3/3, bitrate vẫn 128kbps. Backend **kẹp** về `[0.5, 2.0]` chứ không trả 422: URL này nằm trong `new Audio(src)` nên một 422 chỉ hiện ra dưới dạng im lặng không lý do. |
+   | `STEPFUN_ASR_URL` / `STEPFUN_ASR_MODEL` | — | Mặc định `.../step_plan/v1/audio/asr/sse` + `stepaudio-2.5-asr`. Chép âm cho Hội thoại AI — **đường chính** khi có `STEPFUN_API_KEYS`, nhanh hơn bắt một model đa năng vừa nghe vừa trả JSON. Gemini native vẫn là fallback vì Step Plan chỉ có 1 key (không xoay vòng được khi 429). Chỉ có bản HTTP+SSE: Step Plan không mở bản WebSocket song hướng. |
+   | `GEMINI_API_KEYS` | — | Key relay vilao.ai — đường **dự phòng**, chỉ được chọn khi `STEPFUN_API_KEYS` và `LLM_API_KEYS` đều trống. Mỗi key là một "lượt": key cạn quota thì service tự chuyển sang key kế tiếp. Hết cả ba nguồn → mọi tính năng sinh nội dung tự tắt. |
    | `GEMINI_API_URL` | — | Mặc định `https://api.vilao.ai/v1/chat/completions`. Chỉ đổi khi relay đổi endpoint. |
    | `GEMINI_MODEL` | — | Mặc định `ram/gemini-3.5-flash-low`. |
-   | `LLM_API_URL` / `LLM_API_KEYS` / `LLM_MODEL` | — | Bộ ba **ghi đè** `GEMINI_*` để đổi provider mà không sửa code. Mọi relay đang dùng đều OpenAI-compatible `/chat/completions`, nên `LLM_API_URL` nhận cả URL gốc (`.../v1`) lẫn URL đầy đủ. |
-   | `LLM_JSON_MODE` | — | Chỉ bật `true` khi relay hỗ trợ `response_format`. **vilao.ai không hỗ trợ** — bật lên sẽ lỗi. |
-   | `LLM_REASONING_EFFORT` | — | `low` / `medium` / `high`, hoặc để trống để không gửi tham số. Đây là đòn giảm latency có tác dụng thật: với `grok-4.5` trên gilotex, cùng một bundle ở mặc định mất ~103s và bị gateway cắt ở ~121s, còn `low` chỉ 13–18s và trả JSON đầy đủ. |
-   | `GEMINI_NATIVE_API_KEYS` | ✅ (nếu dùng speech) | Key Google AI Studio thật (`generativelanguage.googleapis.com`), dùng chung cho pronunciation + voice chat + TTS. **Khác** `GEMINI_API_KEYS` ở trên. |
+   | `LLM_API_URL` / `LLM_API_KEYS` / `LLM_MODEL` | — | Bộ ba **ghi đè thủ công**, thắng cả StepFun lẫn `GEMINI_*`. Mọi provider đang dùng đều OpenAI-compatible `/chat/completions`, nên `LLM_API_URL` nhận cả URL gốc (`.../v1`) lẫn URL đầy đủ. **Đặt cả ba hoặc không đặt gì**: chỉ `LLM_API_KEYS` mới chuyển provider, nên đặt lẻ `LLM_API_URL` hay `LLM_MODEL` sẽ gửi key provider này tới endpoint provider kia — backend từ chối khởi động thay vì để lỗi rơi thành 401/404 lúc chạy. |
+   | `LLM_JSON_MODE` | — | Để **trống** = tự quyết theo provider (StepFun hỗ trợ `response_format` → bật; vilao.ai không hỗ trợ → tắt, JSON ép bằng system prompt). Đặt `true`/`false` để ghi đè. |
+   | `LLM_REASONING_EFFORT` | — | `low` / `medium` / `high`, hoặc để trống = tự quyết theo provider (StepFun → `low`; vilao → không gửi). Đây là đòn giảm latency có tác dụng thật, không phải cắt bớt prompt: đo trên `step-3.7-flash` cùng một prompt, mặc định 29s/3749 token, còn `json_object` + `low` chỉ 6s/457 token. Trần gateway ~121s. |
+   | `GEMINI_NATIVE_API_KEYS` | ✅ (nếu dùng speech) | Key Google AI Studio thật (`generativelanguage.googleapis.com`), dùng cho pronunciation + voice chat (cần audio **đầu vào**, relay chỉ xử lý text) và TTS dự phòng. **Khác** `GEMINI_API_KEYS` ở trên. Đặt nhiều key: service xoay vòng khi một key 429, và đây là lý do Gemini giữ vai fallback cho ASR dù StepFun nhanh hơn. |
+   | `GEMINI_NATIVE_MODEL` | — | Mặc định `gemini-3.5-flash-lite`. **Chỉ model này được thử** — danh sách model dự phòng đã bỏ vì nó chỉ làm ladder retry dài gấp 3 mà không cứu được ca lỗi nào (429 gắn với key, còn 404 model-not-found thì key nào cũng thấy cùng tập model). Đặt sai tên = 404 mọi request speech. |
    | `JWT_SECRET` | ✅ (production) | `settings` sẽ từ chối khởi động ở production nếu còn giá trị mặc định. |
 
 3. Kiểm chứng cấu hình đã nạp — chạy trong `backend/`:
    ```bash
-   python -c "from app.settings import settings; print(len(settings.llm_keys_list), 'key(s)'); print(settings.llm_endpoint)"
+   python -c "from app.settings import settings as s; print(s.llm_provider, len(s.llm_keys_list), 'key(s)'); print(s.llm_api_url_effective, s.llm_model_effective)"
    ```
-   Kết quả phải in số key > 0. Nếu in `0 key(s)`, `.env` chưa được đọc (sai thư mục làm việc) hoặc tên biến sai.
+   Kết quả phải in số key > 0 (và `stepfun` nếu dùng cấu hình mặc định). Nếu in `0 key(s)`, `.env` chưa được đọc (sai thư mục làm việc) hoặc tên biến sai.
 
 > ⚠️ **Không commit `.env`.** Mọi secret chỉ đọc từ environment; `.env.example` là tài liệu, không chứa giá trị thật.
 
@@ -264,7 +275,7 @@ Sáu dạng bài được sinh: `vocab`, `listening`, `cloze`, `translation`, `d
 
 **Hai cơ chế then chốt cần hiểu khi vận hành:**
 
-- **Chống trùng lặp.** Relay vilao.ai trả output gần **tất định** — cùng prompt thì gần như cùng kết quả. [llm_generator_service.py](backend/app/services/llm_generator_service.py) xử lý bằng cách chèn một `nonce` ngẫu nhiên vào prompt và truyền `avoid_prompts` (12 prompt gần nhất đã có trong bank cho cùng cặp level+type). Nếu bạn thấy câu hỏi lặp lại, kiểm tra hai thứ này trước khi nghi model.
+- **Chống trùng lặp.** Các provider đang dùng (StepFun `step-3.7-flash`, và trước đó relay vilao.ai) trả output gần **tất định** — cùng prompt thì gần như cùng kết quả. [llm_generator_service.py](backend/app/services/llm_generator_service.py) xử lý bằng cách chèn một `nonce` ngẫu nhiên vào prompt và truyền `avoid_prompts` (12 prompt gần nhất đã có trong bank cho cùng cặp level+type). Nếu bạn thấy câu hỏi lặp lại, kiểm tra hai thứ này trước khi nghi model.
 - **Cổng định dạng đoạn văn.** Prompt `cloze` phải chứa **đúng một** chuỗi `____`, vì renderer frontend tách prompt bằng `split(/_{2,}/)`. Các chỗ trống khác trong cùng đoạn phải ghi `（2）`,`（3）`… Ngoài ra đoạn phải có tối thiểu 16 ký tự Hán và 2 dấu kết câu (`。！？`) để bị coi là *đoạn* chứ không phải *câu rời*. Câu không đạt bị loại tự động.
 
 **Hậu xử lý bắt buộc** — chạy sau mỗi lần sinh số lượng lớn:
@@ -319,6 +330,27 @@ cd backend && python -m pytest tests/test_pinyin_scorer.py tests/test_speech_dem
 ```
 
 Nếu Praat/Parselmouth chưa cài được trên máy bạn, lớp âm học sẽ không chạy; hãy xác nhận điều đó bằng test thay vì đoán qua điểm số trên UI.
+
+#### Chất lượng đầu âm — ba lỗi đã đo và đã sửa
+
+Ba khiếm khuyết dưới đây đều **đo được** bằng parselmouth trên audio thật, và cả ba đều biểu hiện ra ngoài như "âm thanh không ổn định" nên rất dễ bị gom thành một.
+
+1. **Khoảng lặng đầu trải rộng.** Đo 400 clip lấy mẫu của kho tĩnh: lặng đầu từ **120ms tới 760ms** (trung vị 260ms). Cùng một cú bấm "Nghe" mà lúc kêu ngay lúc trễ nửa giây thì người dùng đọc thành "máy lag". Provider không có tham số nào điều khiển việc này (đã dò). Bản sửa: [mp3_trim.py](backend/app/services/mp3_trim.py) cắt lặng đầu/cuối **theo biên frame MPEG**, không giải mã và mã hoá lại (môi trường không có encoder MP3 nào — không ffmpeg, không lameenc). Sau khi sửa, `/tts` đo lại: **60ms cho cả 4 câu, chênh 0ms**.
+   - Vì sao luôn chừa đệm 80ms đầu: bit reservoir cho phép một frame tham chiếu tới ~511 byte của các frame **trước** nó, nên cắt sát mép sinh một tiếng tách. Đệm đẩy chỗ lỗi đó vào phần im lặng.
+   - Kho tĩnh 15.404 clip đã dựng **trước** bản sửa, và frontend ưu tiên clip local — chạy `python -m app.scripts.trim_audio_store --dry-run` rồi bỏ `--dry-run` để xử lý (thử 300 file: cắt 299, giảm 1.3MB).
+
+2. **Bộ chọn tốc độ vô tác dụng ở hai mức chậm.** `SPEECH_RATES` có 0.72/0.82/0.95 nhưng `speech.jsx` kẹp `playbackRate` ở sàn **0.85** — nên 0.72 và 0.82 cho ra audio **y hệt nhau**, và mặc định 0.82 thật ra phát ở 0.85 (browser resample 3.7%). Nhân với `speed=0.9` phía server thì nhịp thật là 0.765x, không khớp nhãn nào. Bản sửa: tốc độ đi vào **query `speed`** để provider tổng hợp lại từ đầu, client phát ở `playbackRate` 1.0. Đo lại qua HTTP thật: **0.72 → 301ms/chữ, 0.82 → 261, 0.95 → 204**, đơn điệu, ASR khớp 3/3.
+
+3. **Đứt tiếng giữa câu ở `/tts/stream`.** StepFun giao `mp3_stream` theo **chùm**: ~5 khối liền nhau (1.25s audio), **nghỉ 1.3–1.4s**, rồi phần còn lại. Tổng thể sinh nhanh hơn phát (0.46x thời gian thực) nhưng cái khe ở giữa dài hơn lượng audio vừa gửi, nên `<audio>` phát hết chỗ có rồi **đứng giữa chữ**. Mô phỏng kim phát trên 10 câu: 8/10 câu đứng, tệ nhất 686ms.
+   - Sàn `playbackRate` 0.85 cũ **vô tình che lỗi này** (phát chậm 15% = thêm 15% đệm): @0.85x đo 0/10 câu đứng, @0.90x 1/10, @1.0x 3/10. Nên bản sửa (2) ở trên đã bỏ lớp đệm tình cờ đó và phải thay bằng lớp cố ý.
+   - Bản sửa: `STREAM_HOLD_SEC` trong [tts.py](backend/app/routers/tts.py) gom khối trong 0.9s **kể từ khối đầu tiên** rồi mới xả. Mốc phải là khối đầu tiên chứ không phải lúc vào generator — bắt tay socket tốn tới 1.3s, dài hơn cả cửa sổ gom, nên tính từ đầu generator thì nhánh socket lạnh không gom được gì (đã đo: vẫn đứt 2/3 câu). Sau khi sửa: **0/3 câu đứt**, tiếng đầu ~2.1–2.5s (vẫn nhanh hơn `/tts` ~3.0s).
+   - 0.9s là mức nhỏ nhất cho 0/10 câu đứng khi cộng thêm 200ms jitter mạng; 0.7s đủ khi mạng lý tưởng nhưng biên còn 0.
+
+Hai thứ **không** sửa được bằng tham số, đã dò và ghi lại để không ai thử lại: `mp3_stream` khoá ở **64kbps** (`bitrate`/`audio_bitrate` bị bỏ qua, `response_format=mp3` cho 32kbps kèm nhịp vỡ hẳn, `sample_rate` 16k/24k đều ra 64kbps, 48k bị từ chối), và `mode=stream` trả 400 `invalid mode`. Đuôi lặng 800ms của đường WS thì bỏ dấu `。` cuối câu hạ được về ~200ms, nhưng **đã từ chối** bản sửa đó: ASR round-trip cho thấy nó làm model đọc chệch chữ (`太好了` → `太好啦`), tức đổi luôn nội dung người học nghe.
+
+```bash
+cd backend && python -m pytest tests/test_mp3_trim.py tests/test_tts_stream.py tests/test_tts_cache.py -q
+```
 
 ### Giai đoạn 6 — Cổng chất lượng nội dung
 

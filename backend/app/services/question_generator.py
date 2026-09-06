@@ -3,7 +3,8 @@ import random
 import re
 from random import shuffle
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import Example, Question, QuizType, Word
@@ -12,6 +13,14 @@ from .exam_passage_service import (
     QUESTION_SUBTYPE_GUIDED_CLOZE,
     QUESTION_SUBTYPE_READING_COMP,
     get_exam_passage_bank,
+)
+from .gloss_senses import (
+    conflicting_option_indexes,
+    duplicate_after_normalize,
+    gloss_reveals_hanzi,
+    has_cjk,
+    normalize_text,
+    senses,
 )
 from .template_engine import get_template_engine
 from .viet_distractor import get_vietnamese_aware_distractors
@@ -32,6 +41,13 @@ QUESTION_SUBTYPE_VOICE = "voice"
 # Các dạng có ngân hàng đoạn văn chuẩn đề thi (选词填空 / 阅读理解) viết tay.
 _EXAM_BANK_TYPES = frozenset({QuizType.cloze, QuizType.reading})
 
+# Dạng mà 4 lựa chọn là GLOSS tiếng Việt của một từ (không phải câu/đoạn/hanzi).
+# Chỉ những dạng này được so trùng theo TẬP NGHĨA: options của
+# listening/dialogue/translation là câu hoàn chỉnh, tách theo dấu phẩy sẽ ra các
+# mệnh đề trùng nhau giữa hai đoạn khác nghĩa (đo trên bank: 65,1% câu
+# translation bị coi là xung đột) → báo động giả, loại oan câu đúng.
+_GLOSS_OPTION_TYPES = frozenset({QuizType.vocab})
+
 # Giới hạn độ dài đoạn đọc (số ký tự CJK) theo cấp HSK. Đoạn vượt mức bị
 # thay bằng câu ví dụ đơn (đúng cấp) để tránh sinh đoạn quá dài so với chuẩn
 # cấp độ — HSK1/2 chỉ đọc câu ngắn, cấp cao mới đọc đoạn dài.
@@ -49,12 +65,15 @@ def _valid_question_payload(
     correct_index: int,
     explanation: str,
     metadata: dict,
+    target_hanzi: str = "",
 ) -> bool:
     """Cổng QA cuối trước khi ghi bank.
 
     Template/LLM đều phải đi qua cùng một contract: 4 lựa chọn khác nhau,
     đáp án hợp lệ, prompt có nội dung và dạng đặc biệt có metadata cần thiết.
     Điều này ngăn dữ liệu lỗi lọt vào DB khi nguồn ví dụ hoặc template thiếu.
+
+    ``target_hanzi`` chỉ dùng cho ``vocab``: xem ``_GLOSS_OPTION_TYPES``.
     """
     if not isinstance(prompt, str) or len(prompt.strip()) < 5:
         return False
@@ -65,7 +84,15 @@ def _valid_question_payload(
     cleaned = [str(item).strip() for item in options]
     if any(not item for item in cleaned) or len(set(cleaned)) != 4:
         return False
+    # So chuỗi thô ở trên bỏ sót cặp chỉ khác chữ hoa/thường: 14 câu trong bank
+    # có hai lựa chọn như ``'Có lẽ'`` / ``'có lẽ'`` (câu 8357, từ 可能).
+    if duplicate_after_normalize(cleaned):
+        return False
     if not isinstance(correct_index, int) or not 0 <= correct_index < 4:
+        return False
+    if quiz_type in _GLOSS_OPTION_TYPES and not _valid_gloss_options(
+        cleaned, correct_index, target_hanzi
+    ):
         return False
     if quiz_type == QuizType.cloze and "____" not in prompt:
         return False
@@ -75,6 +102,67 @@ def _valid_question_payload(
         if len(segments) < 2 or len(order) < 2:
             return False
     return True
+
+
+def _valid_gloss_options(options: list[str], correct_index: int, target_hanzi: str) -> bool:
+    """Kiểm riêng cho lựa chọn dạng GLOSS tiếng Việt (``vocab``).
+
+    Hai lỗi mà cổng cũ để lọt, đo trên bank hiện có:
+
+    1. **Hai đáp án cùng đúng** (262 câu): distractor lấy từ ``meaning_vi`` của
+       từ khác cùng cấp, mà 36,6% từ vựng trùng ít nhất một nghĩa với từ khác
+       CÙNG cấp HSK. Ví dụ câu 11675 hỏi 低 với đáp án ``'thấp'`` và distractor
+       ``'Thấp'`` (từ 矮); câu 5341 hỏi 小 (``'nhỏ; bé; ít; trẻ'``) với distractor
+       ``'Ít'`` (từ 少). Xem ``gloss_senses`` để biết vì sao phải so tập nghĩa.
+    2. **Đáp án tự lộ** (câu 2556): gloss chứa chính chữ Hán đang hỏi, nên lựa
+       chọn duy nhất có chữ Hán là đáp án.
+    """
+    if conflicting_option_indexes(options, correct_index):
+        return False
+    if any(has_cjk(option) for option in options):
+        return False
+    if gloss_reveals_hanzi(options[correct_index], target_hanzi):
+        return False
+    return True
+
+
+# Mã từ loại -> nhãn tiếng Việt hiển thị cho người học. Bảng ``words`` trộn ba
+# quy ước từ ba nguồn nhập khác nhau (mã HSK Trung ``n``/``v``/``vn``, mã tiếng
+# Anh ``noun``/``verb``, và vài dòng đã là tiếng Việt), nên phải tra bằng bảng
+# thay vì hiển thị thô. 64 mã sau khi tách theo ``/``; bảng này phủ ~99%.
+_POS_LABELS = {
+    "n": "danh từ", "noun": "danh từ", "nr": "danh từ riêng", "nz": "danh từ riêng",
+    "v": "động từ", "verb": "động từ", "vn": "danh động từ", "qv": "động từ",
+    "a": "tính từ", "adj": "tính từ", "adjective": "tính từ", "an": "danh tính từ",
+    "d": "phó từ", "ad": "phó từ", "adv": "phó từ", "adverb": "phó từ",
+    "q": "lượng từ", "measure": "lượng từ", "qt": "lượng từ", "m": "số từ",
+    "r": "đại từ", "pron": "đại từ",
+    "p": "giới từ", "prep": "giới từ", "preposition": "giới từ",
+    "c": "liên từ", "conj": "liên từ", "conjunction": "liên từ",
+    "u": "trợ từ", "y": "trợ từ", "k": "trợ từ",
+    "t": "từ chỉ thời gian", "f": "từ chỉ phương vị", "s": "từ chỉ nơi chốn",
+    "b": "từ phân biệt", "z": "từ trạng thái", "g": "từ tố", "l": "cụm cố định",
+}
+
+
+# Mở đầu của ``component_hint`` khi ``chinese_metadata_service`` không tra được
+# bộ thủ nào và phải rơi về câu chung chung ("Quan sát ký tự X trước, rồi..."),
+# đúng với 330/5.746 từ. Câu đó không dạy được gì nên không đưa vào giải thích.
+_GENERIC_HINT_PREFIX = "Quan sát ký tự"
+
+
+def _pos_label(pos: object) -> str:
+    """Nhãn từ loại tiếng Việt cho ``word.pos``, hoặc chuỗi rỗng nếu không tra được.
+
+    ``pos`` có thể là mã ghép (``'v/vn'``, ``'a/ad'``): lấy nhãn của TỪNG mã tra
+    được, bỏ mã lạ, và giữ thứ tự gốc vì mã đầu là từ loại chính.
+    """
+    labels: list[str] = []
+    for token in str(pos or "").split("/"):
+        label = _POS_LABELS.get(token.strip().casefold())
+        if label and label not in labels:
+            labels.append(label)
+    return "/".join(labels)
 
 
 def _pos_filtered_pool(word: Word, pool: list[Word], quiz_type: QuizType) -> list[Word]:
@@ -101,15 +189,54 @@ def _cloze_replace(text: str, hanzi: str) -> str:
     return result
 
 
-def _cloze_replace_all(text: str, hanzi: str) -> str | None:
-    """Như ``_cloze_replace`` nhưng thay TẤT CẢ lần xuất hiện."""
+def _inside_compound(text: str, index: int, compounds: frozenset[str]) -> bool:
+    """``text[index]`` có đang là một phần của từ ghép trong ``compounds``?
+
+    Quét các đoạn 2-4 ký tự bao trùm ``index``; khớp một từ ghép đã biết nghĩa là
+    ký tự này không đứng độc lập ở đây.
+    """
+    length = len(text)
+    for size in (4, 3, 2):
+        first = max(0, index - size + 1)
+        last = min(index, length - size)
+        for start in range(first, last + 1):
+            if text[start:start + size] in compounds:
+                return True
+    return False
+
+
+def _cloze_replace_all(
+    text: str, hanzi: str, compounds: frozenset[str] | None = None
+) -> str | None:
+    """Khoét MỌI lần xuất hiện độc lập của ``hanzi`` thành ``____``.
+
+    Từ ghép (2+ ký tự) thay trực tiếp. Từ đơn thì chỉ khoét những lần xuất hiện
+    KHÔNG nằm trong một từ ghép dài hơn (``compounds`` = các từ ghép đã biết có
+    chứa ``hanzi``) — khoét 学 trong 学习 sẽ tạo câu hỏi sai vì chỗ trống không
+    còn là một từ.
+
+    Trước đây điều kiện độc lập là "hai bên không phải chữ Hán", nhưng tiếng Trung
+    viết liền không dấu cách nên gần như mọi từ đơn đều có chữ Hán kề bên: hàm
+    luôn trả None và KHÔNG từ đơn nào sinh được câu cloze. Đó là toàn bộ khoảng
+    trống cloze còn lại ở HSK1-3 (100% từ chưa phủ là từ đơn).
+
+    ``compounds=None`` (không tra được từ điển) → coi như không có từ ghép nào,
+    tức mọi lần xuất hiện đều độc lập.
+    """
     if len(hanzi) >= 2:
         result = text.replace(hanzi, "____")
         return result if result != text else None
-    cjk = _CJK_RANGE
-    pattern = r"(?<![%s])%s(?![%s])" % (cjk, re.escape(hanzi), cjk)
-    result = re.sub(pattern, "____", text)
-    return result if result != text else None
+
+    known = compounds or frozenset()
+    out: list[str] = []
+    replaced = False
+    for index, char in enumerate(text):
+        if char == hanzi and not _inside_compound(text, index, known):
+            out.append("____")
+            replaced = True
+        else:
+            out.append(char)
+    return "".join(out) if replaced else None
 
 
 def _primary_subtype(quiz_type: QuizType) -> str:
@@ -166,6 +293,31 @@ class QuestionGeneratorService:
         # cùng một pool cho mọi từ/variant ở cùng cấp. Loại ``word.id`` được
         # làm ở Python lúc dùng nên pool dùng chung được giữa các từ.
         self._pool_cache: dict[tuple[int, str | None], list[Word]] = {}
+        # Cache các từ ghép (2+ ký tự) chứa một ký tự cho trước, dùng để biết một
+        # lần xuất hiện của từ ĐƠN có đang nằm trong từ ghép dài hơn hay không
+        # (xem ``_cloze_replace_all``). Tra một lần cho mỗi ký tự trong vòng đời
+        # service; từ điển không đổi trong một lượt sinh.
+        self._compound_cache: dict[str, frozenset[str]] = {}
+
+    def _compounds_containing(self, hanzi: str) -> frozenset[str]:
+        """Các từ ghép trong từ điển có chứa ký tự ``hanzi``.
+
+        Chỉ tra cho từ ĐƠN — từ ghép tự khoét trực tiếp nên không cần. Dùng để
+        không khoét 学 khi nó đang là một nửa của 学习.
+        """
+        if len(hanzi) != 1:
+            return frozenset()
+        cached = self._compound_cache.get(hanzi)
+        if cached is None:
+            rows = self.db.scalars(
+                select(Word.hanzi).where(
+                    func.length(Word.hanzi) >= 2,
+                    Word.hanzi.contains(hanzi),
+                )
+            ).all()
+            cached = frozenset(rows)
+            self._compound_cache[hanzi] = cached
+        return cached
 
     def _examples_for(self, word: Word) -> list[Example]:
         cached = self._example_cache.get(word.id)
@@ -179,6 +331,11 @@ class QuestionGeneratorService:
 
         Không lọc ``id != word.id`` trong SQL để pool dùng chung được cho mọi
         từ ở cùng cấp — người gọi tự loại từ đích ở Python.
+
+        Lấy mẫu NGẪU NHIÊN trong cấp thay vì ``limit(80)`` thuần: ``limit`` không
+        kèm ``order by`` luôn trả 80 từ đầu bảng theo primary key, nên ở HSK5/6
+        (~1.7k từ mỗi cấp) mọi distractor đều rút từ cùng một nhóm nhỏ đầu bộ từ.
+        Cache vẫn giữ trong vòng đời service nên không đổi số truy vấn.
         """
         key = (hsk_level, pos)
         cached = self._pool_cache.get(key)
@@ -186,9 +343,149 @@ class QuestionGeneratorService:
             query = select(Word).where(Word.hsk_level == hsk_level)
             if pos:
                 query = query.where(Word.pos == pos)
-            cached = self.db.scalars(query.limit(80)).all()
+            cached = self.db.scalars(query.order_by(func.random()).limit(80)).all()
             self._pool_cache[key] = cached
         return cached
+
+    def _capable_word_filter(self, quiz_type: QuizType):
+        """Điều kiện SQL giữ lại từ CÓ THỂ sinh câu ở ``quiz_type``.
+
+        cloze/drag_drop cần câu ví dụ CHỨA chính từ đích (để khoét ô trống hoặc
+        tách token); translation/dialogue cần cặp câu CN-VI đầy đủ. Từ không đạt
+        sẽ luôn trả None trong ``_prompt_for`` nên loại ngay ở SQL để mỗi lượt
+        sinh không đốt slot vào từ vô vọng. Các dạng khác trả ``None`` (không lọc)
+        vì đã có nhánh fallback về hanzi + meaning.
+        """
+        if quiz_type in (QuizType.cloze, QuizType.drag_drop):
+            return (
+                select(Example.id)
+                .where(
+                    Example.word_id == Word.id,
+                    Example.sentence_cn.contains(Word.hanzi),
+                )
+                .exists()
+            )
+        if quiz_type in (QuizType.translation, QuizType.dialogue):
+            return (
+                select(Example.id)
+                .where(
+                    Example.word_id == Word.id,
+                    Example.sentence_cn != "",
+                    Example.sentence_vi != "",
+                )
+                .exists()
+            )
+        return None
+
+    def _source_words(self, level: int, quiz_type: QuizType, want: int) -> list[Word]:
+        """Từ nguồn để sinh câu, ƯU TIÊN từ chưa có câu ở ``(level, quiz_type)``.
+
+        Trước đây dùng ``select(Word).where(hsk_level == level).limit(n)``: không
+        có ``order by`` nên SQL luôn trả CÙNG n từ đầu bảng theo primary key. Hệ
+        quả là mọi lượt sinh đều bám vào phần đầu bộ từ mỗi cấp, còn phần đuôi
+        (HSK5/6 có ~1.7k từ mỗi cấp) không bao giờ được dùng — dù từ vựng đã nạp
+        đủ. Giờ xếp theo (số câu đã có ở dạng này, ngẫu nhiên) nên mỗi lượt sinh
+        kéo coverage lan ra từ mới, và bank dần phủ toàn bộ từ vựng của cấp.
+        """
+        covered = (
+            select(Question.word_id.label("word_id"), func.count(Question.id).label("hits"))
+            .where(
+                Question.level == level,
+                Question.quiz_type == quiz_type,
+                Question.word_id.is_not(None),
+            )
+            .group_by(Question.word_id)
+            .subquery()
+        )
+        query = (
+            select(Word)
+            .outerjoin(covered, covered.c.word_id == Word.id)
+            .where(Word.hsk_level == level)
+        )
+        capable = self._capable_word_filter(quiz_type)
+        if capable is not None:
+            query = query.where(capable)
+        query = query.order_by(func.coalesce(covered.c.hits, 0), func.random()).limit(want)
+        return list(self.db.scalars(query).all())
+
+    def coverage(self, level: int, quiz_type: QuizType) -> tuple[int, int]:
+        """``(số từ đã có câu, số từ CÓ THỂ sinh câu)`` ở ``(level, quiz_type)``.
+
+        Mẫu số là số từ đạt điều kiện của dạng (xem ``_capable_word_filter``),
+        không phải toàn bộ từ của cấp — cloze/translation không thể phủ những từ
+        chưa có câu ví dụ phù hợp, nên tính vào mẫu số sẽ báo thiếu vĩnh viễn.
+        """
+        capable = self._capable_word_filter(quiz_type)
+        total_query = select(func.count(Word.id)).where(Word.hsk_level == level)
+        if capable is not None:
+            total_query = total_query.where(capable)
+        total = self.db.scalar(total_query) or 0
+
+        done_query = (
+            select(func.count(func.distinct(Question.word_id)))
+            .select_from(Question)
+            .join(Word, Word.id == Question.word_id)
+            # Ràng buộc CẢ hai phía: bank có sẵn ít row lệch cấp (``question.level``
+            # khác ``word.hsk_level``, sinh ra trước khi có script phủ này). Không
+            # lọc theo cấp của TỪ thì các row đó lọt vào tử số của cấp khác và tỉ lệ
+            # vượt 100%, làm báo cáo mất nghĩa.
+            .where(
+                Question.level == level,
+                Question.quiz_type == quiz_type,
+                Word.hsk_level == level,
+            )
+        )
+        if capable is not None:
+            done_query = done_query.where(capable)
+        done = self.db.scalar(done_query) or 0
+        return done, total
+
+    def ensure_coverage(self, level: int, quiz_type: QuizType, batch: int = 200) -> int:
+        """Sinh câu cho tối đa ``batch`` từ CHƯA có câu nào ở dạng này.
+
+        Khác ``ensure_questions`` (đủ ``limit`` câu là dừng, không quan tâm câu đó
+        thuộc từ nào): hàm này lấy coverage làm mục tiêu nên mỗi lượt gọi đều mở
+        rộng số TỪ được phủ. Idempotent + resumable: chạy lại chỉ nhặt phần còn
+        thiếu, nên script nạp bank có thể lặp tới khi phủ hết mà không tạo trùng.
+
+        Mỗi từ chạy trong một SAVEPOINT riêng: một từ vi phạm unique constraint
+        (prompt trùng do seed khác sinh ra cùng câu) chỉ mất từ đó, không cuốn cả
+        lô từ đã sinh thành công theo.
+
+        Trả về số từ được phủ thêm.
+        """
+        covered_ids = select(Question.word_id).where(
+            Question.level == level,
+            Question.quiz_type == quiz_type,
+            Question.word_id.is_not(None),
+        )
+        query = select(Word).where(Word.hsk_level == level, Word.id.notin_(covered_ids))
+        capable = self._capable_word_filter(quiz_type)
+        if capable is not None:
+            query = query.where(capable)
+        pending = self.db.scalars(query.order_by(Word.id).limit(batch)).all()
+        if not pending:
+            return 0
+
+        added = 0
+        for word in pending:
+            for _ in range(3):  # thử vài seed: template có thể trả None với seed xấu
+                savepoint = self.db.begin_nested()
+                try:
+                    question = self._get_or_create_question(
+                        word, level, quiz_type, random.randint(0, 1_000_000)
+                    )
+                except IntegrityError:
+                    savepoint.rollback()
+                    continue
+                if question is None:
+                    savepoint.rollback()
+                    continue
+                savepoint.commit()
+                added += 1
+                break
+        self.db.commit()
+        return added
 
     def ensure_questions(self, level: int, quiz_type: QuizType, limit: int) -> list[Question]:
         # cloze/reading: nạp ngân hàng đoạn văn chuẩn đề thi trước. Đây là dữ
@@ -200,7 +497,7 @@ class QuestionGeneratorService:
         if len(existing) >= limit:
             return existing[:limit]
 
-        words = self.db.scalars(select(Word).where(Word.hsk_level == level).limit(max(limit * 4, 40))).all()
+        words = self._source_words(level, quiz_type, max(limit * 4, 40))
         if not words:
             return existing
 
@@ -336,7 +633,6 @@ class QuestionGeneratorService:
         return {}
 
     def _get_or_create_question(self, word: Word, level: int, quiz_type: QuizType, seed: int | None = None) -> Question | None:
-        from sqlalchemy import func
         base_prompt = self._prompt_for(word, quiz_type, seed)
         if not base_prompt:
             return None
@@ -379,6 +675,7 @@ class QuestionGeneratorService:
         if not _valid_question_payload(
             quiz_type, prompt, options, correct_index,
             self._explanation_for(word, quiz_type, seed), metadata,
+            target_hanzi=word.hanzi,
         ):
             return None
 
@@ -522,9 +819,11 @@ class QuestionGeneratorService:
         pos_pool = _pos_filtered_pool(word, pool, quiz_type)
         # listening/dialogue/translation lọc bỏ distractor không sinh được câu
         # (xem dưới) nên lấy dư ứng viên để vẫn đủ 3 option sau khi lọc, tránh
-        # câu bị loại chỉ vì vài distractor thiếu example.
+        # câu bị loại chỉ vì vài distractor thiếu example. vocab cũng lấy dư vì
+        # loại distractor TRÙNG NGHĨA với đáp án (xem dưới) — 36,6% từ vựng trùng
+        # nghĩa với một từ khác cùng cấp nên chọn đúng 3 rồi lọc thì hụt.
         _sentence_types = (QuizType.listening, QuizType.dialogue, QuizType.translation)
-        pick_count = 8 if quiz_type in _sentence_types else 3
+        pick_count = 8 if quiz_type in (*_sentence_types, QuizType.vocab) else 3
         distractors = self._pick_distractors(word, pos_pool, pick_count)
         if len(distractors) < 3:
             return [], 0, []
@@ -587,12 +886,31 @@ class QuestionGeneratorService:
 
         clean: list[tuple[str, int | None]] = []
         seen_text: set[str] = set()
+        # Với vocab, ``pairs[0]`` là gloss của đáp án đúng: mọi ứng viên có nghĩa
+        # TRÙNG nó phải bị loại ngay ở đây, không chỉ trùng chuỗi. Loại tại chỗ
+        # (chứ không để cổng QA loại cả câu) vì pool còn ứng viên khác dùng được —
+        # bỏ cả câu sẽ làm hụt phủ từ vựng ở đúng những từ nhiều nghĩa nhất.
+        answer_senses = senses(pairs[0][0]) if quiz_type in _GLOSS_OPTION_TYPES else set()
         for text, wid in pairs:
-            if text and text not in seen_text:
-                seen_text.add(text)
-                clean.append((text, wid))
+            if not text:
+                continue
+            key = normalize_text(text)
+            if key in seen_text:
+                continue
+            if answer_senses and clean and senses(text) & answer_senses:
+                continue
+            seen_text.add(key)
+            clean.append((text, wid))
         if len(clean) < 4:
             return [], 0, []
+        # CẮT còn ĐÚNG 4 lựa chọn. listening/dialogue/translation lấy dư ứng viên
+        # (``pick_count=8``) để chịu được distractor bị lọc hoặc trùng text, nhưng
+        # ``_valid_question_payload`` đòi đúng 4 option — giữ hết sẽ tạo tới 9
+        # option và câu bị loại IM LẶNG ở cổng QA. Đó là lý do bank ba dạng này
+        # không nhận thêm row template nào kể từ khi ``pick_count`` đổi thành 8;
+        # chỉ câu do LLM sinh (đi đường khác) mới vào được. ``clean[0]`` là đáp án
+        # đúng nên cắt phần đuôi luôn giữ đáp án.
+        clean = clean[:4]
         # drag_drop và voice: UI coi index 0 là đáp án chuẩn (drag_drop chấm
         # cục bộ rồi gửi selected_index=0 khi đúng; voice dùng options[0] làm
         # "Đã đọc xong"). Shuffle sẽ làm correct_index lệch khỏi 0 → backend
@@ -630,7 +948,43 @@ class QuestionGeneratorService:
             cloze = self._cloze_for_word(word, seed)
             if cloze:
                 return f"{cloze['answer_cn']} · {cloze['vi']} · Đáp án: {word.hanzi}"
+        if quiz_type == QuizType.vocab:
+            return self._vocab_explanation(word)
         return f"{word.hanzi} · {word.pinyin} · {word.meaning_vi or word.meaning_en}"
+
+    def _vocab_explanation(self, word: Word) -> str:
+        """Giải thích cho câu ``vocab``: thêm phần DẠY, không chỉ lặp đáp án.
+
+        Dòng ``hanzi · pinyin · nghĩa`` một mình là vô ích: nó nhắc lại đúng thứ
+        người học vừa chọn. 95,1% câu trong bank đang như vậy (100% câu
+        ``source=generated``), nên phần "lưu ý" trên UI trống nghĩa.
+
+        Ba mẩu bổ sung, tất cả lấy từ dữ liệu ĐÃ có trong bảng ``words`` mà chưa
+        chỗ nào dùng: từ loại (``pos``, có ở 5.656/5.851 từ), bộ thủ
+        (``component_hint``, 5.746 từ), và từ dễ nhầm (``confusable_words_json``,
+        2.394 từ). Không gọi mạng, không thêm truy vấn.
+        """
+        head = f"{word.hanzi} · {word.pinyin} · {word.meaning_vi or word.meaning_en}"
+        parts = [head]
+
+        pos_label = _pos_label(word.pos)
+        if pos_label:
+            parts.append(f"Từ loại: {pos_label}")
+
+        hint = (word.component_hint or "").strip()
+        if hint and not hint.startswith(_GENERIC_HINT_PREFIX):
+            parts.append(hint.rstrip("."))
+
+        # ``confusable_words_json`` là list[str] hanzi (không kèm nghĩa), nên chỉ
+        # liệt kê chữ — người học tra được ngay trong thư viện từ.
+        confusable = [
+            c if isinstance(c, str) else (c or {}).get("hanzi")
+            for c in (word.confusable_words_json or [])
+        ]
+        distinct = [h for h in confusable if h and h != word.hanzi][:3]
+        if distinct:
+            parts.append("Dễ nhầm với: " + ", ".join(distinct))
+        return " · ".join(parts)
 
     def _audio_for(self, word: Word, quiz_type: QuizType, seed: int | None = None) -> str:
         if quiz_type == QuizType.listening:
@@ -808,7 +1162,9 @@ class QuestionGeneratorService:
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
         if not example or not example.sentence_cn or word.hanzi not in example.sentence_cn:
             return None
-        prompt = _cloze_replace_all(example.sentence_cn, word.hanzi)
+        prompt = _cloze_replace_all(
+            example.sentence_cn, word.hanzi, self._compounds_containing(word.hanzi)
+        )
         if prompt is None:
             return None
         # Chỉ sinh cloze nếu còn ít nhất 2 ký tự ngữ cảnh ngoài ____

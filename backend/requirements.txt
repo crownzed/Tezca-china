@@ -11,3 +11,8 @@ bcrypt==4.2.0
 python-jose[cryptography]==3.3.0
 praat-parselmouth==0.4.7
 numpy==2.4.3
+# Khai TƯỜNG MINH dù uvicorn[standard] đã kéo về: /tts/stream import
+# websockets.sync.client trực tiếp. Dựa vào transitive dep là kiểu vỡ âm thầm —
+# một bản uvicorn sau đổi sang wsproto là chế độ gọi thoại chết mà không ai đổi
+# dòng nào ở đây.
+websockets==16.0

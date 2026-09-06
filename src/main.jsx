@@ -1,5 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// Nạp ĐẦU TIÊN: tokens.css là nguồn duy nhất của màu/bóng/bo góc/chữ. Vì nằm đầu
+// cascade, các file sau ghi đè được mà không cần !important.
+import './tokens.css'
 import './index.css'
 import './overhaul.css'
 // Nạp SAU overhaul.css: dashboard dùng namespace `dash-` riêng nên không cần

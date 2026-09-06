@@ -1,121 +1,4 @@
-:root{
-  color-scheme: light;
-  /* Palette "Mực & Ngọc" (Ink & Jade): nền giấy ấm, mực sâu, ngọc trầm.
-     Primary chuyển từ đỏ gắt -> xanh ngọc (đỡ chói, hợp học tự nhiên);
-     vàng kim chỉ làm điểm nhấn. */
-  --modern-zen-bg: #F6F4EE;
-  --modern-zen-card: #FFFDFA;
-  --modern-zen-primary: #1F8A70;
-  --modern-zen-success: #2E8B57;
-  --modern-zen-text: #23302E;
-  --modern-zen-chip: #ECE8DD;
-  --ink-950: #e9e2d8;
-  --ink-900: #FBF9F6;
-  --ink-850: #FFFFFF;
-  --ink-800: #F4F1EA;
-  --bg-top: var(--modern-zen-bg);
-  --bg-bottom: var(--modern-zen-bg);
-  --bg-wash-1: rgba(211, 47, 47, 0);
-  --bg-wash-2: rgba(46, 139, 87, 0);
-  --grid-line: transparent;
-  --line: rgba(44, 62, 80, 0.08);
-  --line-soft: rgba(44, 62, 80, 0.06);
-  --inner-line: rgba(44, 62, 80, 0.04);
-  --paper: var(--modern-zen-card);
-  --paper-strong: var(--modern-zen-card);
-  --nav-bg: var(--modern-zen-bg);
-  --surface-wash: linear-gradient(150deg, rgba(255, 255, 255, 0), transparent 34%);
-  --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96));
-  --control-bg: var(--modern-zen-chip);
-  --control-hover: #ede8df;
-  --track-bg: #F1F3F5;
-  --ring-track: rgba(44, 62, 80, 0.12);
-  --text: var(--modern-zen-text);
-  --muted: #4B5563;
-  --dim: #687076;
-  --gold: #C08A2D;
-  --gold-soft: rgba(192, 138, 45, 0.12);
-  --jade: var(--modern-zen-primary);
-  --jade-soft: rgba(31, 138, 112, 0.12);
-  --cinnabar: #C2402F;
-  --cinnabar-soft: rgba(194, 64, 47, 0.11);
-  --porcelain: #3f7d9a;
-  --porcelain-soft: rgba(63, 125, 154, 0.1);
-  --primary-start: #23997C;
-  --primary-end: #1B7A62;
-  --primary-text: #FFFFFF;
-  --selected-text: var(--modern-zen-text);
-  --danger-text: #b3261e;
-  --logo-text: #FFFFFF;
-  --focus-ring: rgba(31, 138, 112, 0.36);
-  --shadow: 0 6px 28px rgba(35, 48, 46, 0.07);
-  --badge-strong-text: #0CA678;
-  --badge-strong-bg: #E6FCF5;
-  --badge-weak-text: #FA5252;
-  --badge-weak-bg: #FFF5F5;
-  --radius: 14px;
-  --phi-minor: 0.382fr;
-  --phi-major: 0.618fr;
-  --line-readable: 1.62;
-  --line-compact: 1.32;
-  --measure: 68ch;
-  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-cn: 'LXGW WenKai', 'Noto Sans SC', 'Inter', sans-serif;
-}
-
-:root[data-theme='dark']{
-  color-scheme: dark;
-  --modern-zen-bg: #141313;
-  --modern-zen-card: #1E1D1B;
-  --modern-zen-primary: #34B89A;
-  --modern-zen-success: #3DAA6B;
-  --modern-zen-text: #F2EFE7;
-  --modern-zen-chip: #2A2824;
-  --ink-950: #0f0e0d;
-  --ink-900: var(--modern-zen-bg);
-  --ink-850: var(--modern-zen-card);
-  --ink-800: var(--modern-zen-chip);
-  --bg-top: var(--modern-zen-bg);
-  --bg-bottom: var(--modern-zen-bg);
-  --bg-wash-1: rgba(224, 82, 82, 0);
-  --bg-wash-2: rgba(61, 170, 107, 0);
-  --grid-line: transparent;
-  --line: rgba(247, 242, 234, 0.09);
-  --line-soft: rgba(247, 242, 234, 0.07);
-  --inner-line: rgba(247, 242, 234, 0.05);
-  --paper: var(--modern-zen-card);
-  --paper-strong: var(--modern-zen-card);
-  --nav-bg: var(--modern-zen-bg);
-  --surface-wash: linear-gradient(150deg, rgba(255, 255, 255, 0), transparent 34%);
-  --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.03));
-  --control-bg: var(--modern-zen-chip);
-  --control-hover: #34312c;
-  --track-bg: #2F3336;
-  --ring-track: rgba(247, 242, 234, 0.12);
-  --text: var(--modern-zen-text);
-  --muted: #D4CCC1;
-  --dim: #AFA79D;
-  --gold: #D8B069;
-  --gold-soft: rgba(216, 176, 105, 0.16);
-  --jade: var(--modern-zen-primary);
-  --jade-soft: rgba(52, 184, 154, 0.16);
-  --cinnabar: #E07A5F;
-  --cinnabar-soft: rgba(224, 122, 95, 0.16);
-  --porcelain: #73A7BE;
-  --porcelain-soft: rgba(115, 167, 190, 0.14);
-  --primary-start: #34B89A;
-  --primary-end: #259079;
-  --primary-text: #07120F;
-  --selected-text: var(--modern-zen-text);
-  --danger-text: #FFB0A8;
-  --logo-text: #07120F;
-  --focus-ring: rgba(52, 184, 154, 0.42);
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.30);
-  --badge-strong-text: #7BE0A4;
-  --badge-strong-bg: rgba(61, 170, 107, 0.18);
-  --badge-weak-text: #FF9C9C;
-  --badge-weak-bg: rgba(224, 82, 82, 0.18);
-}
+/* Token màu/bóng/bo góc/chữ đã chuyển sang src/tokens.css (nạp trước file này). */
 
 *{
   box-sizing: border-box;
@@ -1389,7 +1272,6 @@ textarea{
   font-weight: 900;
 }
 
-.confidence-panel,
 .feedback-panel{
   margin-top: 18px;
   padding: 14px;
@@ -1398,57 +1280,14 @@ textarea{
   background: var(--control-bg);
 }
 
-.confidence-panel p{
-  margin: 4px 0 0;
-  color: var(--muted);
-  line-height: 1.5;
-  font-size: 0.84rem;
-  font-weight: 800;
-}
-
-.confidence-grid{
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.confidence-grid button{
-  min-height: 84px;
-  display: grid;
-  align-content: center;
-  gap: 4px;
-  padding: 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  color: var(--muted);
-  background: color-mix(in srgb, var(--paper-strong) 58%, transparent);
-  cursor: pointer;
-  transition: transform 170ms ease, border-color 170ms ease, background 170ms ease, color 170ms ease;
-}
-
-.confidence-grid button:hover{
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--gold) 34%, transparent);
-  background: var(--gold-soft);
-  transform: translateY(-1px);
-}
-
-.confidence-grid strong{
+/* Kết luận tự đánh giá của thuật toán (thay panel "Mức tự tin?" người học tự
+   bấm trước đây). Nhấn bằng chữ đậm + màu vàng, đặt ngay trên phần giải thích.
+   Selector phải bao .feedback-panel để thắng `.feedback-panel p` bên dưới. */
+.feedback-panel .feedback-assess{
+  margin: 0;
   color: var(--gold);
-  font-size: 1.35rem;
-  line-height: 1;
-}
-
-.confidence-grid span,
-.confidence-grid small{
-  overflow-wrap: anywhere;
+  font-size: 0.86rem;
   font-weight: 900;
-}
-
-.confidence-grid small{
-  color: var(--dim);
-  font-size: 0.68rem;
 }
 
 .feedback-panel{
@@ -2310,7 +2149,6 @@ và dòng gợi ý quyền thông báo. */
 
   .session-pill-grid,
 .session-result-grid,
-.confidence-grid,
 .tone-option-grid{
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2359,7 +2197,6 @@ và dòng gợi ý quyền thông báo. */
 .quiz-strategy-grid,
 .session-pill-grid,
 .session-result-grid,
-.confidence-grid,
 .tone-option-grid{
     grid-template-columns: 1fr;
   }
@@ -2596,27 +2433,6 @@ và dòng gợi ý quyền thông báo. */
     color: var(--cinnabar);
     font-size: 0.78rem;
     font-weight: 700;
-  }
-
-  .confidence-label{
-    margin: 0 0 8px;
-    font-size: 0.9rem;
-    font-weight: 800;
-  }
-
-  .confidence-grid{
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .confidence-grid button{
-    padding: 10px 6px;
-    min-height: 56px;
-  }
-
-  .confidence-grid span,
-.confidence-grid small{
-    display: none;
   }
 
   .today-action-buttons{
@@ -3898,7 +3714,501 @@ nên phải
   color: var(--muted);
   line-height: 1.55;
   font-size: 0.9rem;
-}/* HSK level selector — nút active nền đậm,
+}
+
+.vchat-title-row{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vchat-model-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--jade) 30%, transparent);
+  border-radius: 999px;
+  background: var(--jade-soft);
+  color: var(--jade);
+  font: 800 0.68rem var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Chat AI tự do: một surface duy nhất, không còn màn chọn kịch bản/HSK. */
+.ai-chat{
+  width: min(100%, 980px);
+  min-height: min(74dvh, 760px);
+  margin-inline: auto;
+  display: grid;
+  grid-template-rows: auto minmax(360px, 1fr) auto auto;
+  gap: 12px;
+  animation: softRise 260ms ease both;
+}
+
+.ai-chat-header{
+  display: grid;
+  gap: 16px;
+  padding: 2px 2px 4px;
+}
+
+.ai-chat-heading{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ai-chat-mark{
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  margin-top: 1px;
+  border-radius: 11px;
+  background: var(--jade-soft);
+  color: var(--jade);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--jade) 28%, transparent);
+}
+
+.ai-chat-title-line{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.ai-chat-title-line h3{
+  margin: 0;
+  font-size: clamp(1.45rem, 2vw, 1.85rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.ai-chat-toolbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.ai-chat-toolbar-actions{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ai-chat-clear,
+.ai-chat-settings-trigger{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ai-chat-clear:hover:not(:disabled),
+.ai-chat-settings-trigger:hover:not(:disabled),
+.ai-chat-settings-trigger.is-active{
+  background: var(--control-bg);
+  color: var(--text);
+}
+
+.ai-chat-clear:active:not(:disabled),
+.ai-chat-settings-trigger:active:not(:disabled){
+  transform: scale(0.98);
+}
+
+.ai-chat-clear:disabled{
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.ai-chat-settings{
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto minmax(180px, auto);
+  align-items: center;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--paper) 92%, var(--jade-soft));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--paper-strong) 70%, transparent);
+  animation: softRise 180ms ease both;
+}
+
+.ai-chat-settings-copy{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ai-chat-settings-icon{
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--jade-soft);
+  color: var(--jade);
+}
+
+.ai-chat-settings-copy div{
+  display: grid;
+  gap: 2px;
+}
+
+.ai-chat-settings-copy strong{
+  font-size: 0.84rem;
+}
+
+.ai-chat-settings-copy div > span{
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.ai-chat-toggle{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.ai-chat-toggle input{
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ai-chat-toggle > span{
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 180ms ease;
+}
+
+.ai-chat-toggle > span::after{
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--paper-strong);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--text) 18%, transparent);
+  transition: transform 180ms ease;
+}
+
+.ai-chat-toggle input:checked + span{
+  background: var(--jade);
+}
+
+.ai-chat-toggle input:checked + span::after{
+  transform: translateX(16px);
+}
+
+.ai-chat-toggle input:focus-visible + span{
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ai-chat-toggle b{
+  min-width: 58px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.ai-chat-rate{
+  display: grid;
+  gap: 5px;
+}
+
+.ai-chat-rate > span{
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.ai-chat-rate select{
+  min-height: 36px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--control-bg);
+  color: var(--text);
+  font: 700 0.76rem var(--font-ui);
+}
+
+.ai-chat-rate select:disabled{
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.ai-chat-setting-status{
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.ai-chat-setting-status .is-ready{
+  color: var(--jade);
+}
+
+.ai-chat-setting-status .is-missing{
+  color: var(--cinnabar);
+}
+
+.ai-chat-log{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 360px;
+  max-height: 58dvh;
+  overflow-y: auto;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--jade) 5%, transparent), transparent 36%),
+    var(--paper);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--paper-strong) 74%, transparent), var(--shadow);
+  scrollbar-gutter: stable;
+}
+
+.ai-chat-welcome{
+  width: min(100%, 560px);
+  margin: auto;
+  padding-block: clamp(34px, 8vh, 84px);
+  text-align: left;
+}
+
+.ai-chat-welcome-kicker{
+  color: var(--jade);
+  font: 800 0.7rem var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ai-chat-welcome h4{
+  max-width: 18ch;
+  margin: 10px 0 9px;
+  font-size: clamp(1.7rem, 4vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.ai-chat-welcome p{
+  max-width: 55ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.ai-chat-error{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--cinnabar) 36%, var(--line));
+  border-radius: 11px;
+  background: var(--cinnabar-soft);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ai-chat-error button{
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ai-chat-error button:hover{
+  background: color-mix(in srgb, var(--cinnabar) 12%, transparent);
+  color: var(--text);
+}
+
+/* Composer hợp nhất input + mic + send để người học đổi phương thức mà không
+   rời khỏi cùng một luồng hội thoại. */
+.vchat-composer{
+  display: grid;
+  gap: 7px;
+}
+
+.vchat-composer-shell{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  min-height: 74px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.vchat-composer-shell:focus-within{
+  border-color: color-mix(in srgb, var(--jade) 60%, var(--line));
+  box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow);
+}
+
+.vchat-composer-main{
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 0 12px 16px;
+}
+
+.vchat-composer-eyebrow{
+  color: var(--dim);
+  font: 800 0.66rem var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vchat-composer textarea{
+  width: 100%;
+  min-height: 26px;
+  max-height: 110px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: vertical;
+  background: transparent;
+  color: var(--text);
+  font: 500 1rem/1.45 var(--font-cn);
+}
+
+.vchat-composer textarea::placeholder{
+  color: var(--dim);
+  opacity: 0.82;
+}
+
+.vchat-composer textarea:disabled{
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.vchat-composer-actions{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+}
+
+.vchat-mic-button,
+.vchat-send-button{
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--control-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.vchat-mic-button:hover:not(:disabled),
+.vchat-send-button:hover:not(:disabled){
+  transform: translateY(-1px);
+  border-color: var(--jade);
+}
+
+.vchat-mic-button:active:not(:disabled),
+.vchat-send-button:active:not(:disabled){
+  transform: scale(0.96);
+}
+
+.vchat-mic-button.is-recording{
+  border-color: var(--cinnabar);
+  background: var(--cinnabar-soft);
+  color: var(--cinnabar);
+  animation: recPulse 1.6s ease-in-out infinite;
+}
+
+.vchat-send-button:not(:disabled){
+  border-color: transparent;
+  background: var(--jade);
+  color: var(--selected-text);
+}
+
+.vchat-mic-button:disabled,
+.vchat-send-button:disabled{
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.vchat-recording-time{
+  min-width: 38px;
+  color: var(--cinnabar);
+  font: 800 0.76rem var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.vchat-composer-meta{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  color: var(--dim);
+  font-size: 0.72rem;
+}
+
+.vchat-engine-note{
+  margin: -2px 3px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+/* HSK level selector — nút active nền đậm,
 chữ trắng,
 đổ bóng. */
 .pron-levels{
@@ -4190,162 +4500,6 @@ chữ trắng,
 
 .pron-empty{
   gap: 14px;
-}/* ── Voice chat ───────────────────────────────────────────────────── */
-.vchat-log{
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 280px;
-  max-height: 52vh;
-  overflow-y: auto;
-  padding: clamp(14px, 2vw, 20px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-  box-shadow: var(--shadow);
-}
-
-.vchat-empty{
-  margin: auto;
-  color: var(--dim);
-  font-weight: 700;
-  text-align: center;
-}/* Chọn kịch bản hội thoại: mỗi thẻ là một tình huống (vai AI, hoàn cảnh, mục tiêu). */
-.vchat-scenarios{
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.vchat-scenario{
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  text-align: left;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-  box-shadow: var(--shadow);
-  cursor: pointer;
-  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease;
-}
-
-.vchat-scenario:hover{
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--gold) 34%, transparent);
-}
-
-.vchat-scenario-sk{
-  min-height: 132px;
-}
-
-.vchat-scenario-top,
-.vchat-brief-top{
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.vchat-badge{
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--primary-start), var(--primary-end));
-  color: var(--primary-text);
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-}
-
-.vchat-register{
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.vchat-scenario-role{
-  font-size: 1rem;
-  line-height: 1.3;
-}
-
-.vchat-scenario-setting,
-.vchat-scenario-goal{
-  color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.5;
-}
-
-/* Briefing: người học đọc vai + mục tiêu + từ khóa trước khi mở miệng. */
-.vchat-brief{
-  display: grid;
-  gap: 8px;
-  padding: clamp(14px, 2vw, 18px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--gold-soft);
-}
-
-.vchat-brief-exit{
-  margin-left: auto;
-}
-
-.vchat-brief-setting,
-.vchat-brief-line{
-  margin: 0;
-  color: var(--text);
-  font-size: 0.88rem;
-  line-height: 1.55;
-}
-
-.vchat-vocab{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.vchat-vocab-item{
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 5px 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  background: var(--paper);
-}
-
-.vchat-vocab-say{
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-  align-self: center;
-}
-
-.vchat-vocab-say:hover{
-  color: var(--text);
-}
-
-.vchat-vocab-hanzi{
-  font: 800 1rem var(--font-cn);
-}
-
-.vchat-vocab-pinyin{
-  color: var(--gold);
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.vchat-vocab-vi{
-  color: var(--muted);
-  font-size: 0.76rem;
 }/* Bong bóng chat: AI trái,
 User phải. */
 .chat-row{
@@ -4621,8 +4775,64 @@ after scoring lands. */
 }
 
 @media (max-width: 720px) {
+  .ai-chat{
+    min-height: 70dvh;
+  }
+
+  .ai-chat-heading{
+    gap: 10px;
+  }
+
+  .ai-chat-toolbar{
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ai-chat-clear{
+    justify-content: center;
+  }
+
+  .ai-chat-toolbar-actions{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-chat-settings-trigger{
+    justify-content: center;
+  }
+
+  .ai-chat-settings{
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .ai-chat-toggle{
+    justify-content: space-between;
+  }
+
+  .ai-chat-setting-status{
+    grid-column: auto;
+  }
+
+  .ai-chat-log{
+    min-height: 330px;
+    max-height: 54dvh;
+    padding: 16px 13px;
+    border-radius: 18px;
+  }
+
+  .ai-chat-welcome{
+    padding-inline: 8px;
+  }
+
   .pron-levels{
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .vchat-composer-meta{
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .chat-row{
@@ -4646,6 +4856,7 @@ after scoring lands. */
   .pron-result-body,
   .pron-practice,
   .vchat,
+  .ai-chat,
   .pron-wave.is-active .pron-wave-bar,
   .chat-bubble2,
   .hanzi-pop,
@@ -5651,17 +5862,10 @@ hai mặt backface-hidden.
    min-height cố định để thẻ không nhảy chiều cao khi mặt sau dài hơn mặt trước. */
 .fc-card{
   perspective: 1600px;
-  cursor: pointer;
   border: none;
   background: none;
   padding: 0;
   width: 100%;
-}
-
-.fc-card:focus-visible{
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 5px;
-  border-radius: var(--radius);
 }
 
 .fc-card-inner{
@@ -5672,16 +5876,10 @@ hai mặt backface-hidden.
   transition: transform 620ms var(--fc-ease);
 }
 
+/* Thẻ tự lật khi đã chọn đáp án — không còn là nút bấm nên không có cursor,
+   focus-ring hay hiệu ứng nhấn. */
 .fc-card.is-flipped .fc-card-inner{
   transform: rotateY(180deg);
-}
-
-.fc-card:active .fc-card-inner{
-  transform: scale(0.99);
-}
-
-.fc-card.is-flipped:active .fc-card-inner{
-  transform: rotateY(180deg) scale(0.99);
 }/* Khúc xạ cạnh: viền trong 1px + inset highlight,
 không dùng glow ra ngoài. */
 .fc-face{
@@ -5770,7 +5968,8 @@ thay vì phải tìm lại tâm theo độ dài từ. */
 }
 
 .fc-flip-hint kbd,
-.fc-grade kbd{
+.fc-choice kbd,
+.fc-verdict kbd{
   padding: 2px 6px;
   border: 1px solid var(--line);
   border-bottom-width: 2px;
@@ -5868,21 +6067,21 @@ không lồng thêm hộp trong hộp. */
   font-size: 0.85rem;
   color: var(--dim);
   cursor: pointer;
-}/* Hàng chấm điểm: giữ chiều cao cố định để layout không nhảy lúc lật thẻ,
-và
-   3 nút không đều nhau — "Quên" hẹp hơn vì là lựa chọn ít mong muốn nhất. */
-.fc-grade-row{
+}/* Hàng đáp án: 3 nút bằng nhau (không có lựa chọn nào "được ưu ái" về thị giác
+   như bộ tự-đánh-giá cũ), min-height cố định để layout không nhảy khi hiện kết
+   quả. Chữ Hán có thể ngắn hơn nghĩa Việt nhiều nên để text tự co, không ép cột. */
+.fc-choices{
   display: grid;
-  grid-template-columns: minmax(0, 0.84fr) minmax(0, 1fr) minmax(0, 1.08fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   min-height: 68px;
 }
 
-.fc-grade{
-  display: grid;
-  align-content: center;
-  gap: 4px;
-  padding: 11px 13px;
+.fc-choice{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 13px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--paper);
@@ -5890,48 +6089,79 @@ và
   text-align: left;
   cursor: pointer;
   box-shadow: inset 0 1px 0 var(--fc-inner-light);
-  transition: border-color 160ms var(--fc-ease), background 160ms var(--fc-ease), transform 160ms var(--fc-ease);
+  transition: border-color 160ms var(--fc-ease), background 160ms var(--fc-ease), transform 160ms var(--fc-ease), opacity 160ms var(--fc-ease);
 }
 
-.fc-grade:active{
+.fc-choice:active:not(:disabled){
   transform: scale(0.985);
 }
 
-.fc-grade-top{
-  display: flex;
-  align-items: center;
-  gap: 7px;
+.fc-choice:hover:not(:disabled){
+  border-color: color-mix(in srgb, var(--jade) 38%, transparent);
+  background: var(--control-bg);
 }
 
-.fc-grade-top strong{
+.fc-choice-text{
   flex: 1 1 auto;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-weight: 650;
+  line-height: 1.35;
 }
 
-.fc-grade-hint{
-  color: var(--dim);
-  font-size: 0.73rem;
+/* Chữ Hán trong ô đáp án dùng font CN và cỡ lớn hơn — nó là nội dung chính khi
+   hỏi chiều nghĩa → chữ, không phải một nhãn. */
+.fc-choice[lang="zh"] .fc-choice-text{
+  font-family: var(--font-cn);
+  font-size: 1.3rem;
   font-weight: 600;
 }
 
-.fc-grade.grade-forgot svg{ color: var(--cinnabar); }
-.fc-grade.grade-unsure svg{ color: var(--gold); }
-.fc-grade.grade-known svg{ color: var(--jade); }
+.fc-choice:disabled{
+  cursor: default;
+}
 
-.fc-grade.grade-forgot:hover{
-  border-color: color-mix(in srgb, var(--cinnabar) 42%, transparent);
+.fc-choice.is-correct{
+  border-color: color-mix(in srgb, var(--jade) 52%, transparent);
+  background: var(--jade-soft);
+}
+
+.fc-choice.is-correct svg{ color: var(--jade); }
+
+.fc-choice.is-wrong{
+  border-color: color-mix(in srgb, var(--cinnabar) 52%, transparent);
   background: var(--cinnabar-soft);
 }
 
-.fc-grade.grade-unsure:hover{
-  border-color: color-mix(in srgb, var(--gold) 42%, transparent);
-  background: var(--gold-soft);
+.fc-choice.is-wrong svg{ color: var(--cinnabar); }
+
+/* Đáp án không được chọn và không phải đáp án đúng: mờ đi để mắt chỉ còn hai ô
+   cần đối chiếu (cái đã chọn và cái đúng). */
+.fc-choice.is-dim{
+  opacity: 0.45;
 }
 
-.fc-grade.grade-known:hover{
-  border-color: color-mix(in srgb, var(--jade) 42%, transparent);
-  background: var(--jade-soft);
+.fc-verdict{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.fc-verdict.is-correct{ border-left-color: var(--jade); color: var(--jade); }
+.fc-verdict.is-wrong{ border-left-color: var(--cinnabar); color: var(--cinnabar); }
+
+.fc-verdict-next{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 0.76rem;
+  font-weight: 600;
 }
 
 .fc-grade-locked{
@@ -6151,6 +6381,22 @@ chữ bên phải — không phải hộp căn giữa. */
 
 .fc-empty button{
   margin-top: 14px;
+}/* Màn hẹp: 3 đáp án xếp dọc. Ép 3 cột trên điện thoại làm nghĩa tiếng Việt bị
+   cắt thành 4-5 dòng trong mỗi ô, đọc chậm hơn hẳn việc cuộn thêm một nhịp. */
+@media (max-width: 640px){
+  .fc-choices{
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .fc-verdict{
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .fc-verdict-next{
+    margin-left: 0;
+  }
 }/* ── Cặp từ dễ nhầm ───────────────────────────────────────────────────── */
 .pair-workspace{
   margin: 20px auto;
@@ -6446,5 +6692,224 @@ chữ bên phải — không phải hộp căn giữa. */
   .fc-card-inner{ transition: none; }
   .fc-skeleton::after{ animation: none; }
   .fc-tool:hover:not(:disabled),
-.fc-grade:hover,
+.fc-choice:hover:not(:disabled),
 .pair-drill-option:hover:not(:disabled){ transform: none; }}
+
+/* ── NGHE VIẾT (chính tả) ─────────────────────────────────────────────── */
+
+/* Chỉ trình đọc màn hình đọc được. Repo chưa có class này nên khai báo tại đây;
+   dùng cho nhãn đúng/sai/thiếu của bảng so từng chữ. */
+.sr-only{
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dict-head .dict-controls{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.dict-mode-row{
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dict-mode-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.dict-mode-btn:hover:not(.is-active){
+  border-color: var(--accent-soft, var(--line));
+  color: var(--text);
+}
+
+.dict-mode-btn.is-active{
+  background: var(--badge-strong-bg);
+  border-color: color-mix(in srgb, var(--badge-strong-text) 30%, transparent);
+  color: var(--badge-strong-text);
+}
+
+.dict-card{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dict-audio-panel{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft, var(--surface));
+}
+
+.dict-audio-actions{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dict-audio-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 132px;
+  justify-content: center;
+}
+
+.dict-replay-count{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--text-soft);
+}
+
+.dict-input-row{
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.dict-input{
+  flex: 1;
+  font-family: var(--font-cn, inherit);
+  font-size: 1.15rem;
+}
+
+.dict-result{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dict-verdict{
+  display: flex;
+  gap: 8px;
+}
+
+.dict-diff{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Mỗi ô = một chữ + một KÝ HIỆU trạng thái. Ký hiệu là bắt buộc, không phải
+   trang trí: chỉ tô màu thì người mù màu đỏ/xanh không đọc được kết quả. */
+.dict-diff-cell{
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 40px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.dict-diff-char{
+  font-family: var(--font-cn, inherit);
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.dict-diff-mark{
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dict-diff-ok{
+  background: var(--badge-strong-bg);
+  color: var(--badge-strong-text);
+  border-color: color-mix(in srgb, var(--badge-strong-text) 25%, transparent);
+}
+
+.dict-diff-wrong{
+  background: var(--badge-weak-bg);
+  color: var(--badge-weak-text);
+  border-color: color-mix(in srgb, var(--badge-weak-text) 25%, transparent);
+}
+
+.dict-diff-missing{
+  color: var(--text-soft);
+  border-style: dashed;
+}
+
+.dict-diff-extra{
+  color: var(--badge-weak-text);
+  border-style: dotted;
+  text-decoration: line-through;
+}
+
+.dict-answer{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft, var(--surface));
+}
+
+.dict-answer-cn{
+  margin: 0;
+  font-family: var(--font-cn, inherit);
+  font-size: 1.4rem;
+  line-height: 1.6;
+}
+
+.dict-answer-py{
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-soft);
+}
+
+.dict-answer-vi{
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.dict-nav{
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+@media (max-width: 640px){
+  .dict-head .dict-controls{ align-items: stretch; }
+  .dict-mode-row{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dict-mode-btn{ justify-content: center; padding: 8px 6px; font-size: 0.8rem; }
+  .dict-audio-actions{ display: grid; grid-template-columns: 1fr 1fr; }
+  .dict-audio-btn{ min-width: 0; }
+  .dict-replay-count{ grid-column: 1 / -1; margin-left: 0; justify-content: center; }
+  .dict-input-row{ flex-direction: column; }
+  .dict-nav{ flex-direction: column-reverse; }
+  .dict-nav .action-btn{ width: 100%; justify-content: center; }
+}

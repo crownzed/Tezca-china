@@ -3,6 +3,7 @@ import { Headphones, Mic, Square, RotateCcw, X, Volume2 } from 'lucide-react';
 import { getPracticeSentence, scorePronunciation } from '../api-core';
 import { speak, speakFeedback, stopSpeech } from '../speech.jsx';
 import { isRecordingSupported, startRecording } from '../speech-ai.js';
+import { captureScoredWord } from '../srs-capture.js';
 import Waveform from './Pronunciation/Waveform.jsx';
 import ScoreRing from './Pronunciation/ScoreRing.jsx';
 import HskLevelPicker from './HskLevelPicker.jsx';
@@ -34,6 +35,14 @@ export default function PronunciationPractice({ focusLevels }) {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const recorderRef = useRef(null);
+  // Câu KẾ TIẾP, tải sẵn ngay sau khi câu hiện tại hiện ra. Bấm "Câu khác" thì
+  // hoán vị tại chỗ thay vì hiện skeleton rồi chờ một round-trip — thao tác này
+  // được bấm liên tục nên độ trễ ở đây bị cảm nhận rõ.
+  //
+  // Giữ trong ref, không phải state: prefetch xong KHÔNG được render lại (câu
+  // đang đọc sẽ nhấp nháy vô cớ), và cấp đã chọn được ghim vào cùng ref để một
+  // câu tải sẵn cho cấp cũ không bao giờ được dùng sau khi người học đổi cấp.
+  const prefetchRef = useRef({ data: null, levels: null });
   const supported = isRecordingSupported();
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -41,13 +50,36 @@ export default function PronunciationPractice({ focusLevels }) {
   useEffect(() => {
     let active = true;
     const run = async () => {
-      setLoading(true);
+      // Dùng câu đã tải sẵn NẾU nó thuộc đúng tập cấp đang chọn. So sánh bằng
+      // chuỗi đã sort: `levels` là mảng mới mỗi lần render nên so sánh tham
+      // chiếu luôn sai.
+      const cached = prefetchRef.current;
+      const levelKey = normalizeLevels(levels).join(',');
+      const usable = cached.data && cached.levels === levelKey ? cached.data : null;
+      prefetchRef.current = { data: null, levels: null };
+
       setError('');
       setResult(null);
       stopSpeech();
+      if (usable) {
+        setTarget(usable);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
       try {
-        const data = await getPracticeSentence(pickLevel(levels));
-        if (active) setTarget(data);
+        if (!usable) {
+          const data = await getPracticeSentence(pickLevel(levels));
+          if (!active) return;
+          setTarget(data);
+        }
+        // Tải câu kế ngay sau đó. Lỗi ở đây bị bỏ qua có chủ ý: đây là tối ưu,
+        // không được biến thành thông báo lỗi cho câu đang hiển thị bình thường.
+        try {
+          const next = await getPracticeSentence(pickLevel(levels));
+          if (active) prefetchRef.current = { data: next, levels: levelKey };
+        } catch { /* prefetch thất bại: lần sau tải như cũ */ }
       } catch (e) {
         if (active) {
           setError(e.message || 'Không tải được câu luyện tập.');
@@ -95,6 +127,12 @@ export default function PronunciationPractice({ focusLevels }) {
         target_pinyin: target.pinyin || '',
       });
       setResult(scored);
+      // Đọc to một từ là bằng chứng về TRÍ NHỚ ÂM của từ đó — ghi vào cùng lịch
+      // ôn với quiz/thẻ. /practice-sentence trả nguyên một từ trong DB (hanzi +
+      // pinyin + nghĩa) nên đây là tín hiệu mức từ, không phải mức câu. Ngưỡng
+      // điểm → đúng/sai + mức chắc nằm trong auto-confidence.confidenceFromScore,
+      // trùng mốc màu của ScoreRing để vòng tròn và lịch ôn không nói hai chuyện.
+      captureScoredWord({ word: target, score: scored.score, activity: 'voice' });
       // Tự động đọc phản hồi. Cú bấm "Dừng & chấm" là user gesture đã mở khóa
       // audio nên autoplay không bị trình duyệt chặn.
       const speech = feedbackSpeech(scored);

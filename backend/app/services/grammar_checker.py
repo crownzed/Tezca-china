@@ -1,5 +1,6 @@
 """
-Grammar Checker — validates Chinese sentences using the vilao.ai LLM relay.
+Grammar Checker — validates Chinese sentences using the configured LLM provider
+(``settings.llm_provider``: StepFun by default, vilao relay as fallback).
 
 Features:
   - Grammar correctness check
@@ -85,7 +86,7 @@ Reply in JSON only (no markdown):
 {{"grammar_ok": true/false, "translation_ok": "yes"/"partial"/"no", "word_usage_natural": true/false, "grammar_issues": [], "confidence": 0.0-1.0}}"""
 
     try:
-        # _call_api lo sẵn xoay vòng key vilao.ai, retry và bóc markdown fence.
+        # _call_api lo sẵn chọn provider, xoay vòng key, retry và bóc markdown fence.
         parsed = _call_api(prompt)
         if not isinstance(parsed, dict):
             return None

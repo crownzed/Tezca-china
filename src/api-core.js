@@ -1,5 +1,6 @@
 import { scopedKey } from './user-scope';
 import { recordWordReview } from './vocab-srs';
+import { inferConfidence } from './auto-confidence.js';
 import { loadAllFlashcards } from './vocab-loader';
 import { effectiveLevels, primaryLevel } from './hsk-levels';
 import { buildExamQuestions } from './exam-items';
@@ -120,6 +121,20 @@ export async function getWords(level) {
     ? `?${levels.map(value => `level=${encodeURIComponent(value)}`).join('&')}`
     : '';
   return request(`/api/words${query}`);
+}
+
+// Thư viện ngữ pháp 577 mục: phân trang + tìm kiếm ở server. Bundle local
+// src/data/grammar-pool.js vẫn giữ làm fallback offline (xem GrammarLab), nhưng
+// đường đi mặc định là API để client không phải tải cả kho kèm raw_text.
+export async function getGrammarReference({ query = '', page = 1, pageSize = 24 } = {}) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (query.trim()) params.set('q', query.trim());
+  return request(`/api/grammar/reference?${params}`);
+}
+
+// Nội dung đầy đủ một mục (kèm raw_text) theo số thứ tự trong PDF, 1..577.
+export async function getGrammarEntry(number) {
+  return request(`/api/grammar/reference/${encodeURIComponent(number)}`);
 }
 
 const QUIZ_TYPE_LABELS = {
@@ -382,16 +397,35 @@ export async function startLearningSession(payload) {
   }
 }
 
+// Thang confidence 1..4 trước đây do người học tự bấm sau mỗi câu. Giờ thuật
+// toán suy từ đúng/sai + độ trễ so với ngân sách của dạng bài + tiền sử SRS của
+// từ (auto-confidence.js). Giữ NGUYÊN tên trường trong payload: backend
+// (srs_service._quality) và kho SRS local vẫn đọc cùng một thang, không cần đổi
+// API. `correct` truyền vào đúng bằng giá trị sẽ được ghi, để confidence và
+// correct không bao giờ lệch nhau.
+function autoConfidence(payload, question, correct) {
+  if (payload.confidence !== null && payload.confidence !== undefined) return payload.confidence;
+  return inferConfidence({
+    correct,
+    latencyMs: payload.latency_ms,
+    quizType: question?.quiz_type,
+    word: question?.word,
+  });
+}
+
 function localLearningEvent(payload, question = null) {
   const correctIndex = question?.correct_index ?? 0;
   const correct = payload.selected_index === correctIndex;
+  // Suy confidence TRƯỚC recordWordReview: hàm suy đọc lapses/repetition hiện tại
+  // của từ, gọi sau thì đã bị lượt này ghi đè.
+  const confidence = autoConfidence(payload, question, correct);
   // Ghi lịch ôn per-word vào kho SRS local (mirror srs_service.py). Chỉ ghi khi
   // câu có gắn từ; item không có từ (vd reading tổng hợp) bỏ qua. nextReviewAt
   // lấy từ record thật thay số cứng 24h/1h trước đây.
   const srs = question?.word?.hanzi
     ? recordWordReview(question.word, {
         correct,
-        confidence: payload.confidence,
+        confidence,
         latencyMs: payload.latency_ms,
       })
     : null;
@@ -400,6 +434,7 @@ function localLearningEvent(payload, question = null) {
     question_id: payload.question_id,
     correct,
     correct_index: correctIndex,
+    confidence,
     explanation: question?.explanation || '',
     error_tag: correct ? '' : payload.error_tag || (question?.quiz_type === 'listening' || question?.quiz_type === 'dialogue' ? 'sound_error' : 'meaning_error'),
     next_review_at: srs?.nextReviewAt || new Date(Date.now() + (correct ? 24 : 1) * 60 * 60 * 1000).toISOString(),
@@ -409,10 +444,16 @@ function localLearningEvent(payload, question = null) {
 
 export async function recordLearningEvent(payload, question = null) {
   if (question?.local || question?.offline) return localLearningEvent(payload, question);
+  // Đường remote: backend chấm lại câu, nhưng correct_index đã có sẵn trong
+  // QuestionOut nên suy được confidence ngay tại đây và gửi kèm — nếu không,
+  // srs_service._quality sẽ rơi về mặc định và mọi câu đúng nhận cùng quality.
+  const confidence = autoConfidence(payload, question, payload.selected_index === (question?.correct_index ?? 0));
+  const body = { ...payload, confidence };
   try {
-    return await request('/api/session/event', { method: 'POST', body: JSON.stringify(payload) });
+    const review = await request('/api/session/event', { method: 'POST', body: JSON.stringify(body) });
+    return { ...review, confidence: review.confidence ?? confidence };
   } catch {
-    return localLearningEvent(payload, question);
+    return localLearningEvent(body, question);
   }
 }
 
@@ -932,18 +973,112 @@ export async function scoreDemoPronunciation(payload) {
 
 // --- Speech features: turn-based voice chat (Feature 2) ---
 
-// Gửi audio (base64) + lịch sử hội thoại, nhận lời người dùng + câu trả lời CN/VI.
-// Payload có thể kèm scenario_id để AI giữ nguyên vai qua các lượt.
+// Gửi text/audio + lịch sử hội thoại tự do, nhận lời người dùng + câu trả lời CN/VI.
 export async function voiceChat(payload) {
   return request('/api/speech/chat', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-// Danh sách kịch bản hội thoại (conversation bank) để người học chọn tình huống.
-// Server chỉ trả phần công khai: vai, tình huống, mục tiêu, từ khóa, câu mở đầu.
-// Không trả turn_exemplars/repair_moves vì đó là chỉ thị dành cho model.
-export async function getConversationScenarios(level) {
-  const query = level ? `?level=${encodeURIComponent(level)}` : '';
-  return request(`/api/speech/scenarios${query}`);
+// Bản SSE của voiceChat: gọi ``onEvent`` cho từng sự kiện server phát ra và
+// resolve về sự kiện ``done``.
+//
+// Không dùng ``request()``: hàm đó đọc trọn body bằng ``res.json()``, tức chờ
+// hết stream — đúng thứ ta đang tránh. Cũng không dùng ``EventSource``: nó chỉ
+// phát được GET, còn ở đây phải POST audio base64 trong body.
+//
+// Không retry: ``request()`` chỉ thử lại request idempotent, và một lượt hội
+// thoại thì không phải — gửi lại là tiêu thêm một suất quota cho cùng câu nói.
+//
+// Các sự kiện: ``transcript`` (lời người học), ``chunk`` (văn bản tăng dần),
+// ``sentence`` (một câu tiếng Trung đã chốt — gọi TTS ngay), ``done``, ``error``.
+export async function streamVoiceChat(payload, onEvent, { signal } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/api/speech/chat/stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (caught) {
+    if (caught?.name === 'AbortError') throw caught;
+    throw new Error(NETWORK_MESSAGE, { cause: caught });
+  }
+
+  if (!res.ok) {
+    if (res.status === 401 && authToken) notifyUnauthorized();
+    let detail = res.status >= 502 ? COLD_START_MESSAGE : `API ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+    } catch { /* body có thể không phải JSON */ }
+    throw new Error(detail);
+  }
+  if (!res.body) throw new Error('Trình duyệt không hỗ trợ đọc stream.');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let done = null;
+  let failure = '';
+
+  const handle = (raw) => {
+    let event;
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      return; // một dòng lỗi không được giết cả stream
+    }
+    // Lỗi phát sinh sau khi header đã gửi chỉ đến được dưới dạng event. Ghi lại
+    // rồi ném SAU khi đọc hết stream, thay vì ném từ trong vòng đọc — ném giữa
+    // vòng sẽ bỏ body dở dang và ``reader`` không được giải phóng đúng chỗ.
+    if (event.type === 'error') failure = event.detail || 'Không tạo được câu trả lời.';
+    else if (event.type === 'done') done = event;
+    onEvent?.(event);
+  };
+
+  // Một event SSE kết thúc bằng dòng trống. Chunk của mạng KHÔNG trùng ranh giới
+  // event — một event có thể bị cắt làm hai chunk, hoặc hai event về cùng một
+  // chunk — nên phải gom vào buffer và chỉ cắt ở "\n\n".
+  const drain = (flush) => {
+    let index = buffer.indexOf('\n\n');
+    while (index !== -1) {
+      const block = buffer.slice(0, index);
+      buffer = buffer.slice(index + 2);
+      const line = block.split('\n').find((row) => row.startsWith('data:'));
+      if (line) handle(line.slice(5).trim());
+      index = buffer.indexOf('\n\n');
+    }
+    // Server đóng kết nối mà không có dòng trống cuối: vẫn đọc nốt event cuối.
+    if (flush && buffer.trim().startsWith('data:')) {
+      handle(buffer.trim().slice(5).trim());
+      buffer = '';
+    }
+  };
+
+  try {
+    for (;;) {
+      const { value, done: finished } = await reader.read();
+      if (finished) break;
+      buffer += decoder.decode(value, { stream: true });
+      drain(false);
+    }
+    buffer += decoder.decode();
+    drain(true);
+  } finally {
+    reader.releaseLock?.();
+  }
+
+  if (failure) throw new Error(failure);
+  if (!done) throw new Error('Kết nối bị ngắt trước khi AI trả lời xong.');
+  return done;
+}
+
+// Nhận dạng một lượt micro thành chữ Hán trước khi Cloud trả lời.
+export async function transcribeSpeech(payload) {
+  return request('/api/speech/transcribe', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 // --- AI phân tích dữ liệu học tổng hợp (on-demand) ---
@@ -990,6 +1125,176 @@ export async function draftQuizFromTopic(payload) {
 // payload: { quiz_title, source, session_type, questions }
 export async function saveQuizToLibrary(payload) {
   return request('/api/custom-vocab/save', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// --- Luyện dịch câu hai chiều (VI↔CN) ---------------------------------------
+
+// Bản chấm cục bộ, phản chiếu translation_exercise_service.grade của backend:
+// cùng ngưỡng đạt, cùng hai bậc "có dấu / không dấu", cùng bộ khoá trả về. Tồn tại
+// để mất mạng vẫn có phản hồi tức thì (cùng lý do localOutputAssessment tồn tại).
+// Lệch thuật toán giữa hai bên chỉ khiến điểm online/offline khác nhau, không làm
+// vỡ luồng — nhưng nếu sửa ngưỡng ở backend thì sửa cả ở đây.
+const TRANSLATION_PASS_RATIO = 0.85;
+const TRANSLATION_NO_DIACRITIC_PENALTY = 0.9;
+const TRANSLATION_PUNCT_PATTERN = /[.,!?;:…、。！？；：－—\-_"'“”‘’()[\]（）【】《》]/g;
+
+const normVi = (text) => String(text || '')
+  .normalize('NFC')
+  .replace(TRANSLATION_PUNCT_PATTERN, ' ')
+  .trim()
+  .replace(/\s+/g, ' ')
+  .toLowerCase();
+
+const stripDiacritics = (text) => String(text || '')
+  .normalize('NFD')
+  .replace(/[̀-ͯ]/g, '')
+  .replace(/đ/g, 'd')
+  .replace(/Đ/g, 'D');
+
+const normCn = (text) => (String(text || '').normalize('NFC').match(CHINESE_CHAR_PATTERN) || []).join('');
+
+// F1 hai phía: phạt cả thiếu ý (recall thấp) và thêm ý (precision thấp).
+const f1 = (overlap, lenA, lenB) => (lenA && lenB ? (2 * overlap) / (lenA + lenB) : 0);
+
+function tokenRatio(answer, reference) {
+  const a = answer.split(' ').filter(Boolean);
+  const b = reference.split(' ').filter(Boolean);
+  if (!a.length || !b.length) return 0;
+  const pool = [...b];
+  let overlap = 0;
+  a.forEach(token => {
+    const at = pool.indexOf(token);
+    if (at !== -1) { pool.splice(at, 1); overlap += 1; }
+  });
+  return f1(overlap, a.length, b.length);
+}
+
+// Tiếng Trung không có dấu cách nên so ở mức KÝ TỰ; LCS phản ánh "giữ được bao
+// nhiêu chữ theo đúng thứ tự".
+function lcsLength(left, right) {
+  if (!left || !right) return 0;
+  let previous = new Array(right.length + 1).fill(0);
+  for (const charL of left) {
+    const current = [0];
+    for (let i = 0; i < right.length; i += 1) {
+      current.push(charL === right[i] ? previous[i] + 1 : Math.max(current[i], previous[i + 1]));
+    }
+    previous = current;
+  }
+  return previous[right.length];
+}
+
+export function translationReferences(item, direction) {
+  const main = direction === 'vi2cn' ? item?.sentence_cn : item?.sentence_vi;
+  const alts = (direction === 'vi2cn' ? item?.alt_cn : item?.alt_vi) || [];
+  return [main, ...alts].filter(Boolean);
+}
+
+export function translationPrompt(item, direction) {
+  return (direction === 'vi2cn' ? item?.sentence_vi : item?.sentence_cn) || '';
+}
+
+function localTranslationGrade(userAnswer, item, direction) {
+  const mode = direction === 'vi2cn' ? 'vi2cn' : 'cn2vi';
+  const answer = String(userAnswer || '').trim().slice(0, 400);
+  const references = translationReferences(item, mode);
+  if (!references.length) {
+    return {
+      correct: false, score: 0, matched_reference: '', missing_key_words: [],
+      error_tag: 'no_reference', feedback: 'Câu này thiếu đáp án mẫu nên chưa chấm được.',
+    };
+  }
+
+  let ratio = 0;
+  let matched = references[0];
+  let missing = [];
+  let tag = '';
+  let noDiacritics = false;
+
+  if (mode === 'vi2cn') {
+    const normalized = normCn(answer);
+    if (!normalized) {
+      // Gõ pinyin thay chữ Hán cần thông báo RIÊNG: chỉ báo "sai" thì người học
+      // không biết phải đổi bộ gõ.
+      tag = /[a-zA-Z]/.test(answer) ? 'script_error' : 'empty_output';
+    } else {
+      references.forEach(reference => {
+        const target = normCn(reference);
+        if (!target) return;
+        const value = normalized === target ? 1 : f1(lcsLength(normalized, target), normalized.length, target.length);
+        if (value > ratio) { ratio = value; matched = reference; }
+      });
+      missing = (item?.key_words || []).filter(word => normCn(word) && !normalized.includes(normCn(word)));
+      if (missing.length) tag = 'missing_key_word';
+      else if (ratio < TRANSLATION_PASS_RATIO) tag = 'wording_mismatch';
+    }
+  } else {
+    const normalized = normVi(answer);
+    if (!normalized) {
+      tag = 'empty_output';
+    } else {
+      const bare = stripDiacritics(normalized);
+      // Bậc không-dấu chỉ mở khi CẢ CÂU không có dấu nào: ai đã gõ được dấu ở chỗ
+      // khác thì dấu sai là lỗi thật (bà/bả khác nghĩa), không phải hạn chế bàn phím.
+      const typedBare = bare === normalized;
+      references.forEach(reference => {
+        const target = normVi(reference);
+        if (!target) return;
+        let value = normalized === target ? 1 : tokenRatio(normalized, target);
+        let bareHit = false;
+        if (typedBare && normalized !== target) {
+          const bareTarget = stripDiacritics(target);
+          const bareValue = (bare === bareTarget ? 1 : tokenRatio(bare, bareTarget)) * TRANSLATION_NO_DIACRITIC_PENALTY;
+          if (bareValue > value) { value = bareValue; bareHit = true; }
+        }
+        if (value > ratio) { ratio = value; matched = reference; noDiacritics = bareHit; }
+      });
+      if (ratio < TRANSLATION_PASS_RATIO) tag = 'meaning_mismatch';
+      else if (noDiacritics) tag = 'missing_diacritics';
+    }
+  }
+
+  const correct = ratio >= TRANSLATION_PASS_RATIO && !missing.length;
+  let feedback;
+  if (tag === 'empty_output') feedback = 'Chưa có câu trả lời. Hãy gõ bản dịch của bạn.';
+  else if (tag === 'script_error') feedback = 'Hãy gõ bằng chữ Hán, không phải pinyin.';
+  else if (tag === 'missing_key_word') feedback = `Câu dịch còn thiếu ý của từ khoá: ${missing.join('、')}.`;
+  else if (tag === 'missing_diacritics') feedback = 'Đúng nghĩa rồi. Lần sau gõ đủ dấu tiếng Việt để được điểm tối đa.';
+  else if (!correct) feedback = mode === 'vi2cn'
+    ? 'Câu tiếng Trung còn lệch so với đáp án mẫu. Đối chiếu để xem khác ở đâu.'
+    : 'Bản dịch còn lệch nghĩa so với đáp án mẫu. Đối chiếu để xem khác ở đâu.';
+  else feedback = 'Bản dịch khớp đáp án mẫu.';
+
+  return {
+    correct,
+    score: Math.round(Math.min(1, Math.max(0, ratio)) * 100),
+    matched_reference: matched,
+    missing_key_words: missing,
+    error_tag: correct ? '' : (tag || 'translation_error'),
+    feedback,
+    event_id: null,
+  };
+}
+
+// Lấy các cặp câu để luyện dịch. retryable: endpoint sinh nội dung, không ghi
+// tiến độ người dùng — gửi lại khi cold-start là an toàn (cùng lý do analyzeStudyData).
+export async function fetchTranslationItems(payload) {
+  return request('/api/translation/items', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    retryable: true,
+  });
+}
+
+// Chấm một câu dịch. KHÔNG retryable (ghi LearningEvent). Mất mạng thì chấm cục bộ
+// bằng cùng thuật toán so khớp đáp án mẫu — người học không được mất phản hồi cho
+// câu vừa nộp chỉ vì backend ngủ, cùng khuôn submitOutputEvent/localOutputAssessment.
+export async function gradeTranslation(payload) {
+  try {
+    return await request('/api/translation/grade', { method: 'POST', body: JSON.stringify(payload) });
+  } catch {
+    return { ...localTranslationGrade(payload.user_answer, payload.item, payload.direction), offline: true };
+  }
 }
 
 // --- Admin (single admin) ---------------------------------------------------

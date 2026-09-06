@@ -19,6 +19,7 @@ from .exam_passage_service import (
 )
 from .item_difficulty import difficulty_fit, is_low_quality
 from .distractor_policy import order_distractors_by_stage
+from .gloss_senses import glosses_conflict, normalize_text
 from .acquisition_service import acquisition_stage
 from .question_generator import (
     QUESTION_SUBTYPE_DIALOGUE,
@@ -54,7 +55,11 @@ _ai_bankfill_inflight: set[int] = set()
 
 
 def _ai_available() -> bool:
-    """AI khả dụng khi relay vilao.ai có ít nhất một key (provider duy nhất)."""
+    """AI khả dụng khi provider LLM đang chọn có ít nhất một key.
+
+    ``llm_keys_list`` tự bám theo provider (StepFun -> vilao), nên hàm này không
+    cần biết provider nào đang bật.
+    """
     return bool(settings.llm_keys_list)
 
 
@@ -133,7 +138,12 @@ def _generate_ai_questions(db: Session, level: int, target: int) -> int:
     if min(ai_per_type.values()) >= target:
         return 0
 
-    words = db.scalars(select(Word).where(Word.hsk_level == level).limit(60)).all()
+    words = db.scalars(
+        select(Word)
+        .where(Word.hsk_level == level)
+        .order_by(func.random())
+        .limit(60)
+    ).all()
     if not words:
         return 0
     word_by_hanzi = {w.hanzi: w for w in words}
@@ -260,6 +270,54 @@ def _build_user_confusion_map(db: Session, user_id: str) -> dict[int, list[int]]
     return result
 
 
+# Dạng câu mà lựa chọn là GLOSS tiếng Việt của một từ. Chỉ những dạng này được
+# so trùng theo TẬP NGHĨA khi chèn distractor; xem ``_safe_swap_text``.
+_GLOSS_OPTION_TYPES = (QuizType.vocab,)
+# Dạng có lựa chọn là gloss NHƯNG đáp án đúng là câu/đoạn hoàn chỉnh.
+_SENTENCE_OPTION_TYPES = (QuizType.listening, QuizType.dialogue, QuizType.translation)
+
+
+def _swap_option_text(question: Question, word: Word) -> str:
+    """Text đại diện cho ``word`` khi chèn vào options của ``question``."""
+    if question.quiz_type in (*_GLOSS_OPTION_TYPES, *_SENTENCE_OPTION_TYPES):
+        return word.meaning_vi or word.meaning_en or ""
+    return word.hanzi or ""
+
+
+def _safe_swap_text(
+    question: Question,
+    options: list[str],
+    correct_idx: int,
+    text: str,
+) -> bool:
+    """Chèn ``text`` vào một ô distractor có an toàn không?
+
+    Guard cũ chỉ có ``text in options`` — so chuỗi NGUYÊN VĂN, nên hai lỗi lọt
+    qua (đo bằng mô phỏng trên toàn bank):
+
+    1. **Trùng nghĩa với đáp án** (46 câu vocab): 改变 ``'Thay đổi'`` bị chèn thêm
+       变化 ``'thay đổi, biến hóa'``; 矮 ``'Thấp'`` bị chèn thêm 低 ``'thấp'``.
+       Người học chọn ô nào cũng đúng nhưng backend chỉ nhận một ô.
+    2. **Trùng lựa chọn khác sau chuẩn hoá** (19 câu): chỉ khác chữ hoa/thường.
+
+    Với listening/dialogue/translation còn một lỗi thứ ba, nặng hơn: đáp án đúng
+    là CÂU (p50 = 53–164 ký tự) còn gloss chèn vào chỉ vài ký tự (``'tôi'``,
+    ``'Trong'``), nên ô ngắn tũn hiện ra giữa ba ô dài là lộ đáp án bằng mắt —
+    2.134/2.366 câu dialogue sẽ bị vậy. Ba dạng đó không nhận swap gloss nữa.
+    """
+    if not text:
+        return False
+    if question.quiz_type in _SENTENCE_OPTION_TYPES:
+        return False
+    if any(normalize_text(text) == normalize_text(option) for option in options):
+        return False
+    if question.quiz_type in _GLOSS_OPTION_TYPES and glosses_conflict(
+        text, options[correct_idx]
+    ):
+        return False
+    return True
+
+
 def _inject_user_distractors(
     question: Question,
     confusion_map: dict[int, list[int]],
@@ -279,14 +337,21 @@ def _inject_user_distractors(
     correct_idx = question.correct_index
     options = list(question.options or [])
 
-    # Lấy confused word đầu tiên chưa có trong options
+    # Confused word đầu tiên chèn được AN TOÀN. Cũng như ``_inject_stage_confusable``:
+    # ứng viên xung đột thì thử tiếp, vì danh sách đã xếp theo số lần nhầm.
     existing_wids = {wid for wid in option_wids if wid is not None}
     confused_word = None
+    confused_text = ""
     for cid in confused_ids:
-        if cid not in existing_wids:
-            confused_word = word_by_id.get(cid)
-            if confused_word:
-                break
+        if cid in existing_wids:
+            continue
+        candidate_word = word_by_id.get(cid)
+        if not candidate_word:
+            continue
+        candidate = _swap_option_text(question, candidate_word)
+        if _safe_swap_text(question, options, correct_idx, candidate):
+            confused_word, confused_text = candidate_word, candidate
+            break
 
     if not confused_word:
         return
@@ -294,15 +359,6 @@ def _inject_user_distractors(
     # Tìm một vị trí distractor (không phải correct) để thay thế
     distractor_positions = [i for i in range(len(options)) if i != correct_idx]
     if not distractor_positions:
-        return
-
-    # Xác định text cho confused word dựa trên quiz_type
-    if question.quiz_type in (QuizType.vocab, QuizType.listening, QuizType.dialogue, QuizType.translation):
-        confused_text = confused_word.meaning_vi or confused_word.meaning_en
-    else:
-        confused_text = confused_word.hanzi
-
-    if not confused_text or confused_text in options:
         return
 
     # Thay thế distractor ở vị trí cuối cùng (xa correct nhất)
@@ -348,20 +404,20 @@ def _inject_stage_confusable(
     options = list(question.options or [])
     existing_wids = {wid for wid in option_wids if wid is not None}
 
+    # Lấy confusable ĐẦU TIÊN chèn được an toàn, không phải confusable đầu tiên
+    # rồi bỏ cuộc nếu nó xung đột: confusable được xếp theo độ dễ nhầm nên ứng
+    # viên kế tiếp vẫn tốt, còn bỏ cuộc thì mất luôn phần cá nhân hoá.
     chosen = None
+    text = ""
     for h in conf_hanzi:
         w = conf_word_by_hanzi.get(h)
-        if w and w.id not in existing_wids and w.id != question.word_id:
-            chosen = w
+        if not w or w.id in existing_wids or w.id == question.word_id:
+            continue
+        candidate = _swap_option_text(question, w)
+        if _safe_swap_text(question, options, correct_idx, candidate):
+            chosen, text = w, candidate
             break
     if not chosen:
-        return
-
-    if question.quiz_type in (QuizType.vocab, QuizType.listening, QuizType.dialogue, QuizType.translation):
-        text = chosen.meaning_vi or chosen.meaning_en
-    else:
-        text = chosen.hanzi
-    if not text or text in options:
         return
 
     distractor_positions = [i for i in range(len(options)) if i != correct_idx]

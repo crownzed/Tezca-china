@@ -7,8 +7,9 @@ Checks:
   3. Vietnamese translations are accurate (basic check)
   4. Audio text matches prompt content
 
-Dùng relay vilao.ai qua ``_call_api`` (provider LLM duy nhất còn lại — xem ghi
-chú ở ``app/settings.py``). Đặt GEMINI_API_KEYS trước khi chạy.
+Dùng ``_call_api``, nên provider do ``settings.llm_provider`` chọn (mặc định
+StepFun khi có STEPFUN_API_KEYS — xem ghi chú ở ``app/settings.py``). Chỉ cần
+một trong LLM_API_KEYS / STEPFUN_API_KEYS / GEMINI_API_KEYS được đặt.
 Rate limited to 10 req/s to stay within free tier limits.
 """
 from __future__ import annotations
@@ -25,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.db import SessionLocal
 from app.models import Example, Question, Word
 from app.services.llm_generator_service import _call_api
-from app.settings import settings
+from app.settings import NO_LLM_KEY_MESSAGE, settings
 
 # ── Rule-based checks (fast, no API call) ────────────────────────────────
 
@@ -150,7 +151,7 @@ def check_sentences_with_llm(
     Returns: list of issue dicts
     """
     if not settings.llm_keys_list:
-        print("  ⚠ GEMINI_API_KEYS chưa cấu hình — bỏ qua phần kiểm ngữ pháp bằng LLM")
+        print(f"  ⚠ {NO_LLM_KEY_MESSAGE} Bỏ qua phần kiểm ngữ pháp bằng LLM.")
         return []
 
     issues: list[dict] = []
@@ -360,7 +361,12 @@ def main():
     all_issues.extend(rule_issues)
 
     # ── Phase 2: LLM grammar check (if API key available) ──
-    print("\n── Phase 2: LLM grammar check (vilao.ai) ──")
+    # In provider thật thay vì tên cứng: script này chạy lâu, biết nó gọi
+    # endpoint nào giúp khỏi ngồi đợi một provider không mong muốn.
+    print(
+        f"\n── Phase 2: LLM grammar check ({settings.llm_provider}"
+        f" / {settings.llm_model_effective}) ──"
+    )
     if settings.llm_keys_list:
         with SessionLocal() as db:
             examples = db.scalars(
@@ -387,7 +393,7 @@ def main():
         print(f"  Found {len(api_issues)} issues via LLM")
         all_issues.extend(api_issues)
     else:
-        print("  Skipped — đặt GEMINI_API_KEYS để bật")
+        print(f"  Skipped — {NO_LLM_KEY_MESSAGE}")
 
     # ── Phase 3: Question integrity ──
     print("\n── Phase 3: Question integrity ──")
