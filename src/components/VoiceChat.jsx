@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { streamVoiceChat } from '../api-core';
-import { beginSpeechQueue, speakEleven, speakQueued, stopSpeech } from '../speech.jsx';
+import { beginSpeechQueue, setSpeechQueueStreaming, speakEleven, speakQueued, stopSpeech } from '../speech.jsx';
 import { isRecordingSupported, startRecording, VOICE_MAX_RECORDING_SEC } from '../speech-ai.js';
 import ChatBubble from './Conversation/ChatBubble.jsx';
 import TypingIndicator from './Conversation/TypingIndicator.jsx';
@@ -232,7 +232,14 @@ export default function VoiceChat() {
   const runStreamTurn = useCallback(
     async (payload, { userAlreadyShown, isVoiceTurn = false }) => {
       let userShown = userAlreadyShown;
-      if (autoSpeak) beginSpeechQueue();
+      if (autoSpeak) {
+        beginSpeechQueue();
+        // Hội thoại phát qua /tts/stream (MP3 theo khối) thay vì /tts (trọn file).
+        // Đo thật: byte đầu về sau ~1.2s so với ~3.7-4.4s, tức nhanh hơn ~2.5s mỗi câu.
+        // Không bật thì giữa hai câu liên tiếp người học nghe khoảng lặng ~3s — chính
+        // là "đứt quãng" đã báo.
+        setSpeechQueueStreaming(true);
+      }
 
       const done = await streamVoiceChat(payload, (event) => {
         if (event.type === 'transcript') {

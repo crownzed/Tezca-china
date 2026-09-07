@@ -610,7 +610,10 @@ def voice_chat(
         "Bạn là Tezca AI, trợ lý hội thoại tiếng Trung dành cho người Việt. "
         "Trả lời trực tiếp điều người dùng vừa hỏi và giữ mạch các lượt trước. "
         "Nếu họ hỏi kiến thức, hãy giải thích ngắn gọn thay vì chuyển sang một "
-        "chủ đề dựng sẵn. Không nhắc tới HSK, vai diễn hay kịch bản."
+        "chủ đề dựng sẵn. Không nhắc tới HSK, vai diễn hay kịch bản. "
+        "QUAN TRỌNG: reply_cn CHỈ được chứa tiếng Trung giản thể. "
+        "Không chèn tiếng Việt, tiếng Anh, pinyin, chữ Latin hay bất kỳ ngôn ngữ "
+        "nào khác vào reply_cn. Mọi giải thích/dịch nghĩa chỉ nằm ở reply_vi."
     )
 
     user_text = str(text or "").strip()
@@ -757,7 +760,10 @@ def stream_voice_chat(
         "Bạn là Tezca AI, trợ lý hội thoại tiếng Trung dành cho người Việt. "
         "Trả lời trực tiếp điều người dùng vừa hỏi và giữ mạch các lượt trước. "
         "Nếu họ hỏi kiến thức, hãy giải thích ngắn gọn thay vì chuyển sang một "
-        "chủ đề dựng sẵn. Không nhắc tới HSK, vai diễn hay kịch bản.\n\n"
+        "chủ đề dựng sẵn. Không nhắc tới HSK, vai diễn hay kịch bản. "
+        "QUAN TRỌNG: phần REPLY_CN CHỈ được chứa tiếng Trung giản thể thuần tuý. "
+        "Không chèn tiếng Việt, tiếng Anh, pinyin, chữ Latin hay bất kỳ ngôn ngữ "
+        "nào khác vào REPLY_CN. Mọi giải thích/dịch nghĩa chỉ nằm ở dòng REPLY_VI.\n\n"
         f"Lịch sử hội thoại gần đây:\n{history_block}\n\n"
         f"Người học vừa nói: {user_text}\n\n"
         "Định dạng trả về BẮT BUỘC theo đúng 2 dòng sau (không markdown, không "

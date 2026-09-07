@@ -227,37 +227,37 @@
 .qz .option-grid button{
   min-height: 0 !important;
   padding: 14px 16px !important;
-  border: 1px solid var(--qz-hair) !important;
-  border-radius: 10px !important;
-  background: transparent !important;
+  border: 1px solid var(--box-border) !important;
+  border-radius: 12px !important;
+  background: var(--box-bg) !important;
   color: var(--qz-ink) !important;
   font-size: 1.02rem !important;
   font-weight: 550 !important;
   text-align: left !important;
   gap: 14px !important;
   transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease),
-              opacity 170ms var(--qz-ease), transform 120ms var(--qz-ease) !important;
+              opacity 170ms var(--qz-ease), transform 120ms var(--qz-ease), box-shadow 170ms var(--qz-ease) !important;
 }
 
 /* Chữ cái A/B/C/D: ô vuông mono nhỏ, không phải huy hiệu tròn nền vàng. */
 .qz .option-grid button > span:not(.clickable-text){
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px;
-  border: 1px solid var(--qz-hair) !important;
-  border-radius: 6px !important;
-  background: none !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px;
+  border: 1px solid var(--box-border) !important;
+  border-radius: 7px !important;
+  background: var(--box-subtle-bg) !important;
   color: var(--qz-dim) !important;
   font-family: var(--qz-mono);
-  font-size: 0.76rem !important;
+  font-size: 0.78rem !important;
   font-weight: 600 !important;
   transition: color 170ms var(--qz-ease), border-color 170ms var(--qz-ease),
               background 170ms var(--qz-ease) !important;
 }
 
 .qz .option-grid button:hover:not(:disabled){
-  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent) !important;
-  background: var(--qz-accent-soft) !important;
+  border-color: var(--box-border-hover) !important;
+  background: var(--box-hover-bg) !important;
   transform: none !important;
   box-shadow: none !important;
 }
@@ -267,39 +267,44 @@
 }
 
 .qz .option-grid button.selected{
-  border-color: var(--qz-accent) !important;
-  background: var(--qz-accent-soft) !important;
+  border-color: var(--box-selected-border) !important;
+  background: var(--box-selected-bg) !important;
+  color: var(--box-selected-text) !important;
   transform: none !important;
 }
 
 .qz .option-grid button.selected > span:not(.clickable-text){
-  border-color: var(--qz-accent) !important;
-  background: var(--qz-accent) !important;
+  border-color: var(--box-selected-border) !important;
+  background: var(--box-selected-border) !important;
   color: #fff !important;
 }
 
 .qz .option-grid button.option-correct{
-  border-color: var(--qz-accent) !important;
-  background: var(--qz-accent-soft) !important;
+  border-color: var(--box-correct-border) !important;
+  background: var(--box-correct-bg) !important;
+  color: var(--box-correct-text) !important;
 }
 
 .qz .option-grid button.option-correct > span:not(.clickable-text){
-  border-color: var(--qz-accent) !important;
-  color: var(--qz-accent) !important;
+  border-color: var(--box-correct-border) !important;
+  background: var(--box-correct-border) !important;
+  color: #fff !important;
 }
 
 .qz .option-grid button.option-wrong{
-  border-color: var(--qz-warn) !important;
-  background: var(--qz-warn-soft) !important;
+  border-color: var(--box-wrong-border) !important;
+  background: var(--box-wrong-bg) !important;
+  color: var(--box-wrong-text) !important;
 }
 
 .qz .option-grid button.option-wrong > span:not(.clickable-text){
-  border-color: var(--qz-warn) !important;
-  color: var(--qz-warn) !important;
+  border-color: var(--box-wrong-border) !important;
+  background: var(--box-wrong-border) !important;
+  color: #fff !important;
 }
 
 .qz .option-grid button.muted-option{
-  opacity: 0.4 !important;
+  opacity: 0.38 !important;
 }
 
 /* --------------------------------------------- tự đánh giá của thuật toán --
@@ -774,20 +779,20 @@
 
 .qz .tone-option-grid button{
   min-height: 58px;
-  border: 1px solid var(--qz-hair);
-  border-radius: 10px;
-  background: transparent;
+  border: 1px solid var(--box-border);
+  border-radius: 12px;
+  background: var(--box-bg);
   color: var(--qz-ink);
   font-family: var(--qz-mono);
   font-size: 1rem;
   font-weight: 600;
   transition: border-color 170ms var(--qz-ease), background 170ms var(--qz-ease),
-              transform 120ms var(--qz-ease);
+              transform 120ms var(--qz-ease), box-shadow 170ms var(--qz-ease);
 }
 
 .qz .tone-option-grid button:hover:not(:disabled){
-  border-color: color-mix(in srgb, var(--qz-accent) 42%, transparent);
-  background: var(--qz-accent-soft);
+  border-color: var(--box-border-hover);
+  background: var(--box-hover-bg);
   transform: none;
 }
 
@@ -797,15 +802,18 @@
 
 .qz .practice-input,
 .qz .practice-textarea{
-  border-color: var(--qz-hair);
-  border-radius: 10px;
-  background: transparent;
-  transition: border-color 170ms var(--qz-ease);
+  border: 1.5px solid var(--box-border);
+  border-radius: 12px;
+  background: var(--box-subtle-bg);
+  color: var(--text);
+  transition: border-color 170ms var(--qz-ease), box-shadow 170ms var(--qz-ease);
 }
 
 .qz .practice-input:focus,
 .qz .practice-textarea:focus{
-  border-color: var(--qz-accent);
+  border-color: var(--box-selected-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
 }
 
 .qz .audio-actions{

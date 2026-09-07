@@ -124,6 +124,22 @@
   --surface-wash: linear-gradient(150deg, rgba(255, 255, 255, 0), transparent 34%);
   --track-bg: #F1F3F5;
 
+  /* Hệ thống màu đồng bộ cho TẤT CẢ các ô (cards, options, choices, chips, inputs) */
+  --box-bg: var(--paper);
+  --box-subtle-bg: var(--control-bg);
+  --box-border: var(--line);
+  --box-border-hover: color-mix(in srgb, var(--jade) 38%, transparent);
+  --box-hover-bg: var(--jade-soft);
+  --box-selected-bg: var(--jade-soft);
+  --box-selected-border: var(--jade);
+  --box-selected-text: var(--text);
+  --box-correct-bg: color-mix(in srgb, var(--jade) 12%, transparent);
+  --box-correct-border: var(--jade);
+  --box-correct-text: var(--jade);
+  --box-wrong-bg: color-mix(in srgb, var(--cinnabar) 12%, transparent);
+  --box-wrong-border: var(--cinnabar);
+  --box-wrong-text: var(--cinnabar);
+
   /* Thang khoảng cách — MỚI. Trước đây mọi padding/gap là px cứng.
      Chưa đổi call-site nào; dùng dần cho code mới. */
   --sp-1: 4px;
@@ -196,15 +212,31 @@
   /* Nền / lớp giấy / kẻ */
   --bg-wash-1: rgba(224, 82, 82, 0);
   --bg-wash-2: rgba(61, 170, 107, 0);
-  --control-hover: #3D3832;
+  --control-hover: #1A2C42;
   --ink-800: var(--modern-zen-chip);
   --ink-850: var(--modern-zen-card);
   --ink-900: var(--modern-zen-bg);
   --ink-950: #0f0e0d;
   --inner-line: rgba(247, 242, 234, 0.05);
-  --line: rgba(147, 180, 204, 0.10);
-  --line-soft: rgba(147, 180, 204, 0.07);
+  --line: rgba(147, 180, 204, 0.12);
+  --line-soft: rgba(147, 180, 204, 0.08);
   --ring-track: rgba(247, 242, 234, 0.12);
   --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.03));
   --track-bg: #2F3336;
+
+  /* Đồng bộ các ô trong dark mode */
+  --box-bg: var(--modern-zen-card);
+  --box-subtle-bg: var(--modern-zen-chip);
+  --box-border: rgba(147, 180, 204, 0.14);
+  --box-border-hover: rgba(147, 180, 204, 0.40);
+  --box-hover-bg: rgba(147, 180, 204, 0.08);
+  --box-selected-bg: rgba(147, 180, 204, 0.15);
+  --box-selected-border: var(--jade);
+  --box-selected-text: var(--text);
+  --box-correct-bg: rgba(61, 170, 107, 0.18);
+  --box-correct-border: #48BB78;
+  --box-correct-text: #7BE0A4;
+  --box-wrong-bg: rgba(224, 82, 82, 0.18);
+  --box-wrong-border: #E07A5F;
+  --box-wrong-text: #FF9C9C;
 }

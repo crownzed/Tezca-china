@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, Clock3, Ear, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, Clock3, Ear, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, X, XCircle } from 'lucide-react';
 import { analyzeStudyData, completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -160,76 +160,185 @@ const NAV_PARENT_LABEL = NAV.reduce((acc, entry) => {
 }, {});
 
 function SidebarNav({ activeTab, onSelect }) {
-  // Chỉ lưu lựa chọn mở/đóng do người dùng bấm tay. Trạng thái mặc định được
-  // suy ra từ activeTab (nhóm chứa view active thì tự mở), nên không cần effect
-  // đồng bộ khi view đổi từ nơi khác: startQuizFlow, dashboard shortcut...
+  // Chỉ lưu lựa chọn mở/đóng do người dùng bấm tay trên desktop.
   const [groupOverrides, setGroupOverrides] = useState({});
+  const [mobileSheetGroup, setMobileSheetGroup] = useState(null);
 
-  const toggleGroup = (groupId, currentlyExpanded) => {
+  // Đóng sheet khi ấn Escape
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setMobileSheetGroup(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const toggleGroup = (groupId, currentlyExpanded, groupEntry) => {
+    // Trên điện thoại (<= 860px), nếu bấm vào nhóm:
+    // - Chưa ở trong nhóm: chuyển thẳng vào mục đầu tiên của nhóm
+    // - Đang ở trong nhóm: mở Bottom Sheet để chọn chế độ khác
+    if (typeof window !== 'undefined' && window.innerWidth <= 860 && groupEntry?.items) {
+      const hasActiveChild = groupEntry.items.some(item => item.id === activeTab);
+      if (!hasActiveChild) {
+        onSelect(groupEntry.items[0].id);
+      } else {
+        setMobileSheetGroup(prev => prev === groupId ? null : groupId);
+      }
+      return;
+    }
     setGroupOverrides(prev => ({ ...prev, [groupId]: !currentlyExpanded }));
   };
 
+  const activeGroup = mobileSheetGroup ? NAV.find(g => g.id === mobileSheetGroup) : null;
+
   return (
-    <nav className="sh-nav" aria-label="Điều hướng chính">
-      {NAV.map(entry => {
-        const Icon = entry.icon;
+    <>
+      <nav className="sh-nav" aria-label="Điều hướng chính">
+        {NAV.map(entry => {
+          const Icon = entry.icon;
 
-        if (!entry.items) {
+          if (!entry.items) {
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                className={`sh-item${activeTab === entry.id ? ' is-active' : ''}`}
+                onClick={() => {
+                  setMobileSheetGroup(null);
+                  onSelect(entry.id);
+                }}
+                title={entry.label}
+              >
+                <Icon size={18} strokeWidth={1.5} className="sh-item-icon" />
+                <span className="sh-item-text">{entry.label}</span>
+              </button>
+            );
+          }
+
+          // Nhóm chỉ có 1 view => hành xử như mục thường, không có submenu.
+          if (entry.items.length === 1) {
+            const only = entry.items[0];
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                className={`sh-item${activeTab === only.id ? ' is-active' : ''}`}
+                onClick={() => {
+                  setMobileSheetGroup(null);
+                  onSelect(only.id);
+                }}
+                title={entry.label}
+              >
+                <Icon size={18} strokeWidth={1.5} className="sh-item-icon" />
+                <span className="sh-item-text">{entry.label}</span>
+              </button>
+            );
+          }
+
+          const hasActiveChild = entry.items.some(item => item.id === activeTab);
+          const override = groupOverrides[entry.id];
+          const expanded = override === undefined ? hasActiveChild : override;
+          const submenuId = `nav-submenu-${entry.id}`;
+
           return (
-            <button key={entry.id} type="button" className={`sh-item${activeTab === entry.id ? ' is-active' : ''}`} onClick={() => onSelect(entry.id)} title={entry.label}>
-              <Icon size={18} strokeWidth={1.5} />
-              <span>{entry.label}</span>
-            </button>
+            <div key={entry.id} className={`sh-group${hasActiveChild ? ' has-active' : ''}`}>
+              <button
+                type="button"
+                className={`sh-item sh-group-toggle${hasActiveChild ? ' is-active' : ''}`}
+                aria-expanded={expanded}
+                aria-controls={submenuId}
+                onClick={() => toggleGroup(entry.id, expanded, entry)}
+                title={entry.label}
+              >
+                <Icon size={18} strokeWidth={1.5} className="sh-item-icon" />
+                <span className="sh-item-text">{entry.label}</span>
+                {/* Số mục con là dữ liệu thật, dùng mono để cột chữ số không nhảy. */}
+                <span className="sh-count" aria-hidden="true">{String(entry.items.length).padStart(2, '0')}</span>
+                <ChevronDown size={14} strokeWidth={1.5} className={`sh-chevron${expanded ? ' is-open' : ''}`} aria-hidden="true" />
+              </button>
+              <div className="sh-sub" id={submenuId} role="group" aria-label={entry.label} hidden={!expanded}>
+                {entry.items.map(item => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`sh-item sh-subitem${activeTab === item.id ? ' is-active' : ''}`}
+                      onClick={() => onSelect(item.id)}
+                      title={item.label}
+                    >
+                      <ItemIcon size={16} strokeWidth={1.5} className="sh-item-icon" />
+                      <span className="sh-item-text">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           );
-        }
+        })}
+      </nav>
 
-        // Nhóm chỉ có 1 view => hành xử như mục thường, không có submenu.
-        if (entry.items.length === 1) {
-          const only = entry.items[0];
-          return (
-            <button key={entry.id} type="button" className={`sh-item${activeTab === only.id ? ' is-active' : ''}`} onClick={() => onSelect(only.id)} title={entry.label}>
-              <Icon size={18} strokeWidth={1.5} />
-              <span>{entry.label}</span>
-            </button>
-          );
-        }
-
-        const hasActiveChild = entry.items.some(item => item.id === activeTab);
-        const override = groupOverrides[entry.id];
-        const expanded = override === undefined ? hasActiveChild : override;
-        const submenuId = `nav-submenu-${entry.id}`;
-
-        return (
-          <div key={entry.id} className="sh-group">
-            <button
-              type="button"
-              className={`sh-item sh-group-toggle${hasActiveChild ? ' is-active' : ''}`}
-              aria-expanded={expanded}
-              aria-controls={submenuId}
-              onClick={() => toggleGroup(entry.id, expanded)}
-              title={entry.label}
-            >
-              <Icon size={18} strokeWidth={1.5} />
-              <span>{entry.label}</span>
-              {/* Số mục con là dữ liệu thật, dùng mono để cột chữ số không nhảy. */}
-              <span className="sh-count" aria-hidden="true">{String(entry.items.length).padStart(2, '0')}</span>
-              <ChevronDown size={14} strokeWidth={1.5} className={`sh-chevron${expanded ? ' is-open' : ''}`} aria-hidden="true" />
-            </button>
-            <div className="sh-sub" id={submenuId} role="group" aria-label={entry.label} hidden={!expanded}>
-              {entry.items.map(item => {
+      {/* Mobile Drawer / Bottom Sheet cho submenu */}
+      {activeGroup && activeGroup.items && (
+        <div className="sh-sheet-container">
+          <div
+            className="sh-sheet-backdrop"
+            onClick={() => setMobileSheetGroup(null)}
+            aria-hidden="true"
+          />
+          <div
+            className="sh-mobile-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={activeGroup.label}
+          >
+            <div className="sh-sheet-handle" />
+            <div className="sh-sheet-header">
+              <div className="sh-sheet-title">
+                <activeGroup.icon size={20} className="sh-sheet-icon" />
+                <div>
+                  <h3>{activeGroup.label}</h3>
+                  <p>Chọn phân mục bạn muốn luyện tập</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="sh-sheet-close"
+                onClick={() => setMobileSheetGroup(null)}
+                aria-label="Đóng bảng điều hướng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="sh-sheet-list">
+              {activeGroup.items.map(item => {
                 const ItemIcon = item.icon;
+                const isItemActive = activeTab === item.id;
                 return (
-                  <button key={item.id} type="button" className={`sh-item sh-subitem${activeTab === item.id ? ' is-active' : ''}`} onClick={() => onSelect(item.id)} title={item.label}>
-                    <ItemIcon size={16} strokeWidth={1.5} />
-                    <span>{item.label}</span>
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`sh-sheet-item${isItemActive ? ' is-active' : ''}`}
+                    onClick={() => {
+                      onSelect(item.id);
+                      setMobileSheetGroup(null);
+                    }}
+                  >
+                    <div className="sh-sheet-item-icon">
+                      <ItemIcon size={20} strokeWidth={1.75} />
+                    </div>
+                    <div className="sh-sheet-item-info">
+                      <span className="sh-sheet-item-label">{item.label}</span>
+                    </div>
+                    {isItemActive && <span className="sh-sheet-item-badge">Đang mở</span>}
                   </button>
                 );
               })}
             </div>
           </div>
-        );
-      })}
-    </nav>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -62,21 +62,17 @@ _CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
 
 # Giữ output lại bấy nhiêu giây trước khi phát khối đầu của /tts/stream.
 #
-# Vì sao PHẢI có: đo mốc đến từng khối trên 10 câu, StepFun giao ``mp3_stream``
-# theo CHÙM — ~5 khối liền nhau (1.25s audio), NGHỈ 1.3-1.4s, rồi chùm còn lại.
-# Tổng thể sinh nhanh hơn phát (0.46x thời gian thực) nhưng cái khe ở giữa dài hơn
-# lượng audio vừa gửi, nên thẻ ``<audio>`` phát hết chỗ có rồi ĐỨNG chờ. Mô phỏng
-# kim phát: 8/10 câu đứng, trung bình 278ms, tệ nhất 686ms — đứng GIỮA CHỮ.
+# Vì sao PHẢI có: đo mốc đến từng khối trên nhiều câu, StepFun giao ``mp3_stream``
+# theo CHÙM — ~5 khối liền nhau (~1.25s audio), NGHỈ 0.8-1.5s, rồi chùm còn lại.
+# Tổng thể sinh nhanh hơn phát nhưng cái khe ở giữa dài hơn lượng audio vừa gửi,
+# nên thẻ ``<audio>`` phát hết chỗ có rồi ĐỨNG chờ. Đo thật trên key hôm nay:
+# gap lớn nhất 1.525s (câu 22 chữ), trung bình ~1.0s.
 #
-# Sàn ``playbackRate`` 0.85 cũ vô tình che lỗi này (phát chậm 15% = có thêm 15%
-# đệm): @0.85x đo 0/10 câu đứng, @0.90x 1/10, @1.0x 3/10 (và 8/10 khi tính cả
-# lượng đứng tích luỹ). Giờ tốc độ do server tổng hợp và client phát ở 1.0, nên lớp
-# đệm tình cờ đó không còn.
-#
-# 900ms là mức nhỏ nhất cho 0/10 câu đứng kể cả khi cộng thêm 200ms jitter mạng
-# (700ms đủ khi mạng lý tưởng, nhưng biên chỉ còn 0). Đổi lấy: tiếng đầu về ~1.85s
-# thay vì ~0.67s — vẫn nhanh hơn ``/tts`` (3.0s) khoảng 1.2s, và liền mạch.
-STREAM_HOLD_SEC = 0.9
+# Giá trị cũ 0.9s chỉ che được gap trung bình, không che được worst-case → vẫn đứt
+# quãng ở ~30% câu. 1.6s = worst-case đo được (1.525s) + biên jitter 75ms. Đổi lấy:
+# tiếng đầu về ~2.4s thay vì ~1.7s — vẫn nhanh hơn ``/tts`` (3.7-4.4s) khoảng 1.5s,
+# và liền mạch ở mọi câu đã đo.
+STREAM_HOLD_SEC = 1.6
 
 # Dải ``speed`` nhận từ client. Đo trên key thật: provider nhận cả 0.5 và 1.5, và
 # nhịp nói ĐƠN ĐIỆU theo giá trị (0.72 -> 340ms/chữ, 0.82 -> 293, 0.95 -> 202),

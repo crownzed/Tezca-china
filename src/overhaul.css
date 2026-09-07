@@ -4,27 +4,26 @@
 /* 3. Cards & Surfaces */
 .core-card,
 .result-card{
-  background-color: var(--modern-zen-card) !important;
-  background-image: var(--bg-pattern) !important;
-  border: 1px solid rgba(var(--shadow-color), 0.04) !important;
+  background-color: var(--box-bg) !important;
+  background-image: none !important;
+  border: 1px solid var(--box-border) !important;
   border-radius: var(--radius) !important;
-  box-shadow: var(--shadow-md) !important;
+  box-shadow: var(--shadow-sm) !important;
   transition: transform var(--transition-bounce), box-shadow var(--transition-smooth), border-color var(--transition-smooth) !important;
 }
 [data-theme='dark'] .core-card{
-  border: 1px solid rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid var(--box-border) !important;
 }
 .core-card:hover{
-  transform: translateY(-4px) scale(1.01) !important;
-  box-shadow: var(--shadow-lg) !important;
-  border-color: rgba(var(--shadow-color), 0.08) !important;
+  border-color: var(--box-border-hover) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 .core-card:active{
   box-shadow: var(--shadow-sm) !important;
 }
 
 [data-theme='dark'] .core-card:hover{
-  border-color: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--box-border-hover) !important;
 }/* Remove the pseudo element border from old CSS */
 .core-card::after,
 .level-card::after,
@@ -136,30 +135,31 @@ h3{
 }
 
 .option-grid button{
-  border: 2px solid rgba(var(--shadow-color), 0.06) !important;
-  border-radius: var(--radius-lg) !important;
-  padding: 16px 24px !important;
+  border: 1px solid var(--box-border) !important;
+  border-radius: 12px !important;
+  padding: 14px 18px !important;
   font-weight: 600 !important;
-  font-size: 1.1rem !important;
-  transition: all var(--transition-bounce) !important;
-  background: var(--modern-zen-card) !important;
+  font-size: 1.05rem !important;
+  transition: all var(--transition-snappy) !important;
+  background: var(--box-bg) !important;
   display: flex !important;
   align-items: center !important;
-  gap: 16px !important;
+  gap: 14px !important;
   cursor: pointer !important;
-  color: var(--modern-zen-text) !important;
+  color: var(--text) !important;
 }
 
 .option-grid button > span:not(.clickable-text){
   flex: 0 0 auto !important;
-  background: rgba(var(--shadow-color), 0.04) !important;
-  width: 32px !important;
-  height: 32px !important;
+  background: var(--box-subtle-bg) !important;
+  border: 1px solid var(--box-border) !important;
+  width: 28px !important;
+  height: 28px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 50% !important;
-  font-size: 0.9rem !important;
+  border-radius: 7px !important;
+  font-size: 0.8rem !important;
   font-weight: 700 !important;
 }/* Reset span-chip từ index.css cho cụm chữ Hán + từng chữ tap-để-tra:
    index.css ép MỌI span thành hình tròn 28px nền vàng -> phải trả về text thường. */
@@ -193,10 +193,10 @@ h3{
 }
 
 .option-grid button:hover{
-  border-color: var(--modern-zen-primary) !important;
-  background: rgba(18, 122, 93, 0.02) !important;
-  transform: translateY(-2px) scale(1.01) !important;
-  box-shadow: 0 4px 12px rgba(18, 122, 93, 0.08) !important;
+  border-color: var(--box-border-hover) !important;
+  background: var(--box-hover-bg) !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
 .option-grid button:active{
@@ -204,12 +204,14 @@ h3{
 }
 
 .option-grid button.selected{
-  border-color: var(--modern-zen-primary) !important;
-  background: rgba(18, 122, 93, 0.05) !important;
+  border-color: var(--box-selected-border) !important;
+  background: var(--box-selected-bg) !important;
+  color: var(--box-selected-text) !important;
 }
 
 .option-grid button.selected > span:not(.clickable-text){
-  background: var(--modern-zen-primary) !important;
+  background: var(--box-selected-border) !important;
+  border-color: var(--box-selected-border) !important;
   color: white !important;
 }/* Hanzi Text Display - Make it massive */
 .learning-question-card h2{
@@ -550,36 +552,38 @@ không bị biến thành chip tròn */
 }
 
 .option-grid button.selected{
-  background: rgba(18, 122, 93, 0.04) !important;
-  border-color: var(--modern-zen-primary) !important;
-  box-shadow: 0 8px 24px rgba(18, 122, 93, 0.1) !important;
-  transform: translateY(-2px) !important;
+  background: var(--box-selected-bg) !important;
+  border-color: var(--box-selected-border) !important;
+  color: var(--box-selected-text) !important;
 }
 
 .option-grid button.selected > span:not(.clickable-text){
-  background: var(--jade-gradient) !important;
+  background: var(--box-selected-border) !important;
+  border-color: var(--box-selected-border) !important;
   color: white !important;
 }
 
 .option-grid button.option-correct{
-  background: rgba(18, 122, 93, 0.08) !important;
-  border-color: var(--modern-zen-primary) !important;
-  box-shadow: 0 8px 24px rgba(18, 122, 93, 0.12) !important;
+  background: var(--box-correct-bg) !important;
+  border-color: var(--box-correct-border) !important;
+  color: var(--box-correct-text) !important;
 }
 
 .option-grid button.option-correct > span:not(.clickable-text){
-  background: var(--modern-zen-primary) !important;
+  background: var(--box-correct-border) !important;
+  border-color: var(--box-correct-border) !important;
   color: white !important;
 }
 
 .option-grid button.option-wrong{
-  background: rgba(194, 64, 47, 0.08) !important;
-  border-color: #C2402F !important;
-  box-shadow: 0 8px 24px rgba(194, 64, 47, 0.12) !important;
+  background: var(--box-wrong-bg) !important;
+  border-color: var(--box-wrong-border) !important;
+  color: var(--box-wrong-text) !important;
 }
 
 .option-grid button.option-wrong > span:not(.clickable-text){
-  background: #C2402F !important;
+  background: var(--box-wrong-border) !important;
+  border-color: var(--box-wrong-border) !important;
   color: white !important;
 }
 
@@ -1266,16 +1270,16 @@ main.core-page{
 }/* Thang tabs lọc HSK - Segmented control */
 .vocab-hsk-tabs{
   display: inline-flex;
-  background: var(--modern-zen-chip) !important;
+  background: var(--box-subtle-bg) !important;
   padding: 4px !important;
   border-radius: 12px !important;
   gap: 2px;
-  border: 1px solid rgba(var(--shadow-color), 0.05) !important;
+  border: 1px solid var(--box-border) !important;
 }
 
 .vocab-hsk-tabs button{
   background: transparent !important;
-  border: none !important;
+  border: 1px solid transparent !important;
   color: var(--muted) !important;
   padding: 6px 14px !important;
   border-radius: 8px !important;
@@ -1286,21 +1290,23 @@ main.core-page{
 }
 
 .vocab-hsk-tabs button.active{
-  background: var(--modern-zen-card) !important;
-  color: var(--modern-zen-primary) !important;
+  background: var(--box-bg) !important;
+  color: var(--box-selected-border) !important;
+  border-color: var(--box-border) !important;
   box-shadow: var(--shadow-sm) !important;
 }/* Search Box styling */
 .search-box{
-  border: 1.5px solid rgba(var(--shadow-color), 0.08) !important;
-  background: var(--modern-zen-card) !important;
+  border: 1.5px solid var(--box-border) !important;
+  background: var(--box-bg) !important;
   border-radius: 12px !important;
   padding: 0 16px !important;
   box-shadow: var(--shadow-sm) !important;
   transition: border-color var(--transition-snappy) !important;
+  color: var(--text) !important;
 }
 
 .search-box:focus-within{
-  border-color: var(--modern-zen-primary) !important;
+  border-color: var(--box-selected-border) !important;
   box-shadow: 0 0 0 3px var(--focus-ring) !important;
 }
 
@@ -1597,9 +1603,9 @@ main.core-page{
 .handwriting-quiz-grid{
   width: min(220px, 100%) !important;
   aspect-ratio: 1 / 1 !important;
-  border: 1.5px dashed rgba(var(--shadow-color), 0.15) !important;
+  border: 1.5px dashed var(--box-border) !important;
   border-radius: var(--radius) !important;
-  background: #fafaf8 !important;
+  background: var(--box-subtle-bg) !important;
   touch-action: none !important;
   cursor: crosshair;
 }
@@ -1610,8 +1616,8 @@ main.core-page{
 }
 
 [data-theme='dark'] .handwriting-quiz-grid{
-  background: #242220 !important;
-  border-color: rgba(255, 255, 255, 0.06) !important;
+  background: var(--box-subtle-bg) !important;
+  border-color: var(--box-border) !important;
 }
 
 .handwriting-stats{

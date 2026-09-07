@@ -5,32 +5,32 @@
    ========================================================================== */
 
 .cv-studio {
-  --cv-jade: #0F766E;
-  --cv-jade-light: #14B8A6;
-  --cv-jade-soft: rgba(20, 184, 166, 0.12);
-  --cv-jade-glow: rgba(15, 118, 110, 0.25);
-  --cv-amber: #B45309;
-  --cv-amber-soft: rgba(245, 158, 11, 0.12);
-  --cv-red: #E11D48;
-  --cv-red-soft: rgba(225, 29, 72, 0.12);
+  --cv-jade: var(--jade, #127a5d);
+  --cv-jade-light: var(--celadon, #14B8A6);
+  --cv-jade-soft: var(--jade-soft, rgba(18, 122, 93, 0.12));
+  --cv-jade-glow: rgba(18, 122, 93, 0.25);
+  --cv-amber: var(--gold, #B45309);
+  --cv-amber-soft: var(--gold-soft, rgba(212, 163, 89, 0.12));
+  --cv-red: var(--cinnabar, #C2402F);
+  --cv-red-soft: var(--cinnabar-soft, rgba(194, 64, 47, 0.12));
 
-  /* Light Theme (Mặc định) */
-  --cv-bg: #F8FAFC;
-  --cv-card: #FFFFFF;
-  --cv-card-subtle: #F1F5F9;
-  --cv-card-hover: #E2E8F0;
-  --cv-border: #E2E8F0;
-  --cv-border-strong: #CBD5E1;
-  --cv-text: #0F172A;
-  --cv-text-muted: #475569;
-  --cv-text-dim: #64748B;
-  --cv-bubble-ai: #FFFFFF;
-  --cv-bubble-ai-border: #E2E8F0;
-  --cv-bubble-user: linear-gradient(135deg, #0F766E, #0D9488);
+  /* Light Theme — Đồng bộ với hệ thống box tokens */
+  --cv-bg: var(--bg-top, #F8F6F0);
+  --cv-card: var(--box-bg, #FFFFFF);
+  --cv-card-subtle: var(--box-subtle-bg, #F3EFE6);
+  --cv-card-hover: var(--control-hover, #e5e0d4);
+  --cv-border: var(--box-border, var(--line));
+  --cv-border-strong: var(--box-border-hover);
+  --cv-text: var(--text, #1a1e1c);
+  --cv-text-muted: var(--muted, #4B5563);
+  --cv-text-dim: var(--dim, #687076);
+  --cv-bubble-ai: var(--box-bg, #FFFFFF);
+  --cv-bubble-ai-border: var(--box-border, var(--line));
+  --cv-bubble-user: var(--jade-gradient, linear-gradient(135deg, #189874, #127a5d));
   --cv-bubble-user-text: #FFFFFF;
-  --cv-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --cv-shadow-md: 0 4px 14px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-  --cv-shadow-lg: 0 12px 32px -4px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  --cv-shadow-sm: var(--shadow-sm);
+  --cv-shadow-md: var(--shadow-md);
+  --cv-shadow-lg: var(--shadow-lg);
 
   position: relative;
   width: min(100%, 1020px);
@@ -41,24 +41,24 @@
   animation: cvFadeIn 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Dark Theme Overrides */
+/* Dark Theme Overrides — Đồng bộ với tokens.css */
 [data-theme='dark'] .cv-studio {
-  --cv-bg: #091320;
-  --cv-card: #0F1C2D;
-  --cv-card-subtle: #15273D;
-  --cv-card-hover: #1E3550;
-  --cv-border: rgba(255, 255, 255, 0.08);
-  --cv-border-strong: rgba(255, 255, 255, 0.16);
-  --cv-text: #F1F5F9;
-  --cv-text-muted: #94A3B8;
-  --cv-text-dim: #64748B;
-  --cv-bubble-ai: #132238;
-  --cv-bubble-ai-border: rgba(255, 255, 255, 0.08);
-  --cv-bubble-user: linear-gradient(135deg, #0D9488, #115E59);
-  --cv-bubble-user-text: #FFFFFF;
-  --cv-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --cv-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --cv-shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.5);
+  --cv-bg: var(--modern-zen-bg, #091320);
+  --cv-card: var(--box-bg, #0F1C2D);
+  --cv-card-subtle: var(--box-subtle-bg, #15273D);
+  --cv-card-hover: var(--control-hover, #1A2C42);
+  --cv-border: var(--box-border, rgba(147, 180, 204, 0.14));
+  --cv-border-strong: var(--box-border-hover, rgba(147, 180, 204, 0.40));
+  --cv-text: var(--text, #e1edf8);
+  --cv-text-muted: var(--muted, #a4b7c8);
+  --cv-text-dim: var(--dim, #798d9f);
+  --cv-bubble-ai: var(--box-bg, #0F1C2D);
+  --cv-bubble-ai-border: var(--box-border, rgba(147, 180, 204, 0.14));
+  --cv-bubble-user: var(--jade-gradient, linear-gradient(135deg, #b2c9db, #93B4CC));
+  --cv-bubble-user-text: var(--logo-text, #0b1c2b);
+  --cv-shadow-sm: var(--shadow-sm);
+  --cv-shadow-md: var(--shadow-md);
+  --cv-shadow-lg: var(--shadow-lg);
 }
 
 @keyframes cvFadeIn {
@@ -1062,30 +1062,209 @@
   gap: 4px;
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments chuẩn Ergonomic Mobile Web */
 @media (max-width: 640px) {
   .cv-studio {
-    gap: 12px;
+    gap: 10px;
+    width: 100%;
+    padding: 0 2px;
   }
+
   .cv-header {
-    padding: 12px 14px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    gap: 10px;
   }
+
+  .cv-tutor-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  .cv-tutor-info h3 {
+    font-size: 1.02rem;
+  }
+
+  .cv-toolbar {
+    gap: 6px;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .cv-btn-tool {
+    padding: 7px 11px;
+    font-size: 0.78rem;
+    min-height: 36px;
+    border-radius: 10px;
+  }
+
   .cv-settings-panel {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
   }
+
   .cv-scenarios-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
+
+  /* Khung chat chiếm trọn vẹn màn hình khả dụng, không bị ép 52dvh */
   .cv-chat-log {
-    padding: 16px 12px;
-    max-height: 52dvh;
+    padding: 12px 6px;
+    max-height: calc(100dvh - 290px);
+    min-height: 320px;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
+
+  .cv-msg-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
   .cv-bubble-ai,
   .cv-bubble-user {
     padding: 12px 14px;
+    border-radius: 18px;
+    max-width: 92%;
   }
+
+  .cv-hanzi-char {
+    font-size: 1.42rem;
+  }
+
+  .cv-pinyin-label {
+    font-size: 0.76rem;
+  }
+
+  /* Tránh tooltip tràn viền màn hình trên điện thoại */
+  .cv-hanzi-pop {
+    max-width: min(280px, 86vw);
+    white-space: normal;
+    text-align: center;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+  }
+
+  /* Action buttons của tin nhắn: to bản hơn, dễ chạm ngón cái */
+  .cv-msg-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .cv-action-pill {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    border-radius: 999px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .cv-action-pill:active {
+    transform: scale(0.94);
+  }
+
+  .cv-reply-hint-chip {
+    min-height: 36px;
+    padding: 7px 12px;
+    font-size: 0.85rem;
+    touch-action: manipulation;
+  }
+
+  /* Quick Prompts cuộn ngang mượt mà */
+  .cv-quick-prompts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px 2px;
+  }
+
+  .cv-quick-prompts::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cv-prompt-pill {
+    flex-shrink: 0;
+    min-height: 34px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  /* Floating composer: cố định gần ngón cái */
+  .cv-composer-container {
+    gap: 6px;
+  }
+
+  .cv-composer-shell {
+    padding: 6px 8px 6px 14px;
+    border-radius: 22px;
+    gap: 8px;
+  }
+
+  .cv-composer-textarea {
+    font-size: 16px !important; /* Chống iOS Safari auto-zoom khi chạm */
+    min-height: 40px;
+    line-height: 1.4;
+  }
+
+  .cv-composer-textarea::placeholder {
+    font-size: 0.86rem;
+  }
+
+  .cv-btn-mic,
+  .cv-btn-send {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 50%;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .cv-btn-mic:active,
+  .cv-btn-send:active {
+    transform: scale(0.91);
+  }
+
   .cv-audio-waveform {
     display: none;
+  }
+
+  .cv-recording-bar {
+    padding: 4px;
+    gap: 8px;
+  }
+
+  .cv-recording-actions {
+    gap: 6px;
+  }
+
+  .cv-btn-cancel-rec,
+  .cv-btn-stop-rec {
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    touch-action: manipulation;
+  }
+
+  .cv-btn-cancel-rec:active,
+  .cv-btn-stop-rec:active {
+    transform: scale(0.95);
+  }
+
+  .cv-composer-meta {
+    font-size: 0.7rem;
+    padding: 0 4px;
   }
 }

@@ -463,6 +463,88 @@ let queuePlaying = false;
 // lời mới thật sự) mới hạ được cờ này.
 let queueSuspended = false;
 
+// --- Prefetch TTS cho câu kế tiếp -------------------------------------------
+//
+// Khi câu N bắt đầu phát, fetch NGAY audio cho câu N+1 (nếu có trong hàng đợi).
+// Server cache-hit → trả instant (~0ms); cache-miss → audio sẵn sàng khi câu N
+// phát xong, loại bỏ khoảng lặng giữa hai câu.
+//
+// Chỉ bật khi queueStreaming=true (hội thoại): flashcard/quiz dùng /tts (trọn file)
+// nên prefetch không giúp gì — tổng thời gian như nhau, chỉ khác lúc nào fetch.
+//
+// Lưu blob URL thay vì ArrayBuffer: Audio() nhận blob URL trực tiếp, không cần
+// decode lại. Revoke sau khi phát xong để giải phóng RAM.
+const _prefetchCache = new Map(); // key -> { blobUrl, controller }
+let _prefetchController = null;   // AbortController chung cho prefetch đang bay
+
+function _prefetchKey(text, rate) {
+  return `${text}\x1f${rate}`;
+}
+
+function _startPrefetch(text, rate) {
+  if (!queueStreaming) return;
+  const key = _prefetchKey(text, rate);
+  if (_prefetchCache.has(key)) return; // đã prefetch hoặc đang prefetch
+
+  const controller = new AbortController();
+  _prefetchController = controller;
+
+  const speedParam = `&speed=${encodeURIComponent(rate)}`;
+  const url = `${TTS_API_BASE}/tts/stream?text=${encodeURIComponent(text)}${speedParam}`;
+
+  fetch(url, { signal: controller.signal })
+    .then((resp) => {
+      if (!resp.ok || controller.signal.aborted) return;
+      return resp.blob();
+    })
+    .then((blob) => {
+      if (!blob || controller.signal.aborted) return;
+      const blobUrl = URL.createObjectURL(blob);
+      _prefetchCache.set(key, { blobUrl, controller: null });
+    })
+    .catch(() => { /* abort hoặc lỗi mạng — im lặng, drainSpeechQueue sẽ fetch lại */ });
+}
+
+function _consumePrefetch(text, rate) {
+  const key = _prefetchKey(text, rate);
+  const entry = _prefetchCache.get(key);
+  if (!entry) return null;
+  _prefetchCache.delete(key);
+  return entry.blobUrl;
+}
+
+function _clearPrefetch() {
+  // Abort prefetch đang bay
+  _prefetchController?.abort();
+  _prefetchController = null;
+  // Revoke blob URL đã cached
+  for (const [, entry] of _prefetchCache) {
+    URL.revokeObjectURL(entry.blobUrl);
+  }
+  _prefetchCache.clear();
+}
+
+// Phát audio từ blob URL (đã prefetch), playbackRate=1.0 như playAtNativeRate.
+function playBlobUrl(blobUrl, runId, onDone, fallback) {
+  const audio = new Audio(blobUrl);
+  audio.preload = 'auto';
+  audio.volume = 1;
+  audio.playbackRate = 1;
+  activeAudio = audio;
+
+  let resolved = false;
+  const cleanup = () => { URL.revokeObjectURL(blobUrl); };
+  audio.onended = () => {
+    if (!resolved) { resolved = true; activeAudio = null; cleanup(); if (runId === speechRunId) onDone(true); }
+  };
+  audio.onerror = () => {
+    if (!resolved) { resolved = true; activeAudio = null; cleanup(); if (runId === speechRunId) fallback(); }
+  };
+  audio.play().catch(() => {
+    if (!resolved) { resolved = true; activeAudio = null; cleanup(); if (runId === speechRunId) fallback(); }
+  });
+}
+
 export function speakQueued(text, rate = 0.9) {
   const clean = normalizeForTts(String(text || '').trim());
   if (!clean) return;
@@ -484,6 +566,33 @@ function drainSpeechQueue() {
   if (!item) { queuePlaying = false; notifyQueueIdle(); return; }
   queuePlaying = true;
   const runId = queueRunId;
+
+  // Prefetch câu KẾ TIẾP trong lúc câu này đang phát. Server cache-hit → trả
+  // instant; cache-miss → audio sẵn sàng khi câu này xong, không còn khoảng lặng.
+  if (queueItems.length > 0 && queueStreaming) {
+    _startPrefetch(queueItems[0].text, queueItems[0].rate);
+  }
+
+  // Kiểm tra prefetch cho câu HIỆN TẠI — nếu có blob URL thì phát ngay, bỏ qua
+  // network round-trip. Fallback về playEleven nếu blob lỗi (hết hạn, revoke).
+  const prefetched = _consumePrefetch(item.text, item.rate);
+  if (prefetched) {
+    playBlobUrl(prefetched, runId, () => {
+      if (runId !== speechRunId) { queueItems = []; queuePlaying = false; return; }
+      if (queueSuspended) { queueItems = []; queuePlaying = false; return; }
+      drainSpeechQueue();
+    }, () => {
+      // Blob lỗi → fallback về fetch bình thường
+      if (runId !== speechRunId) return;
+      playEleven(item.text, item.rate, runId, () => {
+        if (runId !== speechRunId) { queueItems = []; queuePlaying = false; return; }
+        if (queueSuspended) { queueItems = []; queuePlaying = false; return; }
+        drainSpeechQueue();
+      }, { streaming: queueStreaming });
+    });
+    return;
+  }
+
   playEleven(item.text, item.rate, runId, () => {
     // stopSpeech() hoặc một lượt phát khác đã xen vào giữa: dừng, đừng đọc nốt.
     if (runId !== speechRunId) { queueItems = []; queuePlaying = false; return; }
@@ -519,6 +628,7 @@ export function beginSpeechQueue() {
   queueItems = [];
   queuePlaying = false;
   queueSuspended = false;  // lượt trả lời mới -> hạ chặn của lần cắt lời trước
+  _clearPrefetch();        // bỏ audio đã prefetch của lượt trước
   stopSpeech();            // tăng speechRunId + dừng audio đang phát
   queueRunId = speechRunId;
 }
@@ -532,6 +642,7 @@ export function interruptSpeech() {
   queueItems = [];
   queuePlaying = false;
   queueSuspended = true;
+  _clearPrefetch();  // bỏ audio đã prefetch — người học cắt lời thì không cần nữa
   stopSpeech();
 }
 
