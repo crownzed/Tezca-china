@@ -1,19 +1,19 @@
 """
-Speech AI service — StepFun Step Plan + native Google Gemini.
+Speech AI service — ASR/TTS provider chính + native speech API.
 
-Gemini native (``generativelanguage.googleapis.com``) nhận audio đầu vào, còn
-relay vilao mà ``llm_generator_service`` dùng thì chỉ có text — nên hai tính năng
-giọng nói gọi trực tiếp API native:
+Native speech API nhận audio đầu vào, còn LLM relay mà
+``llm_generator_service`` dùng thì chỉ có text — nên hai tính năng giọng nói
+gọi trực tiếp API native:
 
   Feature 1 — chấm phát âm:
-    audio -> Gemini chép thành {hanzi, pinyin} -> ``pinyin_scorer`` chấm (tất
-    định) -> ``_generate_phonetic_tip`` viết câu nhận xét từ chính kết quả chấm,
-    ngay tại chỗ, KHÔNG có round-trip thứ hai.
+    audio -> speech API chép thành {hanzi, pinyin} -> ``pinyin_scorer`` chấm
+    (tất định) -> ``_generate_phonetic_tip`` viết câu nhận xét từ chính kết quả
+    chấm, ngay tại chỗ, KHÔNG có round-trip thứ hai.
 
   Feature 2 — hội thoại:
-    audio -> StepFun ASR chép (Gemini là fallback) -> LLM trả lời. Bản
-    ``stream_voice_chat`` phát transcript rồi từng CÂU qua SSE để client đọc câu
-    1 trong lúc câu 2 còn đang sinh; ``voice_chat`` là bản một-lần cho ``/chat``.
+    audio -> ASR provider chính chép (provider phụ là fallback) -> LLM trả lời.
+    Bản ``stream_voice_chat`` phát transcript rồi từng CÂU qua SSE để client đọc
+    câu 1 trong lúc câu 2 còn đang sinh; ``voice_chat`` là bản một-lần cho /chat.
 
 Key không bao giờ ra khỏi backend; browser chỉ nói chuyện với router của ta.
 """
@@ -39,8 +39,8 @@ TIMEOUT = 15
 # Trần TỔNG thời gian cho cả vòng xoay key/attempt của một request.
 #
 # Vì sao cần cái này chứ không chỉ hạ ``TIMEOUT``: ladder là vòng lồng
-# ``key × attempt``, nên TIMEOUT chỉ chặn được MỘT request. Với 5 key
-# GEMINI_NATIVE_API_KEYS × 2 attempt × 15s, worst case là 150s — và trước khi
+# ``key × attempt``, nên TIMEOUT chỉ chặn được MỘT request. Với 5 key speech API
+# × 2 attempt × 15s, worst case là 150s — và trước khi
 # gộp danh sách model bên dưới thì còn nhân 3 lần nữa thành 450s. fly.toml không
 # đặt trần request nào, nên chuỗi đó chạy hết thật: người học thấy UI treo, còn
 # fly giữ nguyên một worker suốt thời gian đó.
@@ -54,14 +54,13 @@ LADDER_DEADLINE_SEC = 35.0
 # round-trip. Hai mốc cho MAX_RETRIES = 2 attempt.
 _RETRY_BACKOFF_SEC = (0.5, 1.5)
 
-# Model native Gemini để thử, theo thứ tự.
+# Model native speech API để thử, theo thứ tự.
 #
-# CHỈ MỘT phần tử, có chủ ý. Trước đây chỗ này là ``[gemini_native_model,
-# "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]`` — lặp nguyên văn ở hai
-# hàm — khiến ladder dài gấp 3. Nhưng hai model "dự phòng" đó không cứu được ca
-# lỗi thật nào: 429/quota gắn với KEY (đã xoay vòng ở vòng trong), còn 404
-# model-not-found thì thử model khác cùng key cũng vô nghĩa vì key nào cũng thấy
-# cùng tập model. Đổi model là việc của ``GEMINI_NATIVE_MODEL`` trong env.
+# CHỈ MỘT phần tử, có chủ ý. Trước đây chỗ này liệt kê nhiều model — khiến
+# ladder dài gấp 3. Nhưng các model "dự phòng" đó không cứu được ca lỗi thật
+# nào: 429/quota gắn với KEY (đã xoay vòng ở vòng trong), còn 404 model-not-found
+# thì thử model khác cùng key cũng vô nghĩa vì key nào cũng thấy cùng tập model.
+# Đổi model là việc của biến môi trường tương ứng.
 _CANDIDATE_MODELS = (settings.gemini_native_model,)
 
 
@@ -112,19 +111,19 @@ def _call_native_gemini(
     timeout: int = TIMEOUT,
     deadline: _LadderDeadline | None = None,
 ) -> str:
-    """Call native Gemini generateContent, rotating through configured keys.
+    """Call native speech API generateContent, rotating through configured keys.
 
     ``parts`` is the list of content parts for a single user turn (text and/or
     inline audio). Returns the model's text output. Raises RuntimeError if all
     keys fail hoặc hết ngân sách ``LADDER_DEADLINE_SEC``.
 
-    ``deadline`` cho phép caller đã tiêu một phần ngân sách (vd StepFun ASR thử
+    ``deadline`` cho phép caller đã tiêu một phần ngân sách (vd ASR provider chính thử
     trước rồi mới fallback sang đây) truyền tiếp đồng hồ, để tổng thời gian một
     request vẫn nằm trong một trần duy nhất thay vì mỗi tầng một trần riêng.
     """
     keys = settings.gemini_native_keys_list
     if not keys:
-        raise RuntimeError("GEMINI_NATIVE_API_KEYS chưa được cấu hình.")
+        raise RuntimeError("Speech API keys chưa được cấu hình.")
 
     clock = deadline or _LadderDeadline()
 
@@ -139,7 +138,7 @@ def _call_native_gemini(
             for attempt in range(MAX_RETRIES):
                 if clock.expired():
                     errors.append(f"hết ngân sách {clock.budget:.0f}s")
-                    raise RuntimeError("Gemini native API thất bại: " + " | ".join(errors[:6]))
+                    raise RuntimeError("Speech API thất bại: " + " | ".join(errors[:6]))
                 try:
                     result = _post(url, payload, clock.timeout_for(timeout))
                     cand = (result.get("candidates") or [{}])[0]
@@ -166,7 +165,7 @@ def _call_native_gemini(
                     errors.append(f"{model} key#{idx}: {e}")
                     continue
 
-    raise RuntimeError("Gemini native API thất bại: " + " | ".join(errors[:6]))
+    raise RuntimeError("Speech API thất bại: " + " | ".join(errors[:6]))
 
 
 def _parse_json(text: str) -> dict:
@@ -199,7 +198,7 @@ def score_pronunciation(
 
     Combines two complementary layers so neither can be gamed:
 
-      Identity layer (what was said): Gemini transcribes the audio to hanzi +
+      Identity layer (what was said): speech API transcribes the audio to hanzi +
       tone-marked pinyin; pinyin_scorer compares it to the target
       deterministically (missing/extra/wrong syllables, tone-mark mismatches).
 
@@ -256,8 +255,8 @@ def score_pronunciation(
         # syllable/tone weighting pinyin_scorer was designed around.
         #
         # But DSP alone deciding 40% of the grade lets a lenient or mis-split
-        # acoustic result inflate the score even when Gemini clearly heard a wrong
-        # tone. So we cross-check: take the WORSE of the DSP accuracy and Gemini's
+        # acoustic result inflate the score even when speech API clearly heard a wrong
+        # tone. So we cross-check: take the WORSE of the DSP accuracy and speech API's
         # own tone-correct ratio. Either layer can veto a tone. (syllable_errors
         # are excluded here — they already lower base_score, so counting them again
         # would double-penalize the 0.6 term.)
@@ -359,7 +358,7 @@ def _generate_phonetic_tip(
 ) -> str:
     """Generate precise, instantaneous Vietnamese phonetic feedback in <1ms.
 
-    Eliminates a second round-trip Gemini call while providing 100% deterministic,
+    Eliminates a second round-trip speech API call while providing 100% deterministic,
     pedagogically sound tips without any risk of LLM hallucination.
     """
     has_identity_err = bool(breakdown.get("tone_errors") or breakdown.get("syllable_errors"))
@@ -436,12 +435,12 @@ def transcribe_speech(
 ) -> str:
     """Chép một lượt nói tiếng Trung thành chữ Hán.
 
-    StepFun ASR (``stepaudio-2.5-asr``) là đường CHÍNH: nó là model chuyên chép
-    âm nên nhanh hơn hẳn việc bắt một model đa năng vừa nghe vừa trả JSON.
+    ASR provider chính là đường CHÍNH: nó là model chuyên chép âm nên nhanh hơn
+    hẳn việc bắt một model đa năng vừa nghe vừa trả JSON.
 
-    Gemini vẫn là fallback, có chủ ý — không thay hẳn: hiện chỉ có MỘT key Step
-    Plan (không xoay vòng được khi nó 429/hỏng), còn GEMINI_NATIVE_API_KEYS có
-    năm. Bỏ Gemini là đánh đổi độ bền lấy tốc độ ở đúng tính năng mà lỗi đồng
+    Provider phụ vẫn là fallback, có chủ ý — không thay hẳn: provider chính có thể
+    ít key (không xoay vòng được khi 429/hỏng), còn provider phụ có nhiều key hơn.
+    Bỏ provider phụ là đánh đổi độ bền lấy tốc độ ở đúng tính năng mà lỗi đồng
     nghĩa với "không nói được câu nào".
 
     ``deadline`` để caller đang stream chia chung ngân sách thời gian, xem
@@ -455,9 +454,9 @@ def transcribe_speech(
             text = _stepfun_asr(audio_b64, mime_type, deadline=clock)
             if text:
                 return text
-            logger.info("StepFun ASR trả chuỗi rỗng — fallback sang Gemini")
-        except Exception as exc:  # noqa: BLE001 — mọi lỗi đều phải rơi xuống Gemini
-            logger.warning("StepFun ASR lỗi (%s) — fallback sang Gemini", exc)
+            logger.info("ASR primary trả chuỗi rỗng — fallback sang provider phụ")
+        except Exception as exc:  # noqa: BLE001 — mọi lỗi đều phải rơi xuống provider phụ
+            logger.warning("ASR primary lỗi (%s) — fallback sang provider phụ", exc)
 
     prompt = (
         "Nghe đoạn ghi âm tiếng Trung của người học và chép lại chính xác bằng "
@@ -475,9 +474,9 @@ def transcribe_speech(
     return text
 
 
-# mime của client -> ``format.type`` mà StepFun nhận. Client hiện luôn gửi WAV
-# 16kHz mono 16-bit (``speech-ai.js`` tự encode, không dùng MediaRecorder), nên
-# nhánh wav là đường chạy thật; webm giữ cho trường hợp client khác.
+# mime của client -> ``format.type`` mà ASR provider chính nhận. Client hiện luôn
+# gửi WAV 16kHz mono 16-bit (``speech-ai.js`` tự encode, không dùng MediaRecorder),
+# nên nhánh wav là đường chạy thật; webm giữ cho trường hợp client khác.
 _STEPFUN_ASR_FORMATS = {"audio/wav": "wav", "audio/webm": "ogg", "audio/mpeg": "mp3"}
 
 
@@ -487,7 +486,7 @@ def _stepfun_asr(
     *,
     deadline: _LadderDeadline | None = None,
 ) -> str:
-    """Chép âm qua StepFun ASR SSE. Trả chuỗi rỗng khi không nhận ra gì.
+    """Chép âm qua ASR provider chính (SSE). Trả chuỗi rỗng khi không nhận ra gì.
 
     Chỉ khai ``format.type``, không khai ``rate``/``bits``/``channel``: tài liệu
     chỉ bắt buộc ba trường đó cho ``type: "pcm"`` thô. Với ``wav`` thì header
@@ -495,15 +494,15 @@ def _stepfun_asr(
     hai nguồn nói khác nhau.
 
     Ném RuntimeError khi lỗi — caller (``transcribe_speech``) bắt và rơi xuống
-    Gemini.
+    provider phụ.
     """
     keys = settings.stepfun_keys_list
     if not keys:
-        raise RuntimeError("STEPFUN_API_KEYS chưa được cấu hình.")
+        raise RuntimeError("ASR primary keys chưa được cấu hình.")
 
     fmt = _STEPFUN_ASR_FORMATS.get((mime_type or "").split(";")[0].strip().lower())
     if not fmt:
-        raise RuntimeError(f"StepFun ASR không nhận định dạng {mime_type!r}.")
+        raise RuntimeError(f"ASR primary không nhận định dạng {mime_type!r}.")
 
     clock = deadline or _LadderDeadline()
     body = json.dumps(
@@ -550,7 +549,7 @@ def _stepfun_asr(
         except Exception as exc:  # noqa: BLE001
             errors.append(f"key#{idx}: {exc}")
 
-    raise RuntimeError("StepFun ASR thất bại: " + " | ".join(errors[:4]))
+    raise RuntimeError("ASR primary thất bại: " + " | ".join(errors[:4]))
 
 
 def _read_asr_sse(resp) -> str:
@@ -579,7 +578,7 @@ def _read_asr_sse(resp) -> str:
         elif etype == "transcript.text.done":
             return (str(event.get("text", "")) or delta_text).strip()
         elif etype == "error":
-            raise RuntimeError(f"StepFun ASR: {event.get('message', 'lỗi không rõ')}")
+            raise RuntimeError(f"ASR primary: {event.get('message', 'lỗi không rõ')}")
     return delta_text.strip()
 
 
@@ -712,7 +711,7 @@ def stream_voice_chat(
     Khác ``voice_chat`` ở hai chỗ, cả hai đều để giảm thời gian tới TIẾNG ĐẦU
     TIÊN chứ không phải tổng thời gian:
 
-    1. Chép âm TRƯỚC bằng ``transcribe_speech`` (StepFun ASR, Gemini fallback) và
+    1. Chép âm TRƯỚC bằng ``transcribe_speech`` (ASR primary, provider phụ fallback) và
        phát ``transcript`` ngay. Người học thấy bong bóng chat của mình trong khi
        LLM còn đang nghĩ. Đổi lại, LLM nhận VĂN BẢN thay vì audio — nên prompt chỉ
        cần sinh REPLY_CN + REPLY_VI, không phải kiêm cả USER_TEXT như trước.
@@ -745,7 +744,7 @@ def stream_voice_chat(
     # --- 2) Stream câu trả lời ---------------------------------------------
     keys = settings.gemini_native_keys_list
     if not keys:
-        yield _sse({"type": "error", "detail": "Chưa cấu hình GEMINI_NATIVE_API_KEYS"})
+        yield _sse({"type": "error", "detail": "Chưa cấu hình speech API keys"})
         return
 
     history_lines = []

@@ -1,6 +1,6 @@
 """Speech features router — pronunciation scoring + turn-based voice chat.
 
-All AI calls go through speech_ai_service, which uses the native Gemini API
+All AI calls go through speech_ai_service, which uses the native speech API
 server-side. The browser only talks to these endpoints; the API key never
 leaves the backend.
 """
@@ -71,7 +71,7 @@ _demo_rate_limiter = RateLimiter(max_hits=3, window_seconds=600)
 _practice_sentence_limiter = RateLimiter(max_hits=30, window_seconds=60)
 
 # --- Giới hạn cho /transcribe và /chat (ĐÃ đăng nhập) -----------------------
-# Hai endpoint này tiêu quota GEMINI_NATIVE_API_KEYS — cùng bể key mà /tts và
+# Hai endpoint này tiêu quota speech API keys — cùng bể key mà /tts và
 # /pronunciation đang dùng — nên một tài khoản gọi lặp vô hạn sẽ làm chết tính
 # năng của mọi người khác. Hạn mức nới hơn demo vì đây là hội thoại thật: người
 # học nói nhiều lượt liên tiếp là bình thường.
@@ -139,11 +139,11 @@ def pronunciation(
     """Score a user's recording against the target.
 
     Chấm điểm tất định qua ``pinyin_scorer`` + tầng âm học ``tone_dsp_service``;
-    Gemini CHỈ làm việc chép âm thành hanzi/pinyin. Câu nhận xét do
+    speech API CHỈ làm việc chép âm thành hanzi/pinyin. Câu nhận xét do
     ``_generate_phonetic_tip`` sinh cục bộ từ chính kết quả chấm, không gọi mạng.
 
     Yêu cầu đăng nhập + rate-limit + siết audio, giống ``/transcribe`` và
-    ``/chat``: endpoint này tiêu quota GEMINI_NATIVE_API_KEYS — cùng bể key với
+    ``/chat``: endpoint này tiêu quota speech API keys — cùng bể key với
     cả ba endpoint kia — và trước đây là endpoint DUY NHẤT trong nhóm còn để
     công khai, tức đường vòng miễn phí quanh mọi lớp bảo vệ đã dựng cho các
     endpoint còn lại. Người chưa đăng nhập vẫn có ``/demo-pronunciation`` (câu
@@ -230,7 +230,7 @@ def transcribe(
 ):
     """Speech-to-text bridge used before Mini local generates its reply.
 
-    Yêu cầu đăng nhập: endpoint tiêu quota GEMINI_NATIVE_API_KEYS, để công khai
+    Yêu cầu đăng nhập: endpoint tiêu quota speech API keys, để công khai
     thì thành dịch vụ speech-to-text miễn phí và làm cạn bể key mà /tts,
     /pronunciation, /chat đều dùng chung. UI vốn đã nằm sau AuthGate nên không
     có caller hợp lệ nào bị ảnh hưởng."""
@@ -265,7 +265,7 @@ def chat(
 
     Yêu cầu đăng nhập: kể từ khi ``audio_base64`` thành tuỳ chọn và có thêm
     ``text``, một request chỉ-văn-bản là hợp lệ — nếu để công khai thì đây là
-    proxy LLM miễn phí, tiêu quota GEMINI_NATIVE_API_KEYS. Trước đây
+    proxy LLM miễn phí, tiêu quota speech API keys. Trước đây
     ``min_length=16`` trên audio vô tình chặn được kiểu lạm dụng này."""
     _guard_chat_quota(current_user)
     text = (request.text or "").strip()
@@ -413,7 +413,7 @@ def demo_pronunciation(request: DemoPronunciationRequest, http_request: Request)
     if duration is not None and duration > _DEMO_MAX_DURATION_SEC:
         raise HTTPException(status_code=413, detail="Đoạn ghi âm quá dài (tối đa 8 giây).")
 
-    # 5) Chấm điểm qua service dùng chung (Gemini + DSP). Không log audio/base64.
+    # 5) Chấm điểm qua service dùng chung (speech API + DSP). Không log audio/base64.
     try:
         result = score_pronunciation(
             audio_b64=request.audio_base64,

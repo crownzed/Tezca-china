@@ -69,9 +69,9 @@ def require_admin(authorization: str | None = Header(default=None)) -> str:
 _CONFIG_ALLOWED_FIELDS = (
     "app_name",
     "jwt_expire_hours",
-    # StepFun là provider LLM đang hoạt động, nên hai field này mới là thứ sửa
-    # được từ admin có tác dụng thật; gemini_* bên dưới chỉ còn ảnh hưởng khi
-    # STEPFUN_API_KEYS trống (xem llm_provider trong settings.py).
+    # Primary LLM là provider đang hoạt động, nên hai field này mới là thứ sửa
+    # được từ admin có tác dụng thật; relay/fallback bên dưới chỉ còn ảnh hưởng khi
+    # primary keys trống (xem llm_provider trong settings.py).
     "stepfun_chat_url",
     "stepfun_chat_model",
     "gemini_api_url",

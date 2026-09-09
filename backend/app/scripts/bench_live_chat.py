@@ -9,7 +9,7 @@ Chạy:
     cd backend && python -m app.scripts.bench_live_chat
     cd backend && python -m app.scripts.bench_live_chat --runs 3 --old
 
-CẢNH BÁO: script gọi API TRẢ TIỀN thật (StepFun TTS + ASR, Gemini). Một lượt
+CẢNH BÁO: script gọi API TRẢ TIỀN thật (TTS + ASR provider chính, speech API). Một lượt
 --runs 1 tiêu khoảng: 2 lượt TTS (~40 ký tự) + 1 lượt ASR (~3s audio) + 1 lượt
 LLM stream. Mặc định 1 lần để không đốt quota; --old thêm 1 ASR + 1 LLM nữa.
 
@@ -20,7 +20,7 @@ lúc họ đang nghe câu 1 nên không tính vào độ trễ cảm nhận.
     ASR -> LLM tới câu 1 -> TTS câu 1  = tiếng đầu tiên
 
 Đường CŨ (--old) để có baseline so sánh: /transcribe rồi /chat, hai request
-Gemini tách biệt, rồi TTS TRỌN câu trả lời.
+speech API tách biệt, rồi TTS TRỌN câu trả lời.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def _text_hash(text: str) -> str:
 
 
 def _synth_wav(text: str) -> tuple[bytes, float]:
-    """Dựng audio đầu vào bằng chính StepFun TTS, xin thẳng WAV.
+    """Dựng audio đầu vào bằng chính TTS provider chính, xin thẳng WAV.
 
     Vì sao không đọc file trong ``public/audio``: kho đó là MP3, còn client thật
     (``speech-ai.js``) gửi WAV 16kHz mono — đo trên MP3 sẽ đo sai nhánh format
@@ -67,7 +67,7 @@ def _synth_wav(text: str) -> tuple[bytes, float]:
 
     keys = settings.stepfun_keys_list
     if not keys:
-        raise SystemExit("Cần STEPFUN_API_KEYS trong backend/.env để đo.")
+        raise SystemExit("Cần TTS primary keys trong backend/.env để đo.")
     body = json.dumps(
         {
             "model": settings.stepfun_tts_model,
@@ -155,8 +155,8 @@ def bench_new(audio_b64: str) -> dict:
 def bench_old(audio_b64: str) -> dict:
     """Đường CŨ: /transcribe rồi /chat (hai request), TTS TRỌN câu trả lời.
 
-    Ép ``transcribe_speech`` đi Gemini bằng cách tắt tạm ``stepfun_keys_list``:
-    đường cũ chưa có StepFun ASR, so sánh phải trung thực với thời điểm đó.
+    Ép ``transcribe_speech`` đi provider phụ bằng cách tắt tạm ``stepfun_keys_list``:
+    đường cũ chưa có ASR provider chính, so sánh phải trung thực với thời điểm đó.
     """
     original = settings.stepfun_api_keys
     t0 = time.monotonic()
@@ -203,8 +203,8 @@ def main() -> int:
     ap.add_argument("--text", default=SAMPLE_UTTERANCE, help="câu để dựng audio")
     args = ap.parse_args()
 
-    print(f"Provider: StepFun keys={len(settings.stepfun_keys_list)} "
-          f"Gemini keys={len(settings.gemini_native_keys_list)} "
+    print(f"Provider: primary keys={len(settings.stepfun_keys_list)} "
+          f"speech keys={len(settings.gemini_native_keys_list)} "
           f"model={settings.gemini_native_model}")
     print(f'Câu mẫu: "{args.text}"')
 

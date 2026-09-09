@@ -30,23 +30,22 @@ class Settings(BaseSettings):
     turso_database_url: str = ""
     turso_auth_token: str = ""
 
-    # Relay vilao.ai — provider LLM DỰ PHÒNG. Kể từ khi StepFun được dùng làm
-    # provider chính (xem stepfun_chat_* dưới), relay này chỉ còn được chọn khi
-    # STEPFUN_API_KEYS trống. OpenAI và DeepSeek đã bị bỏ — key OpenAI chưa bao giờ
-    # được cấu hình nên luôn bị skip, còn ai-box.vn/DeepSeek trả 403
-    # insufficient_user_quota, mỗi lần fail chỉ tốn thêm round-trip vô ích.
+    # Provider LLM DỰ PHÒNG qua relay. Kể từ khi primary provider được dùng (xem
+    # stepfun_chat_* dưới), relay này chỉ còn được chọn khi key primary
+    # trống. Các provider khác đã bị bỏ vì trả lỗi quota/auth, mỗi lần fail chỉ
+    # tốn thêm round-trip vô ích.
     # Không ghi secret vào repo; các giá trị này chỉ đọc từ environment.
     # Nhiều key comma-separated: _call_api xoay vòng khi một key cạn quota.
     gemini_api_keys: str = ""
     gemini_api_url: str = "https://api.vilao.ai/v1/chat/completions"
-    # Relay tự chọn model thật (response trả model="gemini-default"), nên giá trị
+    # Relay tự chọn model thật (response trả model="default"), nên giá trị
     # này chỉ là khai báo mong muốn phía client.
     gemini_model: str = "ram/gemini-3.5-flash-low"
     llm_max_tokens: int = 24000
 
     # Override provider LLM mà không cần sửa code: cả ba biến dưới đây, khi đặt,
     # thắng các giá trị ``gemini_*`` ở trên (xem property ``llm_*_effective``).
-    # Mọi relay đang dùng đều là OpenAI-compatible ``/chat/completions`` nên đổi
+    # Mọi relay đang dùng đều là standard chat API ``/chat/completions`` nên đổi
     # provider chỉ là đổi 3 biến môi trường:
     #   LLM_API_URL=https://<host>/v1/chat/completions
     #   LLM_API_KEYS=<key1,key2>
@@ -59,15 +58,14 @@ class Settings(BaseSettings):
     llm_api_keys: str = ""
     llm_model: str = ""
     # json_object mode: chỉ bật khi provider hỗ trợ response_format. Để RỖNG =
-    # tự quyết theo provider (StepFun hỗ trợ -> bật; relay vilao không -> tắt,
+    # tự quyết theo provider (provider chính hỗ trợ -> bật; relay không -> tắt,
     # JSON ép bằng system prompt). Đặt "true"/"false" để ghi đè thủ công.
     llm_json_mode: str = ""
     # Ngân sách reasoning ("low"/"medium"/"high"). Model reasoning đốt phần lớn
-    # thời gian vào chain-of-thought: đo trên gilotex/grok-4.5 cùng một prompt,
-    # mặc định tốn 103s/4360 reasoning token, còn effort=low chỉ 13s/250 token và
-    # vẫn finish_reason=stop. Gateway cắt ở ~121s nên bundle đầy đủ chỉ chạy nổi
-    # khi hạ effort. Để rỗng = tự quyết theo provider (StepFun -> "low", relay
-    # vilao -> không gửi vì không nhận tham số này).
+    # thời gian vào chain-of-thought: đo thực tế cùng một prompt, mặc định tốn
+    # ~103s/4360 reasoning token, còn effort=low chỉ ~13s/250 token và vẫn
+    # finish_reason=stop. Gateway cắt ở ~121s nên bundle đầy đủ chỉ chạy nổi khi
+    # hạ effort. Để rỗng = tự quyết theo provider.
     llm_reasoning_effort: str = ""
 
     # Single-admin credentials. Không hardcode: đọc từ env. Khi cả hai còn rỗng,
@@ -76,19 +74,19 @@ class Settings(BaseSettings):
     admin_email: str = ""
     admin_password_hash: str = ""
 
-    # Google Gemini TTS. Dùng chung GEMINI_NATIVE_API_KEYS với speech (xem dưới);
+    # TTS provider chính. Dùng chung key với speech (xem dưới);
     # chỉ giữ model + voice ở đây.
     gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
     gemini_tts_voice: str = "Kore"
 
-    # Native Google AI Studio keys (generativelanguage.googleapis.com) used for
-    # audio-input features (pronunciation scoring + voice chat). The vilao relay
-    # is text-only, so speech features must call the native API directly.
-    gemini_native_api_keys: str = ""  # comma-separated AI Studio keys
+    # Native speech API keys dùng cho audio-input features (pronunciation scoring
+    # + voice chat). Relay LLM chỉ có text, nên speech features phải gọi trực
+    # tiếp API native.
+    gemini_native_api_keys: str = ""  # comma-separated speech AI provider keys
     gemini_native_url: str = "https://generativelanguage.googleapis.com/v1beta"
     gemini_native_model: str = "gemini-3.5-flash-lite"
 
-    # ElevenLabs TTS — fallback khi mọi key Gemini cạn quota. Trả MP3 sẵn nên
+    # TTS fallback — dùng khi mọi key provider chính cạn quota. Trả MP3 sẵn nên
     # không cần encode. Voice mặc định là giọng đa ngôn ngữ đọc được tiếng Trung.
     # Nhiều key comma-separated: xoay vòng khi key cạn quota ký tự tháng.
     elevenlabs_api_keys: str = ""
@@ -98,17 +96,15 @@ class Settings(BaseSettings):
     # trên (dùng cho fallback đọc tiếng Trung) để chọn giọng Việt tự nhiên hơn.
     elevenlabs_feedback_voice_id: str = "BlZK9tHPU6XXjwOSIiYA"
 
-    # StepFun Step Plan TTS — provider ưu tiên cho audio tiếng Trung khi có key.
-    # Không ghi secret vào repo; đặt STEPFUN_API_KEYS trong environment/.env.
-    # Step Plan dùng hostname api.stepfun.ai và path /step_plan/v1.
+    # TTS provider ưu tiên cho audio tiếng Trung khi có key.
+    # Không ghi secret vào repo; đặt key tương ứng trong environment/.env.
     stepfun_api_keys: str = ""
     stepfun_tts_url: str = "https://api.stepfun.ai/step_plan/v1/audio/speech"
     stepfun_tts_model: str = "stepaudio-2.5-tts"
-    # Voice giáo dục đã kiểm tra quyền trên Step Plan: rõ, êm, phù hợp học tiếng
-    # Trung. Đã dò 9 giọng khác trong tài liệu (yuanqinansheng, wenrounansheng,
-    # linjiajiejie, ...): TẤT CẢ trả 400 "voice_id does not exist" trên Step Plan,
-    # và ``GET /audio/voices`` trả danh sách rỗng. Nói cách khác đây là giọng DUY
-    # NHẤT khả dụng — đừng mất thời gian thử đổi giọng để tăng biểu cảm.
+    # Voice giáo dục đã kiểm tra quyền: rõ, êm, phù hợp học tiếng Trung.
+    # Đã dò nhiều giọng khác trong tài liệu: TẤT CẢ trả 400 "voice_id does not
+    # exist", và ``GET /audio/voices`` trả danh sách rỗng. Nói cách khác đây là
+    # giọng DUY NHẤT khả dụng — đừng mất thời gian thử đổi giọng để tăng biểu cảm.
     stepfun_tts_voice: str = "zixinnansheng"
 
     # Chỉ dẫn diễn đạt cho các câu ĐỌC LẺ (flashcard, quiz, luyện nghe).
@@ -144,37 +140,28 @@ class Settings(BaseSettings):
     stepfun_tts_sample_rate: int = 24000
     stepfun_tts_text_normalization: str = "enhanced"
 
-    # StepFun Step Plan chat — provider LLM ƯU TIÊN khi có STEPFUN_API_KEYS,
-    # dùng chung key với TTS ở trên. Đo trực tiếp trên key hiện tại:
-    #   /step_plan/v1  -> 200 OK
-    #   /v1 (trả tiền theo token) -> 402 quota_exceeded
-    # nên phải giữ path /step_plan/v1; đổi sang /v1 là chết request.
+    # LLM provider ƯU TIÊN khi có key, dùng chung key với TTS ở trên. Đo trực
+    # tiếp trên key hiện tại: path /step_plan/v1 -> 200 OK, path /v1 (trả tiền
+    # theo token) -> 402 quota_exceeded, nên phải giữ path /step_plan/v1; đổi
+    # sang /v1 là chết request.
     stepfun_chat_url: str = "https://api.stepfun.ai/step_plan/v1/chat/completions"
     stepfun_chat_model: str = "step-3.7-flash"
 
-    # StepFun Step Plan ASR — chép âm hội thoại, thay Gemini làm ĐƯỜNG CHÍNH
-    # (Gemini vẫn là fallback, xem ``transcribe_speech``). Dùng chung
-    # STEPFUN_API_KEYS với chat/TTS.
+    # ASR provider chính — chép âm hội thoại. Provider phụ vẫn là fallback (xem
+    # ``transcribe_speech``). Dùng chung key với chat/TTS.
     #
-    # Host là api.stepfun.ai chứ không phải api.stepfun.com như tài liệu ghi:
-    # cả hai endpoint Step Plan đang chạy được (TTS + chat) đều dùng .ai, nên
-    # theo cái đã đo thay vì cái đã đọc. Path /step_plan/v1 là bắt buộc, cùng lý
-    # do như chat ở trên.
+    # Path /step_plan/v1 là bắt buộc, cùng lý do như chat ở trên.
     #
-    # Chỉ dùng bản HTTP+SSE. Step Plan KHÔNG mở bản WebSocket song hướng
-    # (stepaudio-2.5-asr-stream), và bản đó cũng đắt hơn (¥1.2/giờ so với
-    # ¥0.15/giờ), nên không có đường làm streaming ASR hai chiều ở đây.
+    # Chỉ dùng bản HTTP+SSE. Provider KHÔNG mở bản WebSocket song hướng cho ASR,
+    # và bản đó cũng đắt hơn, nên không có đường làm streaming ASR hai chiều ở đây.
     stepfun_asr_url: str = "https://api.stepfun.ai/step_plan/v1/audio/asr/sse"
     stepfun_asr_model: str = "stepaudio-2.5-asr"
 
-    # StepFun Step Plan TTS streaming (WebSocket) — dùng cho chế độ gọi thoại.
+    # TTS streaming (WebSocket) — dùng cho chế độ gọi thoại.
     #
     # Khác ``stepfun_tts_url`` (HTTP, trả trọn file): đường này trả byte đầu tiên
     # ~0.65s sau khi gửi text, so với ~2.5s của HTTP — đo trên key thật, cùng câu.
     # Đổi lại phải trả ~0.94s mở socket mỗi câu, nên chỉ đáng cho hội thoại.
-    #
-    # Host .ai chứ không .com như tài liệu, cùng lý do đã ghi ở khối ASR trên: đo
-    # trên key thật, .com trả 401 "Incorrect API key" còn .ai trả 200.
     #
     # Model dùng chung ``stepfun_tts_model``, voice/speed/instruction dùng chung
     # các setting ở khối TTS — giọng phải KHỚP /tts, nếu không cùng một cuộc gọi
@@ -210,9 +197,8 @@ class Settings(BaseSettings):
 
     # extra="ignore": biến môi trường không khớp field nào thì BỎ QUA thay vì
     # ném ValidationError. Mặc định của pydantic-settings là "forbid", nên khi bỏ
-    # một field (vd DEEPSEEK_API_KEY/OPENAI_API_KEY) mà .env hoặc secret store của
-    # môi trường triển khai vẫn còn dòng cũ thì app không khởi động nổi — hỏng cả
-    # service chỉ vì một biến đã hết dùng.
+    # một field mà .env hoặc secret store của môi trường triển khai vẫn còn dòng
+    # cũ thì app không khởi động nổi — hỏng cả service chỉ vì một biến đã hết dùng.
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
@@ -253,8 +239,8 @@ class Settings(BaseSettings):
         # LLM_API_URL / LLM_API_KEYS / LLM_MODEL là một bộ ba: chỉ llm_api_keys
         # quyết định provider == "custom", nên đặt lẻ URL hoặc model sẽ trộn hai
         # provider vào một request. Hai trường hợp đã đo được:
-        #   - Chỉ LLM_API_URL: provider vẫn "stepfun" -> URL custom + key StepFun.
-        #   - Chỉ LLM_MODEL:   URL/key StepFun + model lạ -> 404 model-not-found.
+        #   - Chỉ LLM_API_URL: provider vẫn "primary" -> URL custom + key primary.
+        #   - Chỉ LLM_MODEL:   URL/key primary + model lạ -> 404 model-not-found.
         # Cả hai chỉ lộ ra khi request chạy thật, nên chặn ngay lúc khởi động.
         provided = {
             "LLM_API_URL": bool(self.llm_api_url.strip()),
@@ -277,12 +263,12 @@ class Settings(BaseSettings):
 
     @property
     def llm_provider(self) -> str:
-        """Provider LLM đang thực sự được dùng: "custom" | "stepfun" | "vilao".
+        """Provider LLM đang thực sự được dùng: "custom" | "primary" | "relay".
 
         Thứ tự ưu tiên, dừng ở cái đầu tiên có key:
-          1. ``custom``  — LLM_API_KEYS được đặt (người dùng chỉ định tay).
-          2. ``stepfun`` — STEPFUN_API_KEYS được đặt (mặc định hiện tại).
-          3. ``vilao``   — GEMINI_API_KEYS, đường dự phòng cũ.
+          1. ``custom``   — LLM_API_KEYS được đặt (người dùng chỉ định tay).
+          2. ``primary``  — key provider chính được đặt (mặc định hiện tại).
+          3. ``relay``    — relay dự phòng.
 
         Mọi property ``llm_*_effective`` bên dưới đọc chung giá trị này, nên URL,
         key, model và payload không bao giờ lệch provider — lỗi trước đây rất dễ
@@ -291,8 +277,8 @@ class Settings(BaseSettings):
         if self._llm_keys_explicit:
             return "custom"
         if self.stepfun_keys_list:
-            return "stepfun"
-        return "vilao"
+            return "primary"
+        return "relay"
 
     @property
     def _llm_keys_explicit(self) -> list[str]:
@@ -310,7 +296,7 @@ class Settings(BaseSettings):
             if url.endswith("/chat/completions"):
                 return url
             return f"{url}/chat/completions"
-        if self.llm_provider == "stepfun":
+        if self.llm_provider == "primary":
             return self.stepfun_chat_url
         return self.gemini_api_url
 
@@ -320,7 +306,7 @@ class Settings(BaseSettings):
         explicit = self._llm_keys_explicit
         if explicit:
             return explicit
-        if self.llm_provider == "stepfun":
+        if self.llm_provider == "primary":
             return self.stepfun_keys_list
         return self.gemini_keys_list
 
@@ -329,7 +315,7 @@ class Settings(BaseSettings):
         model = self.llm_model.strip()
         if model:
             return model
-        if self.llm_provider == "stepfun":
+        if self.llm_provider == "primary":
             return self.stepfun_chat_model
         return self.gemini_model
 
@@ -337,29 +323,29 @@ class Settings(BaseSettings):
     def llm_json_mode_effective(self) -> bool:
         """Có gửi ``response_format: json_object`` hay không.
 
-        LLM_JSON_MODE rỗng = tự quyết theo provider. StepFun hỗ trợ nên bật (đo
-        được: cùng prompt, có json_object mất 10.8s/892 token thay vì 29s/3749
-        token vì model thôi vòng vo ngoài JSON). Relay vilao không hỗ trợ nên tắt.
+        LLM_JSON_MODE rỗng = tự quyết theo provider. Provider chính hỗ trợ nên
+        bật (đo được: cùng prompt, có json_object mất 10.8s/892 token thay vì
+        29s/3749 token vì model thôi vòng vo ngoài JSON). Relay không hỗ trợ nên tắt.
         """
         raw = self.llm_json_mode.strip().lower()
         if raw in ("1", "true", "yes", "on"):
             return True
         if raw in ("0", "false", "no", "off"):
             return False
-        return self.llm_provider == "stepfun"
+        return self.llm_provider == "primary"
 
     @property
     def llm_reasoning_effort_effective(self) -> str:
         """Ngân sách reasoning; rỗng = không gửi tham số.
 
-        Mặc định "low" cho StepFun: kết hợp với json_object, cùng prompt xuống
-        6.0s/457 token (so với 29s/3749 khi không gửi gì) — đủ xa trần gateway
-        ~121s. Relay vilao không nhận tham số này nên để rỗng.
+        Mặc định "low" cho provider chính: kết hợp với json_object, cùng prompt
+        xuống 6.0s/457 token (so với 29s/3749 khi không gửi gì) — đủ xa trần
+        gateway ~121s. Relay không nhận tham số này nên để rỗng.
         """
         effort = self.llm_reasoning_effort.strip()
         if effort:
             return effort
-        if self.llm_provider == "stepfun":
+        if self.llm_provider == "primary":
             return "low"
         return ""
 
@@ -367,12 +353,12 @@ class Settings(BaseSettings):
     def llm_reasoning_flat(self) -> bool:
         """True = gửi ``reasoning_effort: "low"``; False = ``reasoning: {effort}``.
 
-        Không phải chuyện style: đo trên key StepFun hiện tại, dạng phẳng làm
-        prompt_tokens 80 -> 85 (server nhận tham số), còn dạng lồng giữ nguyên 80
-        (bị bỏ qua im lặng). Relay gilotex thì ngược lại — dạng lồng mới hạ được
-        103s -> 13s. Nên cờ này đi theo provider.
+        Không phải chuyện style: đo trên key hiện tại, dạng phẳng làm prompt_tokens
+        80 -> 85 (server nhận tham số), còn dạng lồng giữ nguyên 80 (bị bỏ qua im
+        lặng). Một số relay thì ngược lại — dạng lồng mới hạ được thời gian. Nên cờ
+        này đi theo provider.
         """
-        return self.llm_provider == "stepfun"
+        return self.llm_provider == "primary"
 
     @property
     def gemini_native_keys_list(self) -> list[str]:
@@ -390,10 +376,10 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Thông báo dùng chung cho mọi script khi ``settings.llm_keys_list`` rỗng. Trước
-# đây bảy script tự viết câu riêng và đều chỉ nhắc GEMINI_API_KEYS — nhánh ưu tiên
-# thấp nhất, nên người chạy đặt key vào đó rồi bị StepFun đè im lặng. Một hằng số
-# để lần đổi thứ tự ưu tiên sau không phải sửa bảy chỗ.
+# đây nhiều script tự viết câu riêng và đều chỉ nhắc một provider — nhánh ưu tiên
+# thấp nhất, nên người chạy đặt key vào đó rồi bị provider chính đè im lặng. Một
+# hằng số để lần đổi thứ tự ưu tiên sau không phải sửa bảy chỗ.
 NO_LLM_KEY_MESSAGE = (
-    "Chưa cấu hình key LLM nào — đặt STEPFUN_API_KEYS (khuyến nghị), "
-    "hoặc LLM_API_URL+LLM_API_KEYS+LLM_MODEL, hoặc GEMINI_API_KEYS."
+    "Chưa cấu hình key LLM nào — đặt key provider chính (khuyến nghị), "
+    "hoặc LLM_API_URL+LLM_API_KEYS+LLM_MODEL, hoặc relay keys."
 )

@@ -112,7 +112,7 @@ def generate_custom_vocab(
     try:
         user_id = user.id
         
-        # 1. Gọi DeepSeek API để sinh dữ liệu
+        # 1. Gọi LLM API để sinh dữ liệu
         data = generate_exercises_for_vocab(request.words)
         if "words" not in data:
             raise HTTPException(status_code=500, detail="Invalid JSON format returned from LLM")
@@ -187,7 +187,7 @@ def generate_custom_vocab(
             session_type="custom_vocab",
             behavior_state="learning",
             target_words_json=target_words,
-            reason="Người dùng tự tạo bằng DeepSeek API"
+            reason="Người dùng tự tạo bằng LLM API"
         )
         db.add(session)
         db.commit()

@@ -175,12 +175,12 @@ function geminiTtsUrl(text) {
 }
 
 // Kéo tốc độ ở BROWSER, dùng khi nguồn audio không nhận tham số tốc độ (clip
-// local đã ghi sẵn, Gemini TTS, ElevenLabs).
+// local đã ghi sẵn, native speech TTS, fallback TTS).
 //
 // Sàn 0.85 là có lý do: dưới mức đó browser resample một luồng ĐÃ NÉN và nghe
 // nhòe. Nhưng nó cũng là cái bẫy — SPEECH_RATES của hội thoại có 0.72 và 0.82,
 // cả hai đều bị kẹp lên 0.85, nên hai lựa chọn đó từng cho ra audio Y HỆT NHAU.
-// Đường StepFun không còn đi qua đây nữa (tốc độ vào query ``speed``), nên sàn
+// Đường primary TTS không còn đi qua đây nữa (tốc độ vào query ``speed``), nên sàn
 // này chỉ còn áp cho các nguồn thật sự không điều được tốc độ.
 function clampPlaybackRate(rate, min = 0.85, max = 1.1) {
   return Math.max(min, Math.min(max, rate));
@@ -205,7 +205,7 @@ function tryPlayUrl(url, rate, runId, onDone, fallback) {
   });
 }
 
-// Phát audio đã được tổng hợp SẴN ở đúng tốc độ (StepFun nhận ``speed``), nên
+// Phát audio đã được tổng hợp SẴN ở đúng tốc độ (primary TTS nhận ``speed``), nên
 // playbackRate phải là 1.0 — kéo thêm ở browser là chậm/nhanh hai lần và mất công
 // resample vô ích. Đây là điểm khác duy nhất so với tryPlayUrl.
 function playAtNativeRate(url, runId, onDone, fallback) {
@@ -229,7 +229,7 @@ function playAtNativeRate(url, runId, onDone, fallback) {
 
 function playOnlineTts(text, rate, runId, onDone) {
   const goBrowser = () => speakBrowser(text, rate, runId, onDone);
-  // Gemini TTS (WAV 24kHz, same-origin, âm chuẩn) -> browser TTS.
+  // Native speech TTS (WAV 24kHz, same-origin, âm chuẩn) -> browser TTS.
   // Youdao/Google đã bỏ: mono bitrate thấp, hay cắt cụt chữ, và cross-origin
   // nên không normalize được — chính là nguồn "bóp chữ" người dùng phản ánh.
   tryPlayUrl(geminiTtsUrl(text), rate, runId, onDone, goBrowser);
@@ -395,10 +395,10 @@ export function speak(text, rate = 0.82, onDone) {
 }
 
 // Đọc câu tiếng Trung qua /tts?no_gemini=1. Tên hàm là di sản: nhánh
-// ``no_gemini`` từng đi thẳng ElevenLabs, nhưng tts.py kiểm StepFun TRƯỚC nhánh
-// đó, nên khi có STEPFUN_API_KEYS thì giọng thật là StepFun (zixinnansheng).
-// ElevenLabs chỉ vào khi StepFun không khả dụng. Lỗi cả hai → playOnlineTts
-// (Gemini TTS → browser TTS) để câu trả lời luôn được phát.
+// ``no_gemini`` từng đi thẳng fallback TTS, nhưng tts.py kiểm primary TRƯỚC nhánh
+// đó, nên khi có primary keys thì giọng thật là primary TTS.
+// Fallback TTS chỉ vào khi primary không khả dụng. Lỗi cả hai → playOnlineTts
+// (native speech TTS → browser TTS) để câu trả lời luôn được phát.
 export function speakEleven(text, rate = 0.9, onDone) {
   const clean = normalizeForTts(String(text || '').trim());
   if (!clean) { onDone?.(false); return; }
@@ -417,7 +417,7 @@ export function speakEleven(text, rate = 0.9, onDone) {
 // thứ người học cảm nhận. Với flashcard/quiz thì tổng thời gian mới quan trọng và
 // kho MP3 tĩnh phục vụ phần lớn, nên giữ /tts.
 //
-// Tốc độ đi vào QUERY ``speed``, không qua playbackRate: StepFun tổng hợp lại từ
+// Tốc độ đi vào QUERY ``speed``, không qua playbackRate: primary TTS tổng hợp lại từ
 // đầu ở nhịp đó, còn browser thì resample luồng đã nén. Đo trên key thật:
 // speed=0.72 -> 340ms/chữ, 0.82 -> 293, 0.95 -> 202 (đơn điệu, ASR khớp 3/3,
 // bitrate vẫn 128kbps). Trước đây 0.72 và 0.82 đều bị sàn playbackRate kẹp lên
@@ -432,7 +432,7 @@ function playEleven(clean, rate, runId, onDone, { streaming = false } = {}) {
     onDone?.(success);
   }, () => {
     if (runId !== speechRunId) return;
-    // Fallback (Gemini TTS / browser TTS) KHÔNG nhận tham số tốc độ, nên ở đó phải
+    // Fallback (native speech TTS / browser TTS) KHÔNG nhận tham số tốc độ, nên ở đó phải
     // quay lại kéo playbackRate — kèm cả sàn 0.85 của nó.
     playOnlineTts(clean, rate, runId, (success) => {
       if (runId !== speechRunId) return;
@@ -659,8 +659,8 @@ export function setSpeechQueueStreaming(value) {
   queueStreaming = Boolean(value);
 }
 
-// Đọc phản hồi tiếng Việt qua ElevenLabs (/tts/feedback). Tách khỏi speak():
-// speak() đi qua normalizeForTts + Gemini zh-CN, không hợp cho câu tiếng Việt.
+// Đọc phản hồi tiếng Việt qua fallback TTS (/tts/feedback). Tách khỏi speak():
+// speak() đi qua normalizeForTts + native speech zh-CN, không hợp cho câu tiếng Việt.
 export function speakFeedback(text, onDone) {
   const clean = String(text || '').trim();
   if (!clean) { onDone?.(false); return; }

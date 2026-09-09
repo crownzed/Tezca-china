@@ -1,17 +1,16 @@
-"""StepFun/Gemini TTS proxy.
+"""TTS proxy — tổng hợp giọng đọc từ nhiều provider.
 
-Frontend gọi /tts?text=你好 -> ưu tiên StepFun Step Plan khi đã cấu hình,
-sau đó mới thử Gemini TTS (native API) và ElevenLabs fallback.
+Frontend gọi /tts?text=你好 -> ưu tiên provider chính khi đã cấu hình,
+sau đó mới thử provider phụ và TTS fallback.
 
-Tách khỏi vilao relay: relay chỉ phục vụ chat text, không có model TTS.
-StepFun dùng STEPFUN_API_KEYS; Gemini dùng GEMINI_NATIVE_API_KEYS.
+Tách khỏi LLM relay: relay chỉ phục vụ chat text, không có model TTS.
 
 Ba endpoint, khác nhau ở thứ được tối ưu:
   - ``/tts`` — trả trọn file. Cho flashcard/quiz: ở đó TỔNG thời gian mới quan
     trọng, và kho MP3 tĩnh phục vụ phần lớn lượt.
-  - ``/tts/stream`` — trả từng khối MP3 qua StepFun WebSocket. Cho chế độ gọi: ở
-    đó thời gian tới TIẾNG ĐẦU TIÊN mới quan trọng (0.65s so với 2.5s, đo thật).
-  - ``/tts/feedback`` — tiếng Việt qua ElevenLabs.
+  - ``/tts/stream`` — trả từng khối MP3 qua WebSocket. Cho chế độ gọi: ở đó thời
+    gian tới TIẾNG ĐẦU TIÊN mới quan trọng (0.65s so với 2.5s, đo thật).
+  - ``/tts/feedback`` — tiếng Việt qua TTS fallback.
 
 Hai lớp bảo vệ trước provider trả tiền, áp cho cả ba:
   - cache RAM (``tts_cache``) — cùng một chữ chỉ tốn tiền MỘT lần;
@@ -40,8 +39,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tts", tags=["tts"])
 
-_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-_SAMPLE_RATE = 24000  # Gemini TTS xuất PCM 24kHz mono 16-bit
+_SPEECH_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+_SAMPLE_RATE = 24000  # Provider phụ xuất PCM 24kHz mono 16-bit
 MAX_TEXT_LEN = 500
 
 # Rate-limit theo IP cho /tts và /tts/feedback.
@@ -62,7 +61,7 @@ _CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
 
 # Giữ output lại bấy nhiêu giây trước khi phát khối đầu của /tts/stream.
 #
-# Vì sao PHẢI có: đo mốc đến từng khối trên nhiều câu, StepFun giao ``mp3_stream``
+# Vì sao PHẢI có: đo mốc đến từng khối trên nhiều câu, provider giao ``mp3_stream``
 # theo CHÙM — ~5 khối liền nhau (~1.25s audio), NGHỈ 0.8-1.5s, rồi chùm còn lại.
 # Tổng thể sinh nhanh hơn phát nhưng cái khe ở giữa dài hơn lượng audio vừa gửi,
 # nên thẻ ``<audio>`` phát hết chỗ có rồi ĐỨNG chờ. Đo thật trên key hôm nay:
@@ -127,8 +126,8 @@ def _normalize_onset(audio: bytes) -> bytes:
     nửa giây — người dùng đọc đó là máy lag, không phải giọng đọc có nhịp riêng.
     Provider không có tham số nào điều khiển việc này (đã dò), nên phải cắt ở đây.
 
-    Chỉ áp cho MP3 (StepFun/ElevenLabs). Gemini trả WAV — nhánh đó đi đường khác
-    và tự nó không có vấn đề lặng đầu, nên không cần.
+    Chỉ áp cho MP3 (provider chính/TTS fallback). Provider phụ trả WAV — nhánh đó
+    đi đường khác và tự nó không có vấn đề lặng đầu, nên không cần.
     """
     return mp3_trim.trim_silence(audio)
 
@@ -166,9 +165,9 @@ def _pcm_to_wav(pcm: bytes, sample_rate: int = _SAMPLE_RATE) -> bytes:
 
 
 def _elevenlabs_synth(text: str, voice_id: str = "", key_index: int | None = None) -> bytes | None:
-    """Gọi ElevenLabs text-to-speech, trả MP3 bytes (không cần encode).
+    """Gọi TTS fallback, trả MP3 bytes (không cần encode).
 
-    Dùng làm fallback khi mọi key Gemini cạn quota. Trả None nếu chưa cấu hình
+    Dùng làm fallback khi mọi key provider phụ cạn quota. Trả None nếu chưa cấu hình
     key hoặc call lỗi — caller sẽ trả 429 như trước.
 
     ``voice_id`` rỗng → dùng giọng mặc định (đọc tiếng Trung); truyền vào để
@@ -205,18 +204,18 @@ def _elevenlabs_synth(text: str, voice_id: str = "", key_index: int | None = Non
             # MP3 hợp lệ bắt đầu bằng ID3 tag hoặc MPEG frame sync (0xFFEx).
             if _is_mp3(data):
                 return data
-            logger.warning("ElevenLabs key#%s trả dữ liệu không phải MP3 (%d bytes)", idx, len(data))
+            logger.warning("TTS fallback key#%s trả dữ liệu không phải MP3 (%d bytes)", idx, len(data))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "ignore")[:300] if hasattr(exc, "read") else ""
-            logger.warning("ElevenLabs key#%s HTTP %s: %s", idx, exc.code, detail)
+            logger.warning("TTS fallback key#%s HTTP %s: %s", idx, exc.code, detail)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("ElevenLabs key#%s lỗi: %s", idx, exc)
+            logger.warning("TTS fallback key#%s lỗi: %s", idx, exc)
     return None
 
 
 def _stepfun_synth(text: str, key_index: int | None = None,
                    speed: float | None = None) -> bytes | None:
-    """Gọi StepFun Step Plan TTS, trả MP3 bytes hoặc None nếu không khả dụng.
+    """Gọi TTS provider chính, trả MP3 bytes hoặc None nếu không khả dụng.
 
     ``key_index`` cho phép audio builder ghim một worker vào một key cụ thể;
     request realtime không truyền index sẽ xoay vòng qua toàn bộ key.
@@ -229,7 +228,7 @@ def _stepfun_synth(text: str, key_index: int | None = None,
     if not keys:
         return None
     if key_index is not None:
-        # Audio builder có thể chạy nhiều worker hơn số StepFun key. Ghim theo
+        # Audio builder có thể chạy nhiều worker hơn số key provider chính. Ghim theo
         # vòng để một key vẫn dùng được với AUDIO_WORKERS mặc định; quota/rate
         # limit vẫn được backend xử lý bằng retry/fallback.
         keys = [keys[key_index % len(keys)]]
@@ -266,12 +265,12 @@ def _stepfun_synth(text: str, key_index: int | None = None,
                 data = resp.read()
             if _is_mp3(data):
                 return data
-            logger.warning("StepFun key#%s trả dữ liệu không phải MP3 (%d bytes)", idx, len(data))
+            logger.warning("TTS primary key#%s trả dữ liệu không phải MP3 (%d bytes)", idx, len(data))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "ignore")[:300] if hasattr(exc, "read") else ""
-            logger.warning("StepFun key#%s HTTP %s: %s", idx, exc.code, detail)
+            logger.warning("TTS primary key#%s HTTP %s: %s", idx, exc.code, detail)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("StepFun key#%s lỗi: %s", idx, exc)
+            logger.warning("TTS primary key#%s lỗi: %s", idx, exc)
     return None
 
 
@@ -282,7 +281,7 @@ _TTS_PREFIX = "请用标准普通话朗读："
 
 
 def _stepfun_stream_synth(text: str, speed: float | None = None):
-    """Sinh từng khối MP3 từ StepFun TTS WebSocket, theo thứ tự phát.
+    """Sinh từng khối MP3 từ TTS WebSocket provider chính, theo thứ tự phát.
 
     Vì sao WebSocket thay vì ``_stepfun_synth`` (HTTP): HTTP tổng hợp TRỌN câu rồi
     mới trả byte đầu (đo 2.5s), còn đường này trả khối đầu ~0.65s sau khi gửi
@@ -303,7 +302,7 @@ def _stepfun_stream_synth(text: str, speed: float | None = None):
     """
     keys = settings.stepfun_keys_list
     if not keys:
-        raise RuntimeError("STEPFUN_API_KEYS chưa được cấu hình.")
+        raise RuntimeError("TTS primary keys chưa được cấu hình.")
 
     rate = _resolve_speed(speed)
 
@@ -352,9 +351,9 @@ def _stepfun_stream_synth(text: str, speed: float | None = None):
                 # giọng đóng vai người đối thoại. Đo được +11% F0 và +2dB mà ASR
                 # chép lại vẫn khớp (thanh điệu không méo) — xem settings.py.
                 "instruction": settings.stepfun_tts_instruction_chat,
-                # "standard" cho hội thoại: tài liệu StepFun khuyến nghị đúng thế
-                # cho đường realtime, còn "enhanced" (mặc định của /tts) là cho
-                # bản thu phát thanh, đổi lấy độ trễ.
+                # "standard" cho hội thoại: provider khuyến nghị đúng thế cho đường
+                # realtime, còn "enhanced" (mặc định của /tts) là cho bản thu phát
+                # thanh, đổi lấy độ trễ.
                 "text_normalization": "standard",
             },
         }, ensure_ascii=False))
@@ -386,7 +385,7 @@ def _pump_sentence(ws, session_id: str, text: str):
             return
         elif kind == "tts.response.error":
             raise RuntimeError(
-                f"StepFun TTS stream: {event.get('data', {}).get('message', 'lỗi không rõ')}"
+                f"TTS stream: {event.get('data', {}).get('message', 'lỗi không rõ')}"
             )
 
 
@@ -396,11 +395,10 @@ def synthesize_feedback(
     request: Request,
     text: str = Query(..., min_length=1, max_length=MAX_TEXT_LEN),
 ):
-    """Đọc phản hồi/gợi ý sửa lỗi (tiếng Việt) qua ElevenLabs.
+    """Đọc phản hồi/gợi ý sửa lỗi (tiếng Việt) qua TTS fallback.
 
-    Khác /tts (đọc tiếng Trung qua Gemini): phần tip là tiếng Việt nên đi thẳng
-    ElevenLabs với giọng đa ngôn ngữ (eleven_multilingual_v2 đọc được tiếng
-    Việt). Trả MP3 sẵn, không encode.
+    Khác /tts (đọc tiếng Trung qua provider phụ): phần tip là tiếng Việt nên đi
+    thẳng TTS fallback với giọng đa ngôn ngữ. Trả MP3 sẵn, không encode.
 
     Cache đáng giá hơn ở đây so với /tts: tip do ``_generate_phonetic_tip`` sinh
     từ một tập câu mẫu cố định, nên cùng một lỗi phát âm luôn cho cùng một câu
@@ -429,7 +427,7 @@ def synthesize_feedback(
         return _audio_response(mp3, "audio/mpeg")
     raise HTTPException(
         status_code=503,
-        detail="ElevenLabs chưa cấu hình hoặc không khả dụng",
+        detail="TTS fallback chưa cấu hình hoặc không khả dụng",
     )
 
 
@@ -449,9 +447,9 @@ def synthesize(
 
     rate = _resolve_speed(speed)
 
-    # Cache bọc TOÀN BỘ hàm, không riêng nhánh StepFun: nhánh nào phục vụ được
+    # Cache bọc TOÀN BỘ hàm, không riêng nhánh primary: nhánh nào phục vụ được
     # thì lần sau khỏi gọi lại provider đó. ``no_gemini`` vào khoá vì nó đổi
-    # provider (ElevenLabs thay Gemini) tức đổi giọng thật; ``key_index`` KHÔNG,
+    # provider (fallback TTS thay native speech) tức đổi giọng thật; ``key_index`` KHÔNG,
     # vì nó chỉ chọn key trong cùng provider/voice — xem ``tts_cache.cache_key``.
     key = tts_cache.cache_key(
         clean,
@@ -472,9 +470,9 @@ def synthesize(
     if cached is not None:
         return _audio_response(*cached)
 
-    # StepFun là provider ưu tiên cho tiếng Trung khi có STEPFUN_API_KEYS.
-    # Nếu lỗi/quota/voice không hợp lệ thì rơi xuống Gemini/ElevenLabs như cũ.
-    # Đặt trước no_gemini để script build audio không vô tình bỏ qua StepFun.
+    # Provider chính là ưu tiên cho tiếng Trung khi có key.
+    # Nếu lỗi/quota/voice không hợp lệ thì rơi xuống provider phụ/TTS fallback.
+    # Đặt trước no_gemini để script build audio không vô tình bỏ qua primary TTS.
     if settings.stepfun_keys_list:
         mp3 = _stepfun_synth(clean, key_index=key_index, speed=rate)
         if mp3 is not None:
@@ -485,11 +483,11 @@ def synthesize(
             tts_cache.put(key, mp3, "audio/mpeg")
             return _audio_response(mp3, "audio/mpeg")
 
-    # no_gemini=1: bỏ qua Gemini, đi thẳng ElevenLabs sau khi StepFun không khả
-    # dụng. Dùng khi build kho audio lúc Gemini đã cạn quota ngày — thử nhiều
-    # key Gemini (đều 429) chỉ tốn round-trip vô ích.
+    # no_gemini=1: bỏ qua native speech TTS, đi thẳng fallback TTS sau khi primary
+    # không khả dụng. Dùng khi build kho audio lúc native speech đã cạn quota ngày —
+    # thử nhiều key (đều 429) chỉ tốn round-trip vô ích.
     #
-    # key_index: ghim đúng 1 key ElevenLabs cho request này. Cho phép chạy nhiều
+    # key_index: ghim đúng 1 key TTS fallback cho request này. Cho phép chạy nhiều
     # worker song song, mỗi worker 1 key/1 tài khoản → rate-limit độc lập, cày ~Nx.
     if no_gemini:
         mp3 = _elevenlabs_synth(clean, key_index=key_index)
@@ -497,11 +495,11 @@ def synthesize(
             mp3 = _normalize_onset(mp3)
             tts_cache.put(key, mp3, "audio/mpeg")
             return _audio_response(mp3, "audio/mpeg")
-        raise HTTPException(status_code=429, detail="ElevenLabs không khả dụng", headers={"Retry-After": "60"})
+        raise HTTPException(status_code=429, detail="TTS fallback không khả dụng", headers={"Retry-After": "60"})
 
     keys = settings.gemini_native_keys_list
     if not keys:
-        raise HTTPException(status_code=503, detail="GEMINI_NATIVE_API_KEYS chưa cấu hình")
+        raise HTTPException(status_code=503, detail="Speech API keys chưa cấu hình")
 
     payload = {
         "contents": [{"parts": [{"text": _TTS_PREFIX + clean}]}],
@@ -522,7 +520,7 @@ def synthesize(
     last_error = ""
     retry_after = 60.0  # trần mặc định nếu Google không nêu "retry in Ns"
     for idx, api_key in enumerate(keys):
-        url = f"{_GEMINI_BASE}/{settings.gemini_tts_model}:generateContent?key={api_key}"
+        url = f"{_SPEECH_API_BASE}/{settings.gemini_tts_model}:generateContent?key={api_key}"
         req = urllib.request.Request(
             url, data=data, headers={"Content-Type": "application/json"}, method="POST"
         )
@@ -531,7 +529,7 @@ def synthesize(
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "ignore")[:400] if hasattr(exc, "read") else ""
-            logger.warning("Gemini TTS key#%s HTTP %s: %s", idx, exc.code, detail)
+            logger.warning("Speech TTS key#%s HTTP %s: %s", idx, exc.code, detail)
             last_error = f"HTTP {exc.code}"
             if exc.code == 429:
                 # Free tier giới hạn 10 req/phút/key; Google gợi ý "retry in Ns".
@@ -543,7 +541,7 @@ def synthesize(
             all_quota_exhausted = False
             continue
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Gemini TTS key#%s lỗi: %s", idx, exc)
+            logger.warning("Speech TTS key#%s lỗi: %s", idx, exc)
             last_error = str(exc)
             all_quota_exhausted = False
             continue
@@ -552,7 +550,7 @@ def synthesize(
             part = body["candidates"][0]["content"]["parts"][0]
             b64 = part["inlineData"]["data"]
         except (KeyError, IndexError):
-            logger.warning("Gemini TTS key#%s phản hồi lạ: %s", idx, json.dumps(body)[:300])
+            logger.warning("Speech TTS key#%s phản hồi lạ: %s", idx, json.dumps(body)[:300])
             last_error = "không trả audio"
             all_quota_exhausted = False
             continue
@@ -562,19 +560,19 @@ def synthesize(
         tts_cache.put(key, wav, "audio/wav")
         return _audio_response(wav, "audio/wav")
 
-    # Gemini cạn quota → thử ElevenLabs (nếu có key). ElevenLabs trả MP3 sẵn,
-    # quota riêng, nên lấp được kho khi free tier Gemini đã hết trong ngày.
+    # Provider phụ cạn quota → thử TTS fallback (nếu có key). TTS fallback trả MP3
+    # sẵn, quota riêng, nên lấp được kho khi free tier provider phụ đã hết trong ngày.
     if all_quota_exhausted:
         mp3 = _elevenlabs_synth(clean)
         if mp3 is not None:
             mp3 = _normalize_onset(mp3)
             tts_cache.put(key, mp3, "audio/mpeg")
             return _audio_response(mp3, "audio/mpeg")
-        # Không có ElevenLabs khả dụng: báo client chờ đúng window Gemini rồi thử lại.
+        # Không có TTS fallback khả dụng: báo client chờ đúng window provider phụ rồi thử lại.
         wait = 60 if retry_after == float("inf") else max(1, int(retry_after) + 1)
         raise HTTPException(
             status_code=429,
-            detail="Tất cả key Gemini đều hết quota TTS phút này",
+            detail="Tất cả key speech TTS đều hết quota phút này",
             headers={"Retry-After": str(wait)},
         )
     raise HTTPException(status_code=502, detail="Tổng hợp giọng đọc thất bại, thử lại sau.")
@@ -624,7 +622,7 @@ def synthesize_stream(
         stepfun_model=settings.stepfun_tts_model,
         stepfun_voice=settings.stepfun_tts_voice,
         stepfun_speed=rate,
-        # Chỉ dẫn của HỘI THOẠI. Phải khớp với cái ``_stepfun_stream_synth`` thật
+        # Chỉ dẫn của HỘI THOẠI. Phải khớp với cái stream synth thật
         # sự gửi đi: nếu để chuỗi của /tts ở đây thì đổi giọng hội thoại sẽ KHÔNG
         # làm mất hiệu lực cache, và người học vẫn nghe bản đọc theo chỉ dẫn cũ.
         stepfun_instruction=settings.stepfun_tts_instruction_chat,
@@ -667,7 +665,7 @@ def synthesize_stream(
                 streamed = True
                 yield b"".join(held)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("StepFun TTS stream lỗi: %s", exc)
+            logger.warning("TTS primary stream lỗi: %s", exc)
             if streamed:
                 # Đã phát được một phần rồi: không thể đổi sang nhánh khác nữa vì
                 # nối MP3 của hai lần tổng hợp khác nhau sẽ nghe như nhảy tiếng.
@@ -678,7 +676,7 @@ def synthesize_stream(
             # bỏ: nối nó với audio của lần tổng hợp khác sẽ nghe như nhảy tiếng.
             mp3 = _stepfun_synth(clean, speed=rate)
             if mp3 is None:
-                logger.warning("StepFun HTTP fallback cũng thất bại cho /tts/stream")
+                logger.warning("TTS primary HTTP fallback cũng thất bại cho /tts/stream")
                 return
             mp3 = _normalize_onset(mp3)
             collected = [mp3]

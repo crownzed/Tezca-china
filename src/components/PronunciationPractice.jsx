@@ -23,7 +23,7 @@ function feedbackSpeech(result) {
 
 // Feature 1 — Pronunciation practice (shadowing + scoring).
 // Flow: AI plays a model reading via the existing speak() TTS, the user records
-// a repeat, and Gemini transcribes it while pinyin_scorer scores deterministically.
+// a repeat, and the speech AI transcribes it while pinyin_scorer scores deterministically.
 export default function PronunciationPractice({ focusLevels }) {
   // levels = MẢNG cấp đã chọn. Rỗng => tất cả (pickLevel xử lý).
   const [levels, setLevels] = useState(() => normalizeLevels(focusLevels));

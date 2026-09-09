@@ -17,6 +17,7 @@ from .routers.grammar import router as grammar_router
 from .routers.leaderboard import router as leaderboard_router
 from .routers.quiz import router as quiz_router
 from .routers.custom_vocab import router as custom_vocab_router
+from .routers.streak import router as streak_router
 from .routers.tts import router as tts_router
 from .routers.speech import router as speech_router
 from .routers.translation import router as translation_router
@@ -137,6 +138,7 @@ app.include_router(grammar_router)
 app.include_router(leaderboard_router)
 app.include_router(quiz_router)
 app.include_router(custom_vocab_router)
+app.include_router(streak_router)
 app.include_router(tts_router)
 app.include_router(speech_router)
 app.include_router(translation_router)
@@ -189,7 +191,7 @@ def startup() -> None:
 @app.on_event("shutdown")
 def shutdown() -> None:
     # Đóng socket đang hâm. Không có bước này thì mỗi lần fly deploy sẽ để lại một
-    # kết nối treo phía StepFun cho tới khi họ tự dọn.
+    # kết nối treo phía TTS provider cho tới khi họ tự dọn.
     tts_socket_pool.shutdown()
 
 

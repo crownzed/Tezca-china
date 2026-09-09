@@ -316,8 +316,7 @@ qua route này. Nhưng bốn field **URL** vẫn ghi được: `stepfun_chat_url
 
 **Tác động:** Rò key LLM và SSRF, hậu-chiếm-quyền-admin. Phụ thuộc H4/M1 để lấy token admin nên là Medium, không High.
 
-**Cách sửa:** Validate ba field URL bằng một allowlist host (`api.stepfun.ai`, `generativelanguage.googleapis.com`,
-`api.vilao.ai`) và bắt buộc `https`; hoặc bỏ hẳn URL khỏi allowlist vì chúng vốn thuộc deploy config.
+**Cách sửa:** Validate ba field URL bằng một allowlist host và bắt buộc `https`; hoặc bỏ hẳn URL khỏi allowlist vì chúng vốn thuộc deploy config.
 **Độ khó: Easy.**
 
 ## M5 — Từ do người dùng nhập được INSERT vào bảng `words` DÙNG CHUNG, rồi phục vụ cho mọi người

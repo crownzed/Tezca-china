@@ -1,4 +1,4 @@
-"""Giữ sẵn MỘT socket StepFun TTS đã bắt tay xong, cho câu kế tiếp của cuộc gọi.
+"""Giữ sẵn MỘT socket TTS provider chính đã bắt tay xong, cho câu kế tiếp của cuộc gọi.
 
 Vì sao: phân rã 2.1s của ``/tts/stream`` (đo thật, xem ``bench_live_chat.py``):
 
@@ -10,9 +10,9 @@ trước đang phát thì câu sau chỉ còn trả 0.65s, và TTS từ chặng 
 lượt hội thoại thành chặng nhanh nhất.
 
 KHÔNG phải pool tái dùng, mà là "dọn sẵn rồi dùng một lần": đã đo, một session
-StepFun chỉ phục vụ ĐÚNG MỘT lượt sinh — gửi câu thứ hai sau ``sentence.end`` thì
-server không phản hồi gì và request treo tới timeout. Nên mỗi socket phát ra là
-đóng luôn, và luồng nền hâm cái kế tiếp.
+chỉ phục vụ ĐÚNG MỘT lượt sinh — gửi câu thứ hai sau ``sentence.end`` thì server
+không phản hồi gì và request treo tới timeout. Nên mỗi socket phát ra là đóng
+luôn, và luồng nền hâm cái kế tiếp.
 
 Hâm THEO NHU CẦU, không hâm vĩnh viễn: socket idle bị đóng sau ~60s, nên giữ mãi
 nghĩa là bắt tay lại hai lần mỗi phút, 24/7, trên một máy mà phần lớn thời gian
@@ -34,7 +34,7 @@ from ..settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Làm mới trước hạn: tài liệu StepFun nói socket idle bị đóng sau ~60s, và đo
+# Làm mới trước hạn: provider đóng socket idle sau ~60s, và đo thật thì 30s vẫn sống.
 # thật thì 30s vẫn sống. Phát ra một socket vừa chết còn TỆ HƠN không có gì —
 # caller mất thêm một vòng thử rồi mới mở socket mới, tức chậm hơn cả đường cũ.
 MAX_WARM_AGE_SEC = 40.0
@@ -91,7 +91,7 @@ def _open_warm_socket() -> WarmSocket:
     """
     keys = settings.stepfun_keys_list
     if not keys:
-        raise RuntimeError("STEPFUN_API_KEYS chưa được cấu hình.")
+        raise RuntimeError("TTS primary keys chưa được cấu hình.")
 
     from websockets.sync.client import connect
 

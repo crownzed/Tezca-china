@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 
 def ask(prompt):
     # _call_api lo chọn provider + xoay vòng key + retry + bóc markdown fence.
-    # Trước đây script tự gọi ai-box/DeepSeek; provider đó đã bị bỏ khỏi cấu hình.
+    # Trước đây script tự gọi provider cũ; provider đó đã bị bỏ khỏi cấu hình.
     try:
         return _call_api(prompt)
     except Exception as e:

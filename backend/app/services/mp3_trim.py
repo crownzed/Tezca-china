@@ -27,7 +27,7 @@ import tempfile
 logger = logging.getLogger(__name__)
 
 # Bảng bitrate/sample-rate của Layer III. MPEG2 và MPEG2.5 dùng chung bảng bitrate
-# nhưng khác bảng sample rate. 24kHz (StepFun) là MPEG2; 44.1kHz (ElevenLabs) là
+# nhưng khác bảng sample rate. 24kHz (primary TTS) là MPEG2; 44.1kHz (fallback TTS) là
 # MPEG1 — cả hai đều phải đi qua đây nên không được hardcode một bảng.
 _BR_V1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0]
 _BR_V2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0]

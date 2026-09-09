@@ -442,18 +442,18 @@ def _validate_word_entry(item: dict) -> Tuple[bool, str]:
 
 
 def _extract_content(result_json: dict):
-    """Pull text content from an LLM response, tolerating both OpenAI-style
-    ({choices:[{message:{content}}]}) and native Gemini-style
+    """Pull text content from an LLM response, tolerating both standard chat
+    ({choices:[{message:{content}}]}) and native speech-API-style
     ({candidates:[{content:{parts:[{text}]}}]}) response shapes. Returns the
     string, or None if neither shape is present."""
-    # OpenAI-compatible shape (StepFun và các relay đều trả về dạng này)
+    # Standard chat shape (primary và các relay đều trả về dạng này)
     try:
         content = result_json["choices"][0]["message"]["content"]
         if content:
             return content
     except (KeyError, IndexError, TypeError):
         pass
-    # Native Gemini
+    # Native speech API
     try:
         parts = result_json["candidates"][0]["content"]["parts"]
         text = "".join(p.get("text", "") for p in parts)
@@ -561,10 +561,10 @@ def _cb_check() -> None:
 
 
 def _call_api(prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240) -> dict:
-    """Gọi provider LLM (OpenAI-compatible), xoay vòng qua từng key cấu hình.
+    """Gọi provider LLM (standard chat API), xoay vòng qua từng key cấu hình.
 
-    Provider do ``settings.llm_provider`` chọn: StepFun khi có STEPFUN_API_KEYS,
-    relay vilao khi chỉ có GEMINI_API_KEYS, hoặc bất kỳ endpoint nào khác nếu đặt
+    Provider do ``settings.llm_provider`` chọn: provider chính khi có key, relay
+    dự phòng khi chỉ có relay keys, hoặc bất kỳ endpoint nào khác nếu đặt
     LLM_API_URL/LLM_API_KEYS/LLM_MODEL. URL, key, model và payload đều đọc chung
     một provider nên không thể lệch nhau. Mỗi key là một "lượt" riêng — key cạn
     quota thì thử key tiếp theo. Hết key thì raise RuntimeError kèm lỗi từng key.
@@ -595,8 +595,8 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240) 
         # -> parse fail. Giữ mức cao để reasoning xong vẫn còn chỗ cho JSON.
         "max_tokens": settings.llm_max_tokens,
     }
-    # response_format chỉ gửi khi provider hỗ trợ. StepFun hỗ trợ nên bật (đo:
-    # 10.8s/892 token thay vì 29s/3749); relay vilao không hỗ trợ nên tắt và JSON
+    # response_format chỉ gửi khi provider hỗ trợ. Provider chính hỗ trợ nên bật
+    # (đo: 10.8s/892 token thay vì 29s/3749); relay không hỗ trợ nên tắt và JSON
     # được ép bằng system prompt + _clean_json_response. Xem llm_json_mode_effective.
     if settings.llm_json_mode_effective:
         payload_template["response_format"] = {"type": "json_object"}
@@ -605,8 +605,8 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240) 
     # vẫn fail ở 122s trong khi 15 từ/6 câu xong ở 110s, tức thời gian đi theo số
     # token model sinh ra chứ không theo prompt.
     # Tên tham số KHÁC NHAU theo provider và gửi sai thì bị bỏ qua im lặng (không
-    # báo lỗi, chỉ chậm lại): StepFun nhận dạng phẳng ``reasoning_effort``, relay
-    # gilotex nhận dạng lồng ``reasoning.effort``. Cờ llm_reasoning_flat chọn đúng.
+    # báo lỗi, chỉ chậm lại): provider chính nhận dạng phẳng ``reasoning_effort``,
+    # một số relay nhận dạng lồng ``reasoning.effort``. Cờ llm_reasoning_flat chọn đúng.
     effort = settings.llm_reasoning_effort_effective
     if effort:
         if settings.llm_reasoning_flat:

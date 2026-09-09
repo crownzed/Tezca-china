@@ -24,8 +24,8 @@ WORDS_PER_CALL = 50
 
 
 def _call_llm(prompt: str) -> dict:
-    # Dùng chung _call_api thay vì gọi thẳng ai-box/DeepSeek: provider đó đã bị bỏ
-    # khỏi cấu hình, và _call_api lo sẵn việc chọn provider (StepFun/vilao/custom
+    # Dùng chung _call_api thay vì gọi thẳng provider cũ: provider đó đã bị bỏ
+    # khỏi cấu hình, và _call_api lo sẵn việc chọn provider (primary/relay/custom
     # theo settings.llm_provider), xoay vòng key, retry, bóc markdown fence.
     return _call_api(prompt)
 

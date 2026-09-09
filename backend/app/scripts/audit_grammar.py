@@ -8,8 +8,8 @@ Checks:
   4. Audio text matches prompt content
 
 Dùng ``_call_api``, nên provider do ``settings.llm_provider`` chọn (mặc định
-StepFun khi có STEPFUN_API_KEYS — xem ghi chú ở ``app/settings.py``). Chỉ cần
-một trong LLM_API_KEYS / STEPFUN_API_KEYS / GEMINI_API_KEYS được đặt.
+provider chính khi có key — xem ghi chú ở ``app/settings.py``). Chỉ cần
+một trong LLM_API_KEYS / provider chính keys / relay keys được đặt.
 Rate limited to 10 req/s to stay within free tier limits.
 """
 from __future__ import annotations
@@ -117,11 +117,11 @@ def rule_check_all_examples() -> list[dict]:
     return issues
 
 
-# ── DeepSeek-based grammar check ─────────────────────────────────────────
+# ── LLM-based grammar check ─────────────────────────────────────────────
 
 
 def _build_grammar_prompt(sentence_cn: str, sentence_vi: str, word_hanzi: str) -> str:
-    """Build a prompt for DeepSeek to check a single sentence."""
+    """Build a prompt for the LLM to check a single sentence."""
     return f"""Check this Chinese sentence for grammar errors. The target word is "{word_hanzi}".
 
 Chinese: {sentence_cn}

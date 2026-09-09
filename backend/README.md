@@ -27,15 +27,16 @@ Nếu không đặt `DATABASE_URL`, backend dùng `sqlite:///./dev.db` để tes
 
 ## Chat giọng nói
 
-Luồng mặc định dùng Gemini Native để nhận dạng âm thanh và Gemini/ElevenLabs
+Luồng mặc định dùng speech API native để nhận dạng âm thanh và TTS providers
 cho giọng đọc. Khai báo tối thiểu trong `.env`:
 
 ```dotenv
-GEMINI_NATIVE_API_KEYS=your_ai_studio_key
-GEMINI_NATIVE_MODEL=gemini-2.5-flash
-GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts
-GEMINI_TTS_VOICE=Kore
+# Speech API keys cho nhận dạng âm thanh + chấm phát âm
+GEMINI_NATIVE_API_KEYS=your_speech_api_key
+GEMINI_NATIVE_MODEL=your-speech-model
+GEMINI_TTS_MODEL=your-tts-model
+GEMINI_TTS_VOICE=YourVoice
 ```
 
-Khi người học nói qua micro, backend tự chép audio thành chữ rồi gửi Cloud
+Khi người học nói qua micro, backend tự chép audio thành chữ rồi gửi LLM
 trả lời; nếu chỉ nhắn tin văn bản thì bước nhận dạng được bỏ qua.
