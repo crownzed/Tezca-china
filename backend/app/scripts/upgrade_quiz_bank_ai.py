@@ -246,8 +246,8 @@ def main() -> None:
     if not 1 <= args.count <= MAX_COUNT:
         parser.error(f"--count phải trong khoảng 1..{MAX_COUNT}")
     if not settings.llm_keys_list:
-        # Nêu đủ ba biến theo đúng thứ tự ưu tiên: chỉ dặn GEMINI_API_KEYS thì
-        # người chạy đặt vào nhánh dự phòng, còn StepFun vẫn là nhánh được chọn.
+        # Nêu đủ ba biến theo đúng thứ tự ưu tiên: chỉ dặn relay keys thì
+        # người chạy đặt vào nhánh dự phòng, còn primary vẫn là nhánh được chọn.
         parser.error(NO_LLM_KEY_MESSAGE)
 
     log_file = logging.FileHandler("quiz-bank-progress.log", encoding="utf-8")

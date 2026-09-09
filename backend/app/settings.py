@@ -253,7 +253,7 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"Cấu hình LLM custom thiếu: {missing} (đang có {have}). "
                 "Phải đặt cả LLM_API_URL, LLM_API_KEYS và LLM_MODEL, hoặc để "
-                "trống cả ba để dùng StepFun/vilao."
+                "trống cả ba để dùng primary/relay."
             )
         return self
 
