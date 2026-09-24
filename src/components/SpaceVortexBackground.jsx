@@ -663,7 +663,7 @@ export default function SpaceVortexBackground({ active = true, cardRef = null })
       resizeObserver.disconnect();
       window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [active, reducedMotion]);
+  }, [active, reducedMotion, cardRef, perfTier]);
 
   return (
     <div

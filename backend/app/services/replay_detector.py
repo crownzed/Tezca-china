@@ -124,7 +124,11 @@ def _get_recent_fingerprints(
 # Spectral fingerprint extraction (numpy-based, no Praat MFCC dependency)
 # ---------------------------------------------------------------------------
 
-def _extract_mfcc_fingerprint(audio_bytes: bytes) -> list[float] | None:
+def _extract_mfcc_fingerprint(
+    audio_bytes: bytes,
+    *,
+    predecoded: tuple[list[float], int] | None = None,
+) -> list[float] | None:
     """Extract a compact spectral fingerprint from audio bytes.
 
     Uses log-mel-energy spectrogram features computed with numpy FFT.
@@ -134,13 +138,19 @@ def _extract_mfcc_fingerprint(audio_bytes: bytes) -> list[float] | None:
     This avoids Praat's MFCC API which has parameter sensitivity issues and
     can segfault on edge cases. The spectral fingerprint serves the same
     purpose for replay detection — capturing the acoustic signature.
+
+    Args:
+        audio_bytes: WAV PCM bytes (used only if predecoded is None).
+        predecoded: Optional (samples, sr) tuple to skip redundant WAV decode.
     """
     try:
         import numpy as np
 
-        from .tone_dsp_extractor import decode_wav
-
-        samples, sr = decode_wav(audio_bytes)
+        if predecoded is not None:
+            samples, sr = predecoded
+        else:
+            from .tone_dsp_extractor import decode_wav
+            samples, sr = decode_wav(audio_bytes)
         if len(samples) < sr * 0.1:  # need at least 100ms
             return None
 
@@ -221,12 +231,20 @@ def detect_replay(
     audio_bytes: bytes,
     speaker_id: str,
     window_minutes: int = _DEFAULT_WINDOW_MINUTES,
+    *,
+    predecoded: tuple[list[float], int] | None = None,
 ) -> ReplayDetectOutput:
     """Check if audio is suspiciously similar to recent submissions.
 
     Returns is_replay=True if cosine similarity with any recent fingerprint
     exceeds threshold. Always stores the current fingerprint for future checks
     (unless it's flagged as replay — replays don't update the store).
+
+    Args:
+        audio_bytes: WAV PCM bytes (used only if predecoded is None).
+        speaker_id: Speaker identifier for fingerprint store lookup.
+        window_minutes: Time window for fingerprint comparison.
+        predecoded: Optional (samples, sr) tuple to skip redundant WAV decode.
     """
     result: ReplayDetectOutput = {
         "is_replay": False,
@@ -237,7 +255,7 @@ def detect_replay(
     if not speaker_id:
         return result
 
-    fp = _extract_mfcc_fingerprint(audio_bytes)
+    fp = _extract_mfcc_fingerprint(audio_bytes, predecoded=predecoded)
     if fp is None:
         result["reason"] = "fingerprint_extraction_failed"
         return result
@@ -252,11 +270,13 @@ def detect_replay(
         result["reason"] = "first_in_window"
         return result
 
-    # Compare against all recent fingerprints
+    # Compare against all recent fingerprints (early-exit on match)
     max_sim = 0.0
     for old_fp in recent:
         sim = _cosine_similarity(fp, old_fp)
         max_sim = max(max_sim, sim)
+        if max_sim >= _SIMILARITY_THRESHOLD:
+            break  # Already flagged as replay, no need to scan remaining
 
     result["max_similarity"] = round(max_sim, 4)
 

@@ -193,6 +193,7 @@ def score_pronunciation(
     mime_type: str,
     target_hanzi: str,
     target_pinyin: str = "",
+    speaker_id: str = "",
 ) -> dict:
     """Score the user's recording against ``target_hanzi``.
 
@@ -209,6 +210,9 @@ def score_pronunciation(
     The final score blends both. The acoustic layer is best-effort: if the
     audio isn't decodable WAV or no F0 is found, scoring degrades gracefully to
     the identity layer alone rather than failing the request.
+
+    When ``settings.use_new_scoring_pipeline`` is True, uses the 6-agent
+    pipeline with confidence-weighted fusion instead of min() veto.
     """
     transcribe_prompt = (
         "Bạn là giám khảo phát âm tiếng Trung. Người học vừa cố đọc câu mục tiêu.\n"
@@ -239,6 +243,18 @@ def score_pronunciation(
 
     breakdown = score_pinyin(resolved_target, actual_pinyin)
     identity_score = breakdown["score"]
+
+    # --- NEW 6-agent pipeline (behind feature flag) -------------------------
+    if settings.use_new_scoring_pipeline:
+        return _score_pronunciation_new(
+            audio_b64=audio_b64,
+            target_hanzi=target_hanzi,
+            target_pinyin=resolved_target,
+            actual_pinyin=actual_pinyin,
+            actual_hanzi=actual_hanzi,
+            pinyin_breakdown=breakdown,
+            speaker_id=speaker_id,
+        )
 
     # --- Acoustic layer (best-effort) --------------------------------------
     target_tones = [_extract_tone(s) for s in resolved_target.split() if s]
@@ -311,6 +327,207 @@ def score_pronunciation(
         "detailed_feedback": dsp_feedback,
         "macro_feedback": macro_feedback,
         "tip": tip,
+    }
+
+
+def _score_pronunciation_new(
+    audio_b64: str,
+    target_hanzi: str,
+    target_pinyin: str,
+    actual_pinyin: str,
+    actual_hanzi: str,
+    pinyin_breakdown: dict,
+    speaker_id: str,
+) -> dict:
+    """New 6-agent pronunciation scoring pipeline.
+
+    Runs all agents in dependency order, fuses scores with confidence weighting,
+    and generates explainable feedback. Falls back gracefully if any agent fails.
+    """
+    import base64 as _b64
+
+    from .adaptive_tone_analyzer import analyze_tones_adaptive
+    from .confidence_fuser import fuse_scores
+    from .fluency_prosody_analyzer import analyze_delivery
+    from .phoneme_verifier import verify_phonemes
+    from .replay_detector import detect_replay
+    from .score_explainer import explain_score
+    from .tone_dsp_extractor import ToneDspExtractorError, decode_wav, extract_tone_features_from_samples
+
+    # Decode audio bytes once for all agents (eliminates 4 redundant decodes)
+    try:
+        audio_bytes = _b64.b64decode(audio_b64, validate=True)
+    except Exception:
+        audio_bytes = b""
+
+    # Pre-decode WAV once — passed to extractor, replay detector, phoneme verifier
+    predecoded: tuple[list[float], int] | None = None
+    try:
+        if audio_bytes:
+            predecoded = decode_wav(audio_bytes)
+    except Exception as e:
+        logger.info("New pipeline: WAV decode failed (%s)", e)
+
+    target_syls = [s for s in target_pinyin.split() if s]
+    actual_syls = [s for s in actual_pinyin.split() if s]
+    target_tones = [_extract_tone(s) for s in target_syls]
+
+    # --- Agent 1: Tone DSP Extractor ----------------------------------------
+    extract_output = None
+    try:
+        if predecoded and target_syls:
+            samples, sr = predecoded
+            extract_output = extract_tone_features_from_samples(samples, sr, len(target_syls))
+    except (ToneDspExtractorError, Exception) as e:
+        logger.info("New pipeline: extractor failed (%s), degrading", e)
+
+    extraction_quality = extract_output["extraction_quality"] if extract_output else 0.0
+
+    # --- Agent 2: Phoneme Verifier ------------------------------------------
+    phoneme_output = None
+    try:
+        if audio_bytes and target_syls and actual_syls:
+            phoneme_output = verify_phonemes(
+                audio_bytes, target_syls, actual_syls,
+                predecoded=predecoded,
+                precomputed_f0=extract_output["f0_contour"] if extract_output else None,
+                precomputed_segments=extract_output["segments"] if extract_output else None,
+            )
+    except Exception as e:
+        logger.info("New pipeline: phoneme verifier failed (%s)", e)
+
+    phoneme_confidence = phoneme_output["phoneme_score"] if phoneme_output else 1.0
+
+    # --- Replay Detection (anti-gaming) -------------------------------------
+    # Check before adaptive update to prevent profile poisoning by replayed audio.
+    # Does NOT block scoring — only skips adaptive calibration if replay detected.
+    is_replay = False
+    try:
+        if audio_bytes and speaker_id:
+            replay_result = detect_replay(audio_bytes, speaker_id, predecoded=predecoded)
+            is_replay = replay_result["is_replay"]
+            if is_replay:
+                logger.warning(
+                    "New pipeline: replay detected for speaker %s (%s), "
+                    "skipping adaptive update",
+                    speaker_id[:8], replay_result["reason"],
+                )
+    except Exception as e:
+        logger.info("New pipeline: replay detection failed (%s)", e)
+
+    # --- Agent 3: Adaptive Tone Analyzer ------------------------------------
+    adaptive_output = None
+    dsp_tone_accuracy = 0.0
+    per_syllable_acoustic: list[dict] = []
+    try:
+        if extract_output and target_tones and speaker_id and not is_replay:
+            adaptive_output = analyze_tones_adaptive(
+                segments=extract_output["segments"],
+                normalized_segments=extract_output["normalized_segments"],
+                target_tones=target_tones,
+                speaker_id=speaker_id,
+            )
+            dsp_tone_accuracy = adaptive_output["adaptive_accuracy"]
+            per_syllable_acoustic = adaptive_output.get("per_syllable", [])
+    except Exception as e:
+        logger.info("New pipeline: adaptive analyzer failed (%s)", e)
+
+    # Fallback to legacy DSP if adaptive failed. Extractor có thể thành công
+    # nhưng adaptive fail (exception caught ở trên) — khi đó dsp_tone_accuracy
+    # vẫn 0.0, nên phải fallback bất kể extractor status. Legacy score_tones()
+    # tự extract lại nếu cần, không phụ thuộc vào extract_output.
+    if adaptive_output is None:
+        tone_result = _score_tones_safe(audio_b64, target_tones)
+        if tone_result is not None:
+            dsp_tone_accuracy = tone_result["tone_accuracy"]
+            per_syllable_acoustic = tone_result.get("per_syllable", [])
+
+    # --- Agent 4: Fluency/Prosody Analyzer ----------------------------------
+    fluency_output = None
+    try:
+        if extract_output:
+            fluency_output = analyze_delivery(
+                f0_contour=extract_output["f0_contour"],
+                frame_step_sec=extract_output["frame_step_sec"],
+                n_syllables=len(target_syls),
+                duration_sec=extract_output["duration_sec"],
+            )
+    except Exception as e:
+        logger.info("New pipeline: fluency analyzer failed (%s)", e)
+
+    # --- Agent 5: Confidence Fuser ------------------------------------------
+    n_tone_slots = pinyin_breakdown.get("tone_total", 0)
+    if n_tone_slots > 0:
+        identity_tone_ratio = max(0.0, 1.0 - len(pinyin_breakdown.get("tone_errors", [])) / n_tone_slots)
+    else:
+        identity_tone_ratio = 1.0
+
+    fuse_input = {
+        "base_score": pinyin_breakdown["base_score"],
+        "identity_tone_ratio": identity_tone_ratio,
+        "dsp_tone_accuracy": dsp_tone_accuracy,
+        "phoneme_confidence": phoneme_confidence,
+        "extraction_quality": extraction_quality,
+        "adaptive_used": adaptive_output["used_adaptive"] if adaptive_output else False,
+        "n_tone_slots": n_tone_slots,
+        "per_syllable_identity": pinyin_breakdown.get("syllable_errors", []),
+        "per_syllable_acoustic": per_syllable_acoustic,
+    }
+    fuse_result = fuse_scores(fuse_input)
+
+    final_score = fuse_result["final_score"]
+    tone_accuracy = fuse_result["tone_accuracy"]
+
+    # --- Agent 6: Score Explainer -------------------------------------------
+    explain_output = explain_score(
+        target_hanzi=target_hanzi,
+        target_pinyin=target_pinyin,
+        actual_pinyin=actual_pinyin,
+        fuse_output=fuse_result,
+        phoneme_output=phoneme_output,
+        adaptive_output=adaptive_output,
+        fluency_output=fluency_output,
+        pinyin_breakdown=pinyin_breakdown,
+    )
+
+    tip = explain_output["tip"]
+    macro_feedback = explain_output.get("macro_feedback", "")
+
+    # Extract fluency/prosody dicts for backward-compatible response shape
+    fluency = fluency_output.get("fluency") if fluency_output else None
+    prosody = fluency_output.get("prosody") if fluency_output else None
+    f0_contour = extract_output["f0_contour"] if extract_output else []
+    per_syllable = per_syllable_acoustic
+
+    # DSP feedback from acoustic per-syllable
+    dsp_feedback_parts = [
+        d.get("feedback", "") for d in per_syllable_acoustic if d.get("feedback")
+    ]
+    dsp_feedback = " ".join(dsp_feedback_parts[:2])
+
+    return {
+        "score": final_score,
+        "base_score": pinyin_breakdown["base_score"],
+        "identity_score": pinyin_breakdown["score"],
+        "tone_accuracy": tone_accuracy,
+        "target_hanzi": target_hanzi,
+        "target_pinyin": target_pinyin,
+        "actual_hanzi": actual_hanzi,
+        "actual_pinyin": actual_pinyin,
+        "tone_errors": pinyin_breakdown["tone_errors"],
+        "syllable_errors": pinyin_breakdown["syllable_errors"],
+        "tone_syllables": per_syllable,
+        "user_f0_contour": f0_contour,
+        "fluency": fluency,
+        "prosody": prosody,
+        "detailed_feedback": dsp_feedback,
+        "macro_feedback": macro_feedback,
+        "tip": tip,
+        # New fields from 6-agent pipeline
+        "fusion_method": fuse_result["fusion_method"],
+        "dimension_scores": explain_output.get("dimension_scores"),
+        "per_syllable_explanation": fuse_result.get("per_syllable_explanation"),
+        "confidence_breakdown": fuse_result.get("confidence_breakdown"),
     }
 
 
@@ -582,6 +799,101 @@ def _read_asr_sse(resp) -> str:
     return delta_text.strip()
 
 
+def _stepfun_asr_stream(
+    audio_b64: str,
+    mime_type: str,
+    *,
+    deadline: _LadderDeadline | None = None,
+):
+    """Streaming variant của _stepfun_asr: yield từng event thay vì chờ xong.
+
+    Yield dict với một trong ba dạng:
+      {"type": "asr_delta", "delta": "..."}   — partial transcript
+      {"type": "asr_done", "text": "..."}     — final transcript (đã ITN)
+      {"type": "asr_error", "message": "..."} — lỗi từ server
+
+    Dùng chung request body và key rotation logic với _stepfun_asr. Khác ở chỗ
+    thay vì đọc hết stream rồi trả chuỗi, ta yield mỗi SSE event ngay khi nhận
+    được để caller forward xuống client, giảm perceived latency ~500-1000ms.
+    """
+    keys = settings.stepfun_keys_list
+    if not keys:
+        yield {"type": "asr_error", "message": "ASR primary keys chưa được cấu hình."}
+        return
+
+    fmt = _STEPFUN_ASR_FORMATS.get((mime_type or "").split(";")[0].strip().lower())
+    if not fmt:
+        yield {"type": "asr_error", "message": f"ASR primary không nhận định dạng {mime_type!r}."}
+        return
+
+    clock = deadline or _LadderDeadline()
+    body = json.dumps(
+        {
+            "audio": {
+                "data": audio_b64,
+                "input": {
+                    "transcription": {
+                        "model": settings.stepfun_asr_model,
+                        "language": "zh",
+                        "enable_itn": True,
+                        "enable_timestamp": False,
+                    },
+                    "format": {"type": fmt},
+                },
+            }
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    errors: list[str] = []
+    for idx, api_key in enumerate(keys):
+        if clock.expired():
+            errors.append(f"hết ngân sách {clock.budget:.0f}s")
+            break
+        req = urllib.request.Request(
+            settings.stepfun_asr_url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=clock.timeout_for()) as resp:
+                for line_bytes in resp:
+                    line = line_bytes.decode("utf-8", "ignore").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if not payload or payload == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    etype = event.get("type", "")
+                    if etype == "transcript.text.delta":
+                        yield {"type": "asr_delta", "delta": str(event.get("delta", ""))}
+                    elif etype == "transcript.text.done":
+                        text = (str(event.get("text", "")) or "").strip()
+                        yield {"type": "asr_done", "text": text}
+                        return
+                    elif etype == "error":
+                        yield {"type": "asr_error", "message": event.get("message", "lỗi không rõ")}
+                        return
+            # Stream kết thúc mà không có done event — dùng accumulated delta
+            return
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "ignore")[:200] if hasattr(exc, "read") else ""
+            errors.append(f"key#{idx}: HTTP {exc.code} {detail}")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"key#{idx}: {exc}")
+
+    yield {"type": "asr_error", "message": "ASR primary thất bại: " + " | ".join(errors[:4])}
+
+
 def voice_chat(
     audio_b64: str,
     mime_type: str,
@@ -711,15 +1023,16 @@ def stream_voice_chat(
     Khác ``voice_chat`` ở hai chỗ, cả hai đều để giảm thời gian tới TIẾNG ĐẦU
     TIÊN chứ không phải tổng thời gian:
 
-    1. Chép âm TRƯỚC bằng ``transcribe_speech`` (ASR primary, provider phụ fallback) và
-       phát ``transcript`` ngay. Người học thấy bong bóng chat của mình trong khi
-       LLM còn đang nghĩ. Đổi lại, LLM nhận VĂN BẢN thay vì audio — nên prompt chỉ
-       cần sinh REPLY_CN + REPLY_VI, không phải kiêm cả USER_TEXT như trước.
+    1. Chép âm TRƯỚC bằng ASR streaming (forward delta ngay khi nhận) và
+       phát ``transcript`` khi chốt. Người học thấy transcript xuất hiện dần
+       trong khi LLM còn đang nghĩ. Đổi lại, LLM nhận VĂN BẢN thay vì audio —
+       nên prompt chỉ cần sinh REPLY_CN + REPLY_VI, không phải kiêm cả USER_TEXT.
     2. Phát ``sentence`` mỗi khi chốt được một câu tiếng Trung, để client gọi TTS
        câu 1 trong lúc câu 2 còn đang sinh.
 
     Sự kiện phát ra:
-      {"type": "transcript", "user_text": ...}
+      {"type": "asr_delta", "delta": ...}     — partial transcript (streaming)
+      {"type": "transcript", "user_text": ...} — final transcript
       {"type": "chunk", "text": ...}          — văn bản tăng dần, để hiện dần
       {"type": "sentence", "index": n, "text": ...}  — câu đã chốt, để đọc
       {"type": "done", "user_text": ..., "reply_cn": ..., "reply_vi": ...}
@@ -730,12 +1043,35 @@ def stream_voice_chat(
 
     # --- 1) Transcript trước, phát ngay ------------------------------------
     if not user_text and audio_b64:
-        try:
-            user_text = transcribe_speech(audio_b64, mime_type, deadline=clock)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Stream ASR thất bại: %s", exc)
-            yield _sse({"type": "error", "detail": "Không nhận dạng được giọng nói."})
+        # Inline ASR streaming: forward delta ngay khi nhận, giảm perceived latency
+        asr_accumulated = ""
+        asr_failed = False
+        for asr_event in _stepfun_asr_stream(audio_b64, mime_type, deadline=clock):
+            if asr_event["type"] == "asr_delta":
+                asr_accumulated += asr_event["delta"]
+                yield _sse({"type": "asr_delta", "delta": asr_event["delta"]})
+            elif asr_event["type"] == "asr_done":
+                user_text = asr_event["text"] or asr_accumulated.strip()
+                break
+            elif asr_event["type"] == "asr_error":
+                logger.warning("Stream ASR thất bại: %s", asr_event["message"])
+                # Fallback sang provider phụ (Gemini) nếu StepFun ASR lỗi
+                try:
+                    user_text = transcribe_speech(audio_b64, mime_type, deadline=clock)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Fallback ASR cũng thất bại: %s", exc)
+                    yield _sse({"type": "error", "detail": "Không nhận dạng được giọng nói."})
+                    return
+                asr_failed = True
+                break
+
+        if not asr_failed and not user_text:
+            user_text = asr_accumulated.strip()
+
+        if not user_text:
+            yield _sse({"type": "error", "detail": "Không có nội dung để trả lời."})
             return
+
     if not user_text:
         yield _sse({"type": "error", "detail": "Không có nội dung để trả lời."})
         return

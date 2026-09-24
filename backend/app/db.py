@@ -71,6 +71,7 @@ def init_db() -> None:
     if settings.database_url.startswith("sqlite") or _is_turso(settings.database_url):
         _ensure_sqlite_word_columns()
         _ensure_sqlite_user_progress_columns()
+        _ensure_sqlite_user_streaks_columns()
     _ensure_user_columns()
     _ensure_indexes()
 
@@ -128,6 +129,8 @@ def _ensure_user_columns() -> None:
                 conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
             if "last_seen_at" not in existing:
                 conn.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME"))
+            if "timezone" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN timezone VARCHAR(64) DEFAULT 'Asia/Shanghai'"))
     else:
         with engine.begin() as conn:
             conn.execute(text(
@@ -135,6 +138,9 @@ def _ensure_user_columns() -> None:
             ))
             conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP"
+            ))
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) DEFAULT 'Asia/Shanghai'"
             ))
 
 
@@ -158,3 +164,17 @@ def _ensure_sqlite_user_progress_columns() -> None:
         for name, ddl in columns.items():
             if name not in existing:
                 conn.execute(text(f"ALTER TABLE user_progress ADD COLUMN {name} {ddl}"))
+
+
+def _ensure_sqlite_user_streaks_columns() -> None:
+    """Thêm cột freeze vào bảng user_streaks đã tồn tại."""
+    columns = {
+        "freezes_remaining": "INTEGER DEFAULT 1",
+        "last_freeze_date": "DATETIME",
+        "freeze_month": "VARCHAR(7) DEFAULT ''",
+    }
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(user_streaks)"))}
+        for name, ddl in columns.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE user_streaks ADD COLUMN {name} {ddl}"))

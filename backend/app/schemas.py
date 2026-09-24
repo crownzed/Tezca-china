@@ -30,6 +30,8 @@ class QuestionWordOut(BaseModel):
     confusable_words: list[str] = Field(default_factory=list)
     collocations: list[str] = Field(default_factory=list)
     topic: str = "core"
+    semantic_notes: str = ""
+    usage_notes: str = ""
 
     @classmethod
     def from_word(cls, word) -> "QuestionWordOut | None":
@@ -46,6 +48,8 @@ class QuestionWordOut(BaseModel):
             confusable_words=list(word.confusable_words_json or []),
             collocations=list(word.collocations_json or []),
             topic=word.topic or "core",
+            semantic_notes=word.semantic_notes or "",
+            usage_notes=word.usage_notes or "",
         )
 
 class QuestionOut(BaseModel):
@@ -490,6 +494,9 @@ class QuizDraftOut(BaseModel):
     passage: str = ""
     source: str = ""
     questions: list[DraftQuestion] = []
+    requested_count: int | None = None
+    generated_count: int = 0
+    partial: bool = False
 
 class SaveQuizRequest(BaseModel):
     quiz_title: str = ""
@@ -597,6 +604,12 @@ class PronunciationScoreOut(BaseModel):
     detailed_feedback: str = ""
     macro_feedback: str = ""
     tip: str = ""
+    # New pipeline fields (only populated when use_new_scoring_pipeline=True).
+    # Có default để backward compatible với legacy pipeline.
+    fusion_method: str = ""
+    dimension_scores: dict[str, float | None] = Field(default_factory=dict)
+    per_syllable_explanation: list[dict] = Field(default_factory=list)
+    confidence_breakdown: dict[str, float] = Field(default_factory=dict)
 
 
 # Trần dùng chung cho mọi tin nhắn hội thoại. Phải >= maxLength của textarea
@@ -700,6 +713,11 @@ class WordOut(BaseModel):
     # Cặp từ dễ nhầm (hanzi) do enrichment_service sinh. Trước đây chỉ lộ qua
     # QuestionWordOut để làm distractor; thư viện cần luôn để dựng bài "phân biệt".
     confusable_words: list[str] = Field(default_factory=list)
+    # Chi tiết ngữ nghĩa, lưu ý, cách dùng — do dual-professor enrichment sinh.
+    semantic_notes: str = ""
+    usage_notes: str = ""
+    usage_patterns: list[dict] = Field(default_factory=list)
+    character_analysis: str = ""
 
 
 class WordsOut(BaseModel):
@@ -827,6 +845,8 @@ class TranslationItemsRequest(BaseModel):
     # Các câu vừa gặp, để phiên kế tiếp không lặp lại. Giới hạn để payload không
     # phình theo lịch sử học của người dùng.
     exclude: list[str] = Field(default_factory=list, max_length=60)
+    # Chủ đề lọc câu (vd "shopping", "family"). None = trộn tất cả chủ đề.
+    topic: str | None = Field(default=None, max_length=64)
 
 
 class TranslationItemOut(BaseModel):
@@ -867,3 +887,28 @@ class TranslationGradeOut(BaseModel):
     feedback: str = ""
     event_id: int | None = None
 
+
+# --- Hệ thống Streak (Chuỗi ngày học liên tiếp) ----------------------------
+
+class StreakCurrentOut(BaseModel):
+    current_streak: int = 0
+    longest_streak: int = 0
+    last_active_date: str | None = None
+    studied_today: bool = False
+    broken: bool = False
+    timezone: str = "Asia/Shanghai"  # M9: user's IANA timezone
+    freezes_remaining: int = 1  # S3: streak freeze charges left this month
+
+
+class StreakEntryOut(BaseModel):
+    rank: int = 1
+    user_id: str
+    display_name: str | None = None
+    current_streak: int = 0
+    longest_streak: int = 0
+
+
+class StreakLeaderboardOut(BaseModel):
+    entries: list[StreakEntryOut] = Field(default_factory=list)
+    me: StreakEntryOut | None = None
+    total: int = 0

@@ -1,4 +1,4 @@
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_JWT_SECRET = "change-me-in-production-use-env-var"
@@ -139,6 +139,7 @@ class Settings(BaseSettings):
     stepfun_tts_speed: float = 0.9
     stepfun_tts_sample_rate: int = 24000
     stepfun_tts_text_normalization: str = "enhanced"
+    stepfun_tts_language: str = "zh"
 
     # LLM provider ƯU TIÊN khi có key, dùng chung key với TTS ở trên. Đo trực
     # tiếp trên key hiện tại: path /step_plan/v1 -> 200 OK, path /v1 (trả tiền
@@ -146,6 +147,9 @@ class Settings(BaseSettings):
     # sang /v1 là chết request.
     stepfun_chat_url: str = "https://api.stepfun.ai/step_plan/v1/chat/completions"
     stepfun_chat_model: str = "step-3.7-flash"
+    # Chỉ dùng cho các caller sinh nội dung học tập đánh dấu content_task;
+    # rỗng = dùng model chat mặc định. Không ghi đè provider custom/relay.
+    stepfun_content_model: str = ""
 
     # ASR provider chính — chép âm hội thoại. Provider phụ vẫn là fallback (xem
     # ``transcribe_speech``). Dùng chung key với chat/TTS.
@@ -167,6 +171,37 @@ class Settings(BaseSettings):
     # các setting ở khối TTS — giọng phải KHỚP /tts, nếu không cùng một cuộc gọi
     # sẽ đổi giọng giữa câu khi rơi về fallback HTTP.
     stepfun_tts_ws_url: str = "wss://api.stepfun.ai/step_plan/v1/realtime/audio"
+
+    # Realtime Voice Chat — end-to-end speech-to-speech qua WebSocket.
+    #
+    # Đây là Preview riêng, KHÔNG dùng chung key Step Plan ở trên. Mặc định tắt
+    # vì tài liệu công khai không chứng minh tài khoản hiện tại đã được cấp quyền.
+    # Khi bật, backend chỉ thử các key trong STEPFUN_REALTIME_API_KEYS.
+    # Endpoint KHÔNG dùng /step_plan/v1 mà là endpoint Realtime /v1 riêng.
+    #
+    # Giới hạn cục bộ 25 phút; không suy ra quyền/hạn mức từ tài liệu Preview.
+    stepfun_realtime_enabled: bool = False
+    stepfun_realtime_api_keys: str = ""
+    stepfun_realtime_ws_url: str = "wss://api.stepfun.ai/v1/realtime"
+    stepfun_realtime_model: str = "stepaudio-3-realtime-preview"
+    stepfun_realtime_voice: str = "qingchunshaonv"
+    # Chưa có Hz cho Audio 3 trong tài liệu đã đối chiếu. Chỉ điền sau khi xác
+    # nhận contract với provider; thiếu một trong hai thì capability vẫn tắt.
+    stepfun_realtime_input_sample_rate: int | None = Field(default=None, ge=8000, le=48000)
+    stepfun_realtime_output_sample_rate: int | None = Field(default=None, ge=8000, le=48000)
+    stepfun_realtime_system_prompt: str = (
+        "你是Tezca中文老师，用简单中文和学生对话。"
+        "每次回复控制在1-2句话。语速适中，发音清晰。"
+        "这个实验模式只支持中文和英文。需要解释时使用简短英文，不确定时明确说明。"
+    )
+
+    @field_validator(
+        "stepfun_realtime_input_sample_rate", "stepfun_realtime_output_sample_rate",
+        mode="before",
+    )
+    @classmethod
+    def _empty_realtime_rate(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
 
     # SMTP — gửi email đặt lại mật khẩu. Nếu smtp_host trống, luồng reset vẫn
     # chạy (sinh + lưu token) nhưng chỉ log link ra console thay vì gửi mail —
@@ -194,6 +229,11 @@ class Settings(BaseSettings):
     # tài khoản nào. Cờ riêng này bịt lỗ đó KHÔNG phụ thuộc vào việc ``ENV`` có
     # được đặt đúng hay không — đặt sai tên biến thì mặc định vẫn là an toàn.
     email_debug_log: bool = False
+
+    # Bật pipeline chấm phát âm mới (6-agent). Mặc định TẮT để giữ backward
+    # compatibility. Khi bật, score_pronunciation() dùng confidence-weighted fusion
+    # thay vì min() veto, adaptive tone templates, và phoneme verification.
+    use_new_scoring_pipeline: bool = False
 
     # extra="ignore": biến môi trường không khớp field nào thì BỎ QUA thay vì
     # ném ValidationError. Mặc định của pydantic-settings là "forbid", nên khi bỏ
@@ -371,6 +411,10 @@ class Settings(BaseSettings):
     @property
     def stepfun_keys_list(self) -> list[str]:
         return [k.strip() for k in self.stepfun_api_keys.split(",") if k.strip()]
+
+    @property
+    def stepfun_realtime_keys_list(self) -> list[str]:
+        return [k.strip() for k in self.stepfun_realtime_api_keys.split(",") if k.strip()]
 
 
 settings = Settings()

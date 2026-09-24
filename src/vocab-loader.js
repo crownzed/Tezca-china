@@ -70,6 +70,12 @@ function mapBackendWord(w) {
     // Cặp dễ nhầm do pipeline enrichment sinh (confusable_words_json). DB dev có
     // thể chưa enrich => rỗng; ConfusablePairs tự suy cặp khi thiếu.
     confusables: Array.isArray(w.confusable_words) ? w.confusable_words.filter(Boolean) : [],
+    // Chi tiết ngữ nghĩa/lưu ý/cách dùng — do dual-professor enrichment sinh.
+    // Từ chưa enrich sẽ có chuỗi rỗng/mảng trống, UI tự ẩn section tương ứng.
+    semanticNotes: w.semantic_notes || '',
+    usageNotes: w.usage_notes || '',
+    usagePatterns: Array.isArray(w.usage_patterns) ? w.usage_patterns : [],
+    characterAnalysis: w.character_analysis || '',
   };
 }
 

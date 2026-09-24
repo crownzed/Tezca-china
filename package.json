@@ -12,6 +12,8 @@
     "deploy": "vercel --prod"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
     "hanzi-writer": "^3.7.3",
     "lucide-react": "^1.16.0",
     "react": "^19.2.6",

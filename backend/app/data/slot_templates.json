@@ -406,38 +406,78 @@
     },
     {
       "cn": "[TIME]，[SUBJECT][PLACE]参加了一个重要的商务会议。[BUSINESS_ACTION]的时候，对方提到了{[TARGET]}这个词。[OPINION]，在商业语境中它的意思是{[MEANING]}，对我们理解合同条款很有帮助。",
-      "vi": "[TIME], [SUBJECT] tham gia mot cuoc hop kinh doanh quan trong tai [PLACE]. Khi [BUSINESS_ACTION], doi tac co nhac den tu {[TARGET]}. [OPINION], trong ngu canh thuong mai no co nghia la {[MEANING]}, rat huu ich de hieu cac dieu khoan hop dong.",
+      "vi": "[TIME], [SUBJECT] tham gia một cuộc họp kinh doanh quan trọng tại [PLACE]. Khi [BUSINESS_ACTION], đối tác có nhắc đến từ {[TARGET]}. [OPINION], trong ngữ cảnh thương mại nó có nghĩa là {[MEANING]}, rất hữu ích để hiểu các điều khoản hợp đồng.",
       "option_vi": "Trong cuoc hop kinh doanh, tu {[TARGET]} mang nghia thuong mai."
     },
     {
       "cn": "最近公司安排[SUBJECT]去[TRAVEL_SCENE]出差。[TRANSITION]，在[WORKPLACE_SCENE]准备材料的时候，同事提醒说要注意{[TARGET]}的用法，因为在当地{[MEANING]}是非常常见的表达。",
-      "vi": "Gan day cong ty sap xep [SUBJECT] di cong tac o [TRAVEL_SCENE]. [TRANSITION], khi chuan bi tai lieu o [WORKPLACE_SCENE], dong nghiep nhac nho phai chu y cach dung cua {[TARGET]}, vi o dia phuong {[MEANING]} la cach dien dat rat pho bien.",
+      "vi": "Gần đây công ty sắp xếp [SUBJECT] đi công tác ở [TRAVEL_SCENE]. [TRANSITION], khi chuẩn bị tài liệu ở [WORKPLACE_SCENE], đồng nghiệp nhắc nhở phải chú ý cách dùng của {[TARGET]}, vì ở địa phương {[MEANING]} là cách diễn đạt rất phổ biến.",
       "option_vi": "Dong nghiep nhac [SUBJECT] chu y cach dung cua {[TARGET]} khi di cong tac."
     },
     {
       "cn": "[SUBJECT][SHOPPING_SCENE]购物时，看到了一个产品说明上写着{[MEANING]}。[OPINION]，这个词对应的中文就是{[TARGET]}，以后买东西就能看懂了。",
-      "vi": "Khi [SUBJECT] mua sam o [SHOPPING_SCENE], nhin thay tren huong dan san pham co viet {[MEANING]}. [OPINION], tu nay trong tieng Trung chinh la {[TARGET]}, sau nay di mua do la co the hieu duoc.",
+      "vi": "Khi [SUBJECT] mua sắm ở [SHOPPING_SCENE], nhìn thấy trên hướng dẫn sản phẩm có viết {[MEANING]}. [OPINION], từ đó trong tiếng Trung chính là {[TARGET]}, sau này đi mua đồ là có thể hiểu được.",
       "option_vi": "[SUBJECT] hoc duoc tu {[TARGET]} khi di mua sam."
     },
     {
       "cn": "今天[SUBJECT]在[SHOPPING_SCENE]想买一样东西，但不知道怎么用中文表达。[TRANSITION]想起了之前学过的{[TARGET]}，正好就是{[MEANING]}的意思。店员听了立刻就明白了。",
-      "vi": "Hom nay [SUBJECT] o [SHOPPING_SCENE] muon mua mot mon do, nhung khong biet dien dat bang tieng Trung the nao. [TRANSITION] nho ra tu {[TARGET]} da hoc truoc do, dung nghia la {[MEANING]}. Nhan vien nghe xong lien hieu ngay.",
+      "vi": "Hôm nay [SUBJECT] ở [SHOPPING_SCENE] muốn mua một món đồ, nhưng không biết diễn đạt bằng tiếng Trung thế nào. [TRANSITION] nhớ ra từ {[TARGET]} đã học trước đó, đúng nghĩa là {[MEANING]}. Nhân viên nghe xong liền hiểu ngay.",
       "option_vi": "[SUBJECT] dung tu {[TARGET]} de giao tiep khi mua sam."
     },
     {
       "cn": "[SUBJECT]在[WORKPLACE_SCENE]和同事[GROUP_ACTIVITY]。[TRANSITION]，一位资深同事分享了经验，特别强调了{[TARGET]}在工作沟通中的重要性，它传达的是{[MEANING]}的含义。",
-      "vi": "[SUBJECT] o [WORKPLACE_SCENE] cung dong nghiep [GROUP_ACTIVITY]. [TRANSITION], mot dong nghiep ky cuu chia se kinh nghiem, dac biet nhan manh tam quan trong cua {[TARGET]} trong giao tiep cong viec, no truyen tai y nghia {[MEANING]}.",
+      "vi": "[SUBJECT] ở [WORKPLACE_SCENE] cùng đồng nghiệp [GROUP_ACTIVITY]. [TRANSITION], một đồng nghiệp kỳ cựu chia sẻ kinh nghiệm, đặc biệt nhấn mạnh tầm quan trọng của {[TARGET]} trong giao tiếp công việc, nó truyền tải ý nghĩa {[MEANING]}.",
       "option_vi": "Dong nghiep ky cuu nhan manh tam quan trong cua tu {[TARGET]} trong cong viec."
     },
     {
       "cn": "[TIME]，[SUBJECT]来到了[TRAVEL_SCENE]。[EMOTION]，因为在这里听到了当地人很自然地使用{[TARGET]}这个词，意思是{[MEANING]}。[TRANSITION]，真希望以后也能用得这么地道。",
-      "vi": "[TIME], [SUBJECT] den [TRAVEL_SCENE]. [EMOTION], vi o day nghe thay nguoi dia phuong rat tu nhien su dung tu {[TARGET]}, nghia la {[MEANING]}. [TRANSITION], that mong sau nay cung co the dung chuan nhu vay.",
+      "vi": "[TIME], [SUBJECT] đến [TRAVEL_SCENE]. [EMOTION], vì ở đây nghe thấy người địa phương rất tự nhiên sử dụng từ {[TARGET]}, nghĩa là {[MEANING]}. [TRANSITION], thật mong sau này cũng có thể dùng chuẩn như vậy.",
       "option_vi": "[SUBJECT] nghe nguoi ban dia dung tu {[TARGET]} khi di du lich."
     },
     {
       "cn": "会议中，[SUBJECT]需要用中文做[BUSINESS_ACTION]。[TRANSITION]，想到了可以用{[TARGET]}来表达{[MEANING]}的意思，果然对方一听就懂了要点。",
-      "vi": "Trong cuoc hop, [SUBJECT] can dung tieng Trung de [BUSINESS_ACTION]. [TRANSITION], nghi ra co the dung {[TARGET]} de dien dat y {[MEANING]}, qua nhien doi phuong vua nghe da hieu y chinh.",
+      "vi": "Trong cuộc họp, [SUBJECT] cần dùng tiếng Trung để [BUSINESS_ACTION]. [TRANSITION], nghĩ ra có thể dùng {[TARGET]} để diễn đạt ý {[MEANING]}, quả nhiên đối phương vừa nghe đã hiểu ý chính.",
       "option_vi": "[SUBJECT] dung tu {[TARGET]} trong cuoc hop kinh doanh."
+    },
+    {
+      "cn": "[TIME]，[SUBJECT]在[PLACE]偶然翻到一本旧书。书页间夹着一张纸条，上面写着：\"{[EXAMPLE_CN]}\"看到\"{[TARGET]}\"这个词，[SUBJECT]不禁想起了当初学它时的情景——原来\"{[MEANING]}\"可以这样用。",
+      "vi": "[TIME], [SUBJECT] tình cờ lật được một cuốn sách cũ ở [PLACE]. Giữa các trang sách kẹp một mẩu giấy viết: \"{[EXAMPLE_VI]}\" Thấy từ \"{[TARGET]}\", [SUBJECT] chợt nhớ lại hồi mới học — hóa ra \"{[MEANING]}\" lại dùng được như thế.",
+      "option_vi": "[SUBJECT] tìm thấy từ {[TARGET]} trong cuốn sách cũ và nhớ lại cách dùng."
+    },
+    {
+      "cn": "[SUBJECT]最近在追一部中文电视剧。[TIME]看到一句台词：\"{[EXAMPLE_CN]}\"字幕翻译成了\"{[MEANING]}\"。[OPINION]，这里的\"{[TARGET]}\"翻得很到位，既准确又接地气。",
+      "vi": "[SUBJECT] dạo này đang xem một bộ phim truyền hình Trung Quốc. [TIME] thấy một câu thoại: \"{[EXAMPLE_VI]}\" Phụ đề dịch thành \"{[MEANING]}\". [OPINION], từ \"{[TARGET]}\" ở đây dịch rất chuẩn, vừa chính xác vừa gần gũi.",
+      "option_vi": "Phụ đề phim dịch từ {[TARGET]} rất chuẩn và tự nhiên."
+    },
+    {
+      "cn": "[SUBJECT]的中文老师常说，学语言不能只背单词，还要看它怎么用。比如\"{[TARGET]}\"这个词，单独看只知道是\"{[MEANING]}\"，但放进句子里就不一样了：\"{[EXAMPLE_CN]}\"",
+      "vi": "Giáo viên tiếng Trung của [SUBJECT] hay nói rằng học ngôn ngữ không thể chỉ học thuộc từ đơn mà phải xem nó được dùng thế nào. Ví dụ từ \"{[TARGET]}\", đứng riêng chỉ biết nghĩa là \"{[MEANING]}\", nhưng đặt vào câu thì khác hẳn: \"{[EXAMPLE_VI]}\"",
+      "option_vi": "Giáo viên nhấn mạnh phải học từ {[TARGET]} trong ngữ cảnh câu完整."
+    },
+    {
+      "cn": "[TIME]，[SUBJECT]收到了一封来自中国的邮件。信里写道：\"{[EXAMPLE_CN]}\"读完之后，[SUBJECT]查了一下\"{[TARGET]}\"，发现它不只是\"{[MEANING]}\"那么简单，还带着一层感情色彩。",
+      "vi": "[TIME], [SUBJECT] nhận được một bức thư từ Trung Quốc. Trong thư viết: \"{[EXAMPLE_VI]}\" Đọc xong, [SUBJECT] tra từ \"{[TARGET]}\" và phát hiện nó không chỉ đơn giản là \"{[MEANING]}\" mà còn mang một sắc thái cảm xúc riêng.",
+      "option_vi": "[SUBJECT] khám phá sắc thái cảm xúc của từ {[TARGET]} qua bức thư."
+    },
+    {
+      "cn": "[SUBJECT]每天坚持用中文写一小段日记。今天写到\"{[EXAMPLE_CN]}\"的时候，[SUBJECT]犹豫了很久要不要用\"{[TARGET]}\"。最后决定用了，因为\"{[MEANING]}\"正好能表达当时的心情。",
+      "vi": "[SUBJECT] mỗi ngày đều kiên trì viết một đoạn nhật ký ngắn bằng tiếng Trung. Hôm nay khi viết đến \"{[EXAMPLE_VI]}\", [SUBJECT] phân vân khá lâu có nên dùng \"{[TARGET]}\" hay không. Cuối cùng quyết định dùng, vì \"{[MEANING]}\" diễn tả đúng tâm trạng lúc đó.",
+      "option_vi": "[SUBJECT] chọn dùng từ {[TARGET]} trong nhật ký vì diễn tả đúng tâm trạng."
+    },
+    {
+      "cn": "朋友问[SUBJECT]：\"你觉得中文最难的是什么？\"[SUBJECT]想了想说：\"不是语法，是同一个词在不同场景下意思不一样。比如'{[TARGET]}'，有时候是'{[MEANING]}'，有时候又不是。就像这句：'{[EXAMPLE_CN]}'\"",
+      "vi": "Bạn hỏi [SUBJECT]: \"Cậu thấy tiếng Trung khó nhất ở điểm nào?\" [SUBJECT] ngẫm nghĩ rồi đáp: \"Không phải ngữ pháp, mà là cùng một từ nhưng nghĩa thay đổi tùy ngữ cảnh. Ví dụ '{[TARGET]}', có lúc là '{[MEANING]}', có lúc lại khác. Giống như câu này: '{[EXAMPLE_VI]}'\"",
+      "option_vi": "[SUBJECT] giải thích từ {[TARGET]} thay đổi nghĩa tùy ngữ cảnh."
+    },
+    {
+      "cn": "[TIME]，[SUBJECT]在[PLACE]听了一场关于中国文化的讲座。主讲人举了一个例子：\"{[EXAMPLE_CN]}\"他说，\"{[TARGET]}\"在这里体现的是\"{[MEANING]}\"的文化内涵，不能简单地逐字翻译。",
+      "vi": "[TIME], [SUBJECT] tham dự một buổi giảng về văn hóa Trung Quốc tại [PLACE]. Diễn giả đưa ra ví dụ: \"{[EXAMPLE_VI]}\" Ông nói, \"{[TARGET]}\" ở đây thể hiện nội hàm văn hóa của \"{[MEANING]}\", không thể dịch từng chữ một cách đơn giản.",
+      "option_vi": "Diễn giả phân tích nội hàm văn hóa của từ {[TARGET]} trong bài giảng."
+    },
+    {
+      "cn": "[SUBJECT]正在准备HSK考试。[TIME]复习到\"{[TARGET]}\"这个词时，课本上的例句是：\"{[EXAMPLE_CN]}\"[SUBJECT]觉得光记住\"{[MEANING]}\"还不够，还得知道它在口语和书面语中的区别。",
+      "vi": "[SUBJECT] đang ôn thi HSK. [TIME] khi ôn đến từ \"{[TARGET]}\", câu ví dụ trong sách là: \"{[EXAMPLE_VI]}\" [SUBJECT] thấy chỉ nhớ \"{[MEANING]}\" thôi chưa đủ, còn phải biết sự khác biệt giữa văn nói và văn viết.",
+      "option_vi": "[SUBJECT] nhận ra cần phân biệt văn nói và văn viết khi học từ {[TARGET]}."
     }
   ],
   "dialogue_templates": [
@@ -493,23 +533,53 @@
     },
     {
       "cn": "A：你在[WORKPLACE_SCENE]做什么呢？\nB：我在准备明天[BUSINESS_ACTION]的资料。\nA：有什么重点吗？\nB：有一个关键词{[TARGET]}，意思是{[MEANING]}，要重点向客户解释。",
-      "vi": "A: Ban dang lam gi o [WORKPLACE_SCENE] the?\nB: Toi dang chuan bi tai lieu cho [BUSINESS_ACTION] ngay mai.\nA: Co diem gi quan trong khong?\nB: Co mot tu khoa {[TARGET]}, nghia la {[MEANING]}, can giai thich ky cho khach hang.",
+      "vi": "A: Bạn đang làm gì ở [WORKPLACE_SCENE] thế?\nB: Tôi đang chuẩn bị tài liệu cho [BUSINESS_ACTION] ngày mai.\nA: Có điểm gì quan trọng không?\nB: Có một từ khóa {[TARGET]}, nghĩa là {[MEANING]}, cần giải thích kỹ cho khách hàng.",
       "option_vi": "B can giai thich tu {[TARGET]} cho khach hang trong buoi hop."
     },
     {
       "cn": "A：欢迎光临！您在找什么？\nB：我在找{[TARGET]}，就是{[MEANING]}那种东西。\nA：好的，请跟我来。\nB：谢谢你用中文跟我确认了这个词，我更自信了。",
-      "vi": "A: Xin chao quy khach! Ban dang tim gi a?\nB: Toi dang tim {[TARGET]}, chinh la loai {[MEANING]} do.\nA: Vang, moi di theo toi.\nB: Cam on ban da xac nhan tu nay bang tieng Trung voi toi, toi tu tin hon roi.",
+      "vi": "A: Xin chào quý khách! Bạn đang tìm gì ạ?\nB: Tôi đang tìm {[TARGET]}, chính là loại {[MEANING]} đó.\nA: Vâng, mời đi theo tôi.\nB: Cảm ơn bạn đã xác nhận từ này bằng tiếng Trung với tôi, tôi tự tin hơn rồi.",
       "option_vi": "B tu tin dung tu {[TARGET]} khi mua sam."
     },
     {
       "cn": "A：你刚从[TRAVEL_SCENE]回来吗？好玩吗？\nB：很好玩！我还学了一个很有用的词。\nA：是什么？\nB：{[TARGET]}，当地人经常用，意思大概是{[MEANING]}。",
-      "vi": "A: Ban vua tu [TRAVEL_SCENE] ve a? Co vui khong?\nB: Rat vui! Toi con hoc duoc mot tu rat huu ich.\nA: La tu gi?\nB: {[TARGET]}, nguoi dia phuong hay dung, y nghia dai khai la {[MEANING]}.",
+      "vi": "A: Bạn vừa từ [TRAVEL_SCENE] về à? Có vui không?\nB: Rất vui! Tôi còn học được một từ rất hữu ích.\nA: Là từ gì?\nB: {[TARGET]}, người địa phương hay dùng, ý nghĩa đại khái là {[MEANING]}.",
       "option_vi": "B hoc duoc tu {[TARGET]} tu nguoi dia phuong khi di du lich."
     },
     {
       "cn": "A：[BUSINESS_ACTION]进行得怎么样？\nB：还行，不过有个术语需要确认。\nA：什么术语？\nB：{[TARGET]}，对方一直在强调，意思是{[MEANING]}，看来很关键。",
-      "vi": "A: [BUSINESS_ACTION] tien trien the nao roi?\nB: Cung duoc, nhung co mot thuat ngu can xac nhan.\nA: Thuat ngu gi?\nB: {[TARGET]}, doi tac cu nhan manh mai, nghia la {[MEANING]}, xem ra rat quan trong.",
+      "vi": "A: [BUSINESS_ACTION] tiến triển thế nào rồi?\nB: Cũng được, nhưng có một thuật ngữ cần xác nhận.\nA: Thuật ngữ gì?\nB: {[TARGET]}, đối tác cứ nhấn mạnh mãi, nghĩa là {[MEANING]}, xem ra rất quan trọng.",
       "option_vi": "B phat hien tu {[TARGET]} la thuat ngu then chot trong dam phan."
+    },
+    {
+      "cn": "A：这个词我怎么也记不住。\nB：哪个词？\nA：\"{[TARGET]}\"。每次看到都觉得眼熟，就是想不起意思。\nB：你试试放到句子里记：\"{[EXAMPLE_CN]}\"——这样是不是好多了？它其实就是\"{[MEANING]}\"的意思。",
+      "vi": "A: Từ này tôi mãi không nhớ nổi.\nB: Từ nào?\nA: \"{[TARGET]}\". Lần nào thấy cũng quen quen mà không nghĩ ra nghĩa.\nB: Cậu thử đặt vào câu mà học: \"{[EXAMPLE_VI]}\" — thế có dễ hơn không? Nó chính là \"{[MEANING]}\" đấy.",
+      "option_vi": "B gợi ý A học từ {[TARGET]} bằng cách đặt vào câu ví dụ."
+    },
+    {
+      "cn": "A：我发现中文里有些词翻译成越南语之后，味道就不一样了。\nB：比如呢？\nA：就像\"{[TARGET]}\"，直译是\"{[MEANING]}\"，但实际用起来感觉更丰富。你看这句话：\"{[EXAMPLE_CN]}\"\nB：确实，语言之间的微妙差别才是最有趣的部分。",
+      "vi": "A: Tôi phát hiện một số từ tiếng Trung khi dịch sang tiếng Việt thì mất đi sắc thái gốc.\nB: Ví dụ như?\nA: Như \"{[TARGET]}\", dịch thẳng là \"{[MEANING]}\", nhưng dùng thực tế lại phong phú hơn nhiều. Xem câu này: \"{[EXAMPLE_VI]}\"\nB: Đúng vậy, những khác biệt tinh tế giữa các ngôn ngữ mới là phần thú vị nhất.",
+      "option_vi": "Hai người thảo luận về sắc thái khó dịch của từ {[TARGET]}."
+    },
+    {
+      "cn": "A：老师今天布置了一个翻译作业，要把这段话翻成越南语：\"{[EXAMPLE_CN]}\"\nB：这段不难吧？\nA：大部分还好，就是\"{[TARGET]}\"这个词不好翻。字典说是\"{[MEANING]}\"，但放在这里总觉得不太对。\nB：你可以意译啊，不一定要逐字对应。",
+      "vi": "A: Hôm nay giáo viên giao bài tập dịch đoạn này sang tiếng Việt: \"{[EXAMPLE_VI]}\"\nB: Đoạn này không khó lắm chứ?\nA: Phần lớn thì ổn, chỉ mỗi từ \"{[TARGET]}\" khó dịch. Từ điển bảo là \"{[MEANING]}\", nhưng đặt vào đây cứ thấy chưa đúng.\nB: Cậu có thể dịch thoát ý mà, đâu nhất thiết phải tương ứng từng chữ.",
+      "option_vi": "A gặp khó khăn khi dịch từ {[TARGET]} vì nghĩa từ điển không khớp ngữ cảnh."
+    },
+    {
+      "cn": "A：你知道\"{[TARGET]}\"和它的近义词有什么区别吗？\nB：让我想想……虽然都可以翻译成\"{[MEANING]}\"，但用法不一样。\nA：对！比如这句只能用\"{[TARGET]}\"：\"{[EXAMPLE_CN]}\"\nB：没错，语感这种东西，得多读多听才能慢慢体会。",
+      "vi": "A: Cậu biết \"{[TARGET]}\" khác từ gần nghĩa với nó ở điểm nào không?\nB: Để tôi nghĩ... Tuy đều có thể dịch thành \"{[MEANING]}\" nhưng cách dùng khác nhau.\nA: Đúng! Ví dụ câu này chỉ dùng được \"{[TARGET]}\": \"{[EXAMPLE_VI]}\"\nB: Chuẩn rồi, cảm giác ngôn ngữ kiểu này phải đọc nhiều nghe nhiều mới dần cảm nhận được.",
+      "option_vi": "Hai người phân biệt cách dùng của {[TARGET]} so với từ gần nghĩa."
+    },
+    {
+      "cn": "A：我在[PLACE]听到一个小孩说了一句特别流利的中文。\nB：说了什么？\nA：他说：\"{[EXAMPLE_CN]}\"用词特别准确，尤其是\"{[TARGET]}\"。\nB：小孩子语感好很正常，他们学语言不像大人那样想太多语法。",
+      "vi": "A: Tôi ở [PLACE] nghe một em bé nói một câu tiếng Trung rất lưu loát.\nB: Em ấy nói gì?\nA: Em nói: \"{[EXAMPLE_VI]}\" Dùng từ rất chuẩn, đặc biệt là \"{[TARGET]}\".\nB: Trẻ con cảm giác ngôn ngữ tốt là bình thường, chúng học ngôn ngữ không suy nghĩ nhiều về ngữ pháp như người lớn.",
+      "option_vi": "A ấn tượng với cách một em bé dùng từ {[TARGET]} rất tự nhiên."
+    },
+    {
+      "cn": "A：你觉得学中文最重要的是什么？\nB：我觉得是理解词语背后的思维方式。比如\"{[TARGET]}\"不只是\"{[MEANING]}\"，它还反映了中国人看问题的角度。\nA：能举个例子吗？\nB：当然：\"{[EXAMPLE_CN]}\"——你看，这里的用法就很有讲究。",
+      "vi": "A: Cậu thấy điều quan trọng nhất khi học tiếng Trung là gì?\nB: Tôi nghĩ là hiểu được tư duy đằng sau từ ngữ. Ví dụ \"{[TARGET]}\" không chỉ là \"{[MEANING]}\", nó còn phản ánh góc nhìn của người Trung Quốc.\nA: Cho ví dụ được không?\nB: Tất nhiên: \"{[EXAMPLE_VI]}\" — cậu xem, cách dùng ở đây rất tinh tế.",
+      "option_vi": "B cho rằng học từ {[TARGET]} cần hiểu tư duy văn hóa đằng sau nó."
     }
   ]
 }

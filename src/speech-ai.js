@@ -208,8 +208,9 @@ export async function startRecording() {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Chế độ gọi thoại: mic mở liên tục, VAD tự chốt từng lượt.
+// startStreamingSession đã được tách sang src/realtime/streaming-mic.js
+// (startStreamingMic). Không giữ lại ở đây để tránh dead code diverge.
+
 //
 // Tách hẳn khỏi startRecording (không sửa nó) vì ba khác biệt không dung hoà được:
 //

@@ -352,6 +352,13 @@ function QuizPreview({ draft, onStartLive }) {
         <p>{draft.questions.length} câu hỏi. Xem qua rồi bắt đầu làm ngay.</p>
       </div>
 
+      {draft.partial && (
+        <div className="feedback-panel" role="status" style={{ marginBottom: '1rem' }}>
+          <strong>Đã tạo {draft.generated_count}/{draft.requested_count} câu hỏi hợp lệ.</strong>
+          <p>Bạn có thể bắt đầu với các câu hỏi hiện có, hoặc thử tạo lại / đổi nội dung để có thêm câu hỏi.</p>
+        </div>
+      )}
+
       {draft.passage && (
         <div className="feedback-panel" style={{ marginBottom: '1rem', whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
           <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Đoạn văn nguồn:</strong>

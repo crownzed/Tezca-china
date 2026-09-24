@@ -20,6 +20,7 @@ from .routers.custom_vocab import router as custom_vocab_router
 from .routers.streak import router as streak_router
 from .routers.tts import router as tts_router
 from .routers.speech import router as speech_router
+from .realtime import router as realtime_router
 from .routers.translation import router as translation_router
 from .routers.words import router as words_router
 from .services import tts_cache, tts_socket_pool
@@ -141,6 +142,7 @@ app.include_router(custom_vocab_router)
 app.include_router(streak_router)
 app.include_router(tts_router)
 app.include_router(speech_router)
+app.include_router(realtime_router)
 app.include_router(translation_router)
 app.include_router(words_router)
 

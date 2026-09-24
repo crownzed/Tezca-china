@@ -56,6 +56,35 @@ class TtsCacheUnitTest(unittest.TestCase):
         self.assertNotEqual(a, c)
         self.assertNotEqual(a, d)
 
+    def test_output_affecting_parameters_are_distinct(self):
+        """Every provider/output dimension must invalidate the old clip."""
+        base = {
+            "endpoint": "tts",
+            "model": "stepaudio-2.5-tts",
+            "voice": "zixinnansheng",
+            "speed": 0.82,
+            "instruction": "read naturally",
+            "sample_rate": 24000,
+            "response_format": "mp3",
+            "text_normalization": "enhanced",
+            "language": "zh",
+        }
+        original = tts_cache.cache_key("你好", **base)
+        changes = {
+            "model": "stepaudio-3-tts",
+            "voice": "another-voice",
+            "speed": 0.95,
+            "instruction": "read carefully",
+            "sample_rate": 16000,
+            "response_format": "wav",
+            "text_normalization": "standard",
+            "language": "en",
+        }
+        for name, value in changes.items():
+            with self.subTest(parameter=name):
+                changed = {**base, name: value}
+                self.assertNotEqual(original, tts_cache.cache_key("你好", **changed))
+
     def test_evicts_oldest_when_over_byte_cap(self):
         """Trần theo BYTE, không theo số entry: máy fly chỉ có 512MB."""
         entry = b"x" * 1024
@@ -204,6 +233,48 @@ class TtsEndpointCacheTest(unittest.TestCase):
         self.assertEqual(
             m.call_args.kwargs["speed"], tts_module.settings.stepfun_tts_speed
         )
+
+    def test_output_affecting_settings_invalidate_plain_tts_cache(self):
+        """Router phải đưa mọi setting làm đổi audio vào cache key thật."""
+        dimensions = {
+            "stepfun_tts_model": "stepaudio-3-tts",
+            "stepfun_tts_voice": "another-voice",
+            "stepfun_tts_instruction": "read carefully",
+            "stepfun_tts_sample_rate": 16000,
+            "stepfun_tts_text_normalization": "standard",
+            "stepfun_tts_language": "en",
+        }
+        with patch.object(tts_module.settings, "stepfun_api_keys", "fake-key"):
+            with patch.object(tts_module, "_stepfun_synth", return_value=_FAKE_MP3) as synth:
+                for setting, changed in dimensions.items():
+                    with self.subTest(setting=setting):
+                        tts_cache.clear()
+                        self.client.get("/tts", params={"text": "你好"})
+                        with patch.object(tts_module.settings, setting, changed):
+                            self.client.get("/tts", params={"text": "你好"})
+                        self.assertEqual(
+                            synth.call_count,
+                            2,
+                            f"changing {setting} must miss the plain TTS cache",
+                        )
+                        synth.reset_mock()
+
+    def test_plain_tts_accepts_limit_and_rejects_over_limit(self):
+        with patch.object(tts_module.settings, "stepfun_api_keys", "fake-key"):
+            with patch.object(tts_module, "_stepfun_synth", return_value=_FAKE_MP3) as synth:
+                accepted = self.client.get("/tts", params={"text": "字" * 1000})
+                rejected = self.client.get("/tts", params={"text": "字" * 1001})
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        self.assertEqual(rejected.status_code, 422, rejected.text)
+        synth.assert_called_once()
+
+    def test_feedback_accepts_limit_and_rejects_over_limit(self):
+        with patch.object(tts_module, "_elevenlabs_synth", return_value=_FAKE_MP3) as synth:
+            accepted = self.client.get("/tts/feedback", params={"text": "a" * 500})
+            rejected = self.client.get("/tts/feedback", params={"text": "a" * 501})
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        self.assertEqual(rejected.status_code, 422, rejected.text)
+        synth.assert_called_once()
 
 
 if __name__ == "__main__":

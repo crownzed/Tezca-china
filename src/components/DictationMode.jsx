@@ -17,8 +17,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardPaste, Ear,
-  FileText, Headphones, MessagesSquare, Pause, Play, Repeat, RotateCcw, Trash2,
+  AlertCircle, BookOpen, Check, ChevronLeft, ChevronRight, Ear,
+  FileText, Headphones, MessagesSquare, Pause, Play, Repeat, RotateCcw,
   Type, XCircle,
 } from 'lucide-react';
 import { pauseSpeech, resumeSpeech, speak, stopSpeech } from '../speech.jsx';
@@ -189,15 +189,6 @@ function readSavedDialogue() {
   }
 }
 
-function writeSavedDialogue(text) {
-  try {
-    if (text) window.localStorage.setItem(scopedKey(DIALOGUE_KEY), text);
-    else window.localStorage.removeItem(scopedKey(DIALOGUE_KEY));
-  } catch {
-    // localStorage đầy/bị khoá → bài dán chỉ còn trong phiên này.
-  }
-}
-
 // Hội thoại dán vào → danh sách đơn vị nghe viết. Mỗi lượt nói là một đơn vị;
 // lượt quá dài thì cắt tiếp theo câu nhưng GIỮ tên người nói của lượt đó, để vẫn
 // biết ai đang nói ở từng mảnh.
@@ -246,11 +237,8 @@ export default function DictationMode({ focusLevels }) {
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
 
-  // Hội thoại dán vào. `dialogueDraft` là nội dung trong ô soạn, `dialogueText`
-  // là nội dung ĐÃ chốt để luyện — tách hai cái để người học sửa ô soạn giữa
-  // phiên mà phiên đang chạy không bị dựng lại dưới chân họ.
-  const [dialogueDraft, setDialogueDraft] = useState(() => readSavedDialogue());
-  const [dialogueText, setDialogueText] = useState(() => readSavedDialogue());
+  // Giữ bài hội thoại đã lưu cho chế độ luyện hiện có.
+  const [dialogueText] = useState(() => readSavedDialogue());
 
   // Số lần nghe lại, đếm THEO ĐƠN VỊ (khoá theo item.key) chứ không phải một biến
   // dồn rồi reset khi sang câu: đi lùi về câu trước phải thấy lại đúng số lần đã
@@ -409,33 +397,6 @@ export default function DictationMode({ focusLevels }) {
   const startSession = useCallback(async () => {
     applySession(await buildItems());
   }, [applySession, buildItems]);
-
-  // Chốt đoạn đang soạn thành bài luyện. dialogueText đổi → buildItems chạy lại
-  // qua effect bên dưới, nên không cần gọi startSession ở đây.
-  const applyDialogue = useCallback(() => {
-    const text = dialogueDraft.trim();
-    setDialogueText(text);
-    writeSavedDialogue(text);
-  }, [dialogueDraft]);
-
-  const clearDialogue = useCallback(() => {
-    stopSpeech();
-    setDialogueDraft('');
-    setDialogueText('');
-    writeSavedDialogue('');
-  }, []);
-
-  // Dán bằng nút: tiện trên mobile, nơi Ctrl+V không có sẵn. navigator.clipboard
-  // cần quyền và chỉ chạy trên HTTPS/localhost — thất bại thì im lặng, người học
-  // vẫn dán tay được vào textarea.
-  const pasteFromClipboard = useCallback(async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) setDialogueDraft(prev => (prev ? `${prev}\n${text}` : text));
-    } catch {
-      setNotice('Trình duyệt không cho đọc clipboard. Hãy dán tay vào ô bên dưới (Ctrl+V).');
-    }
-  }, []);
 
   // Mở phiên khi đổi chế độ / cấp / số lượng, và ngay sau khi kho thẻ nạp xong.
   useEffect(() => {

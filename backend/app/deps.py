@@ -110,3 +110,23 @@ def resolve_user_id(current_user: User = Depends(get_current_user)) -> str:
     cầu đăng nhập và chỉ trả về id của chính người dùng đó.
     """
     return current_user.id
+
+
+def get_user_from_token_query(
+    token: str | None = None,
+    db: Session = Depends(get_db),
+) -> User | None:
+    """M8: Xác thực user từ token trong query param (cho EventSource/SSE).
+
+    EventSource API không hỗ trợ custom headers, nên phải truyền JWT qua URL.
+    Token chỉ dùng để READ streak data — không grant write access.
+    """
+    if not token:
+        return None
+    user_id = AuthService.decode_token(token)
+    if not user_id:
+        return None
+    user = AuthService(db).get_user_by_id(user_id)
+    if not user or user.is_active is False:
+        return None
+    return user

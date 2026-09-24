@@ -13,6 +13,19 @@ export function setAuthToken(token) {
   authToken = token || null;
 }
 
+export function getAuthToken() {
+  return authToken;
+}
+
+// Capability discovery is deliberately separate from the WebSocket handshake.
+// The endpoint is authenticated, and a malformed/failed response must never
+// enable the experimental client path.
+export async function getRealtimeCapabilities({ signal } = {}) {
+  // This is a discovery probe, not a call attempt. Do not retry it in the
+  // background after leaving the screen or after the user changes accounts.
+  return request('/api/realtime/capabilities', { signal }, 0);
+}
+
 // Handler được auth-context đăng ký để dọn phiên khi token hết hạn/không hợp lệ
 // (401). Trước đây chỉ getMe() bắt 401 để logout; mọi call khác ném lỗi generic
 // nên token chết vẫn dính, user tưởng còn đăng nhập. Giờ MỌI 401 đều báo về đây.
@@ -239,17 +252,19 @@ function localDragDrop(card) {
   const correctOrder = segments.filter(Boolean);
   if (new Set(correctOrder).size < 2) return null;
 
-  let scrambled = [...correctOrder];
+  // Shuffle bằng index để tránh bug token trùng.
+  let indices = correctOrder.map((_, i) => i);
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    scrambled = shuffle(correctOrder);
-    if (scrambled.join('') !== correctOrder.join('')) break;
+    indices = shuffle(indices);
+    if (indices.some((idx, i) => idx !== i)) break;
   }
 
   return {
     sentence_cn: sentence,
     sentence_vi: cleanText(card.exampleVi || card.example_vi || card.meaning),
-    segments: scrambled,
-    correct_order: correctOrder,
+    segments: correctOrder,
+    correct_order: correctOrder.map((_, i) => i),
+    scrambled_indices: indices,
   };
 }
 
@@ -341,6 +356,7 @@ async function localQuestions({ level, levels, quiz_type, limit }) {
       metadata_json: dragData ? {
         segments: dragData.segments,
         correct_order: dragData.correct_order,
+        scrambled_indices: dragData.scrambled_indices,
         sentence_vi: dragData.sentence_vi,
       } : {},
     };
@@ -1106,19 +1122,31 @@ export async function generateQuestionsFromText(payload) {
 
 // Sinh bài tập từ danh sách từ vựng để xem trước. payload: { words: string[] }
 export async function draftQuizFromVocab(payload) {
-  return request('/api/custom-vocab/draft/vocab', { method: 'POST', body: JSON.stringify(payload) });
+  return request('/api/custom-vocab/draft/vocab', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    retryable: true,
+  });
 }
 
 // Sinh câu hỏi từ đoạn văn để xem trước.
 // payload: { text, hsk_level, count, question_types }
 export async function draftQuizFromPassage(payload) {
-  return request('/api/custom-vocab/draft/passage', { method: 'POST', body: JSON.stringify(payload) });
+  return request('/api/custom-vocab/draft/passage', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    retryable: true,
+  });
 }
 
 // Sinh câu hỏi từ chủ đề (AI tự sinh đoạn văn theo chủ đề rồi ra câu hỏi).
 // payload: { topic, hsk_level, count, question_types }
 export async function draftQuizFromTopic(payload) {
-  return request('/api/custom-vocab/draft/topic', { method: 'POST', body: JSON.stringify(payload) });
+  return request('/api/custom-vocab/draft/topic', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    retryable: true,
+  });
 }
 
 // Lưu bộ câu hỏi đã xem trước vào thư viện (DB) + tạo session để học lại.

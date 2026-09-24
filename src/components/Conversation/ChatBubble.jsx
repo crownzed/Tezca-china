@@ -1,4 +1,4 @@
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { Bot, Check, Copy, Eye, EyeOff, Lightbulb, Mic, Sparkles, User, Volume2 } from 'lucide-react';
 import { isHanzi, lookupHanzi } from './hanzi-lookup.js';
 

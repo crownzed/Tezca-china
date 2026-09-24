@@ -67,8 +67,15 @@ _VOCAB_SPEC = (
 _TRANSLATION_SPEC = (
     "translation: prompt là câu/đoạn văn tiếng Trung ngắn (1-3 câu, ngữ cảnh đầy đủ). "
     "4 options là 4 bản dịch tiếng Việt — chỉ 1 bản vừa chính xác vừa tự nhiên. "
-    "3 bản sai theo các lỗi tinh tế khác nhau: sai thì/thể, sai đại từ nhân xưng, "
-    "dịch từng chữ cứng nhắc, hoặc bỏ sót/thêm ý. TẤT CẢ 4 options phải nghe như "
+    "ĐÁP ÁN ĐÚNG phải ĐA DẠNG VĂN PHONG: luân phiên giữa các kiểu diễn đạt sau "
+    "(mỗi câu hỏi chọn 1 kiểu, KHÔNG lặp lại cùng một kiểu cho mọi câu): "
+    "(a) dịch sát nghĩa, trang trọng; "
+    "(b) dịch thoát ý, giọng đời thường/trò chuyện; "
+    "(c) dịch ngắn gọn, súc tích; "
+    "(d) dịch diễn giải, thêm ngữ cảnh cho rõ nghĩa. "
+    "3 bản sai theo các lỗi tinh tế KHÁC NHAU: sai thì/thể, sai đại từ nhân xưng, "
+    "dịch từng chữ cứng nhắc, bỏ sót/thêm ý, sai sắc thái cảm xúc, nhầm chủ thể hành động, "
+    "hoặc dùng từ chưa phù hợp ngữ cảnh. TẤT CẢ 4 options phải nghe như "
     "tiếng Việt tự nhiên (không phải tiếng Anh dịch). KHÔNG để CJK trong options. "
     "explanation bằng tiếng Việt: nêu rõ lỗi của từng option sai và căn cứ đáp án đúng."
 )
@@ -527,8 +534,8 @@ def _call_provider(url: str, api_key: str, model: str, payload: dict, retries: i
 # State nằm trong RAM tiến trình → reset khi restart (an toàn vì restart cũng
 # reset connection pool). Không cần Redis vì single-instance trên free tier.
 _CB_THRESHOLD_FAILS = 5          # số lỗi liên tiếp trước khi mở mạch
-_CB_COOLDOWN_SEC = 60            # thời gian giữ mạch mở (giây)
-_cb_state = {"fails": 0, "open_until": 0.0}
+_CB_COOLDOWN_SEC = 60            # thời gian giữ mạch mở
+_cb_states: dict[tuple[str, str], dict[str, float | int]] = {}
 
 
 class CircuitBreakerOpen(RuntimeError):
@@ -536,31 +543,62 @@ class CircuitBreakerOpen(RuntimeError):
     pass
 
 
-def _cb_record_success() -> None:
-    _cb_state["fails"] = 0
-    _cb_state["open_until"] = 0.0
+def _cb_identity(provider: str | None = None, model: str | None = None) -> tuple[str, str]:
+    """Return the breaker bucket for an effective provider/model pair."""
+    return (
+        provider or settings.llm_provider,
+        model or settings.llm_model_effective,
+    )
 
 
-def _cb_record_failure() -> None:
-    _cb_state["fails"] += 1
-    if _cb_state["fails"] >= _CB_THRESHOLD_FAILS:
-        _cb_state["open_until"] = time.time() + _CB_COOLDOWN_SEC
+def _cb_state_for(provider: str | None = None, model: str | None = None) -> dict[str, float | int]:
+    return _cb_states.setdefault(_cb_identity(provider, model), {"fails": 0, "open_until": 0.0})
+
+
+def _cb_record_success(provider: str | None = None, model: str | None = None) -> None:
+    state = _cb_state_for(provider, model)
+    state["fails"] = 0
+    state["open_until"] = 0.0
+
+
+def _cb_record_failure(provider: str | None = None, model: str | None = None) -> None:
+    state = _cb_state_for(provider, model)
+    state["fails"] += 1
+    if state["fails"] >= _CB_THRESHOLD_FAILS:
+        state["open_until"] = time.time() + _CB_COOLDOWN_SEC
         logger.warning(
-            "LLM circuit breaker OPENED after %d consecutive failures; "
-            "cooldown %ds", _cb_state["fails"], _CB_COOLDOWN_SEC,
+            "LLM circuit breaker OPENED for provider=%s model=%s after %d "
+            "consecutive failures; cooldown %ds",
+            *_cb_identity(provider, model), state["fails"], _CB_COOLDOWN_SEC,
         )
 
 
-def _cb_check() -> None:
-    """Raise CircuitBreakerOpen nếu mạch đang mở và chưa hết cooldown."""
-    if _cb_state["open_until"] > time.time():
-        remaining = int(_cb_state["open_until"] - time.time())
+def _cb_check(provider: str | None = None, model: str | None = None) -> None:
+    """Raise CircuitBreakerOpen nếu bucket đang mở và chưa hết cooldown."""
+    state = _cb_state_for(provider, model)
+    if state["open_until"] > time.time():
+        remaining = int(state["open_until"] - time.time())
+        provider_name, model_name = _cb_identity(provider, model)
         raise CircuitBreakerOpen(
-            f"LLM provider đang bị gián đoạn (circuit breaker mở, còn {remaining}s)"
+            f"LLM provider {provider_name}/{model_name} đang bị gián đoạn "
+            f"(circuit breaker mở, còn {remaining}s)"
         )
 
 
-def _call_api(prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240) -> dict:
+def _effective_llm_model(*, content_task: bool = False) -> tuple[str, str]:
+    """Select the provider/model pair without widening the content opt-in."""
+    provider = settings.llm_provider
+    model = settings.llm_model_effective
+    content_model = settings.stepfun_content_model.strip()
+    if content_task and provider == "primary" and content_model:
+        model = content_model
+    return provider, model
+
+
+def _call_api(
+    prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240,
+    *, content_task: bool = False,
+) -> dict:
     """Gọi provider LLM (standard chat API), xoay vòng qua từng key cấu hình.
 
     Provider do ``settings.llm_provider`` chọn: provider chính khi có key, relay
@@ -577,13 +615,14 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240) 
         retries: Số lần retry mỗi key trước khi chuyển key tiếp.
         timeout: Timeout mỗi request đến provider (giây). Mặc định 240 cho batch
             generation; caller on-demand (study analysis) nên truyền thấp hơn.
+        content_task: Chỉ dùng content model khi provider hiệu lực là StepFun.
     """
-    _cb_check()  # fail nhanh nếu provider đang bị gián đoạn
+    provider, model = _effective_llm_model(content_task=content_task)
+    _cb_check(provider, model)  # fail nhanh nếu provider/model đang bị gián đoạn
     keys = settings.llm_keys_list
     if not keys:
         raise RuntimeError(NO_LLM_KEY_MESSAGE)
     url = settings.llm_api_url_effective
-    model = settings.llm_model_effective
 
     payload_template = {
         "messages": [
@@ -633,7 +672,7 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240) 
                 retries=retries,
                 timeout=timeout,
             )
-            _cb_record_success()
+            _cb_record_success(provider, model)
             return result
         except Exception as e:
             err_msg = f"LLM key #{i + 1}: {str(e)}"
@@ -643,7 +682,7 @@ def _call_api(prompt_text: str, retries: int = MAX_RETRIES, timeout: int = 240) 
                 time.sleep(0.5)  # nghỉ ngắn trước khi đổi key
             continue
 
-    _cb_record_failure()
+    _cb_record_failure(provider, model)
     raise RuntimeError(
         f"Đã thử hết {len(keys)} key LLM ({model}). Errors: {' | '.join(errors)}"
     )
@@ -719,7 +758,7 @@ QUY TẮC BẮT BUỘC:
 12. Chỉ trả về JSON, không giải thích gì thêm"""
 
     # Call API with retries
-    data = _call_api(prompt)
+    data = _call_api(prompt, content_task=True)
 
     if "words" not in data:
         raise RuntimeError("Invalid JSON format from LLM: missing 'words' key")
@@ -838,10 +877,17 @@ def _validate_api_quiz_question(item: dict, quiz_type: str) -> Tuple[bool, str]:
         correct_order = metadata.get("correct_order") or []
         if len(segments) < 2 or len(correct_order) < 2:
             return False, "drag_drop missing segments/correct_order"
-        if sorted(map(str, segments)) != sorted(map(str, correct_order)):
-            return False, "drag_drop tokens do not match"
-        if list(segments) == list(correct_order):
-            return False, "drag_drop is not scrambled"
+        # Format mới: segments là mảng string (thứ tự đúng), correct_order là
+        # mảng index [0,1,2,...]. Kiểm tra tính nhất quán thay vì so sánh giá trị.
+        if isinstance(correct_order[0], int):
+            if correct_order != list(range(len(segments))):
+                return False, "drag_drop correct_order indices mismatch"
+        else:
+            # Format cũ (pre-normalize): cả hai đều là string array
+            if sorted(map(str, segments)) != sorted(map(str, correct_order)):
+                return False, "drag_drop tokens do not match"
+            if list(segments) == list(correct_order):
+                return False, "drag_drop is not scrambled"
     return True, "ok"
 
 
@@ -896,14 +942,17 @@ def _normalize_api_quiz_question(item: dict, quiz_type: str) -> dict:
     metadata = dict(row.get("metadata") or {})
     correct_order = [str(token).strip() for token in metadata.get("correct_order") or [] if str(token).strip()]
     if len(correct_order) >= 2:
-        scrambled = list(correct_order)
+        # Shuffle bằng index để tránh bug token trùng.
+        indices = list(range(len(correct_order)))
         rng = random.Random("|".join(correct_order))
         for _ in range(12):
-            rng.shuffle(scrambled)
-            if scrambled != correct_order:
+            rng.shuffle(indices)
+            if [correct_order[i] for i in indices] != correct_order:
                 break
-        metadata["correct_order"] = correct_order
-        metadata["segments"] = scrambled
+        scrambled = [correct_order[i] for i in indices]
+        metadata["correct_order"] = list(range(len(correct_order)))
+        metadata["segments"] = correct_order
+        metadata["scrambled_indices"] = indices
         row["metadata"] = metadata
         # Nhúng token vào prompt, đúng định dạng các câu drag_drop viết tay
         # ("Sắp xếp từ thành câu đúng: A · B · C"). LLM để nguyên câu lệnh chung
@@ -969,13 +1018,14 @@ Quy tắc từng loại:
 - drag_drop: {_DRAG_DROP_SPEC}
 
 Chỉ dùng từ vựng/ngữ pháp phù hợp HSK {hsk_level}. Mỗi câu có đúng 4 lựa chọn duy nhất, correct_index 0..3 và giải thích tiếng Việt rõ ràng. Không markdown.
+ĐA DẠNG VĂN PHONG DỊCH: các câu translation PHẢI luân phiên văn phong đáp án đúng (trang trọng / đời thường / ngắn gọn / diễn giải), KHÔNG để mọi câu cùng một kiểu dịch.
 Mỗi option chỉ chứa nội dung lựa chọn. KHÔNG thêm nhãn "A.", "B)", "C、", "D:" vào đầu option — giao diện tự đánh nhãn theo vị trí.
 explanation TUYỆT ĐỐI không được trỏ đáp án bằng chữ cái ("đáp án đúng là B", "phương án C sai"). Backend xáo lại vị trí 4 options sau khi nhận, nên chữ cái sẽ trỏ sai ô. Hãy TRÍCH NGUYÊN VĂN nội dung option khi cần nhắc tới nó.
 Văn bản tiếng Trung (prompt, options của reading/cloze, audio_text) phải THUẦN tiếng Trung: không chèn từ tiếng Anh/tiếng Việt/tiếng Hàn/tiếng Nhật vào giữa câu.
 Chỉ trả JSON object:
 {{"questions":[{{"quiz_type":"vocab","target_hanzi":"词","prompt":"...","options":["lựa chọn 1","lựa chọn 2","lựa chọn 3","lựa chọn 4"],"correct_index":0,"explanation":"...","audio_text":"","metadata":{{"segments":[],"correct_order":[],"sentence_vi":""}}}}]}}
 """
-    data = _call_api(prompt)
+    data = _call_api(prompt, content_task=True)
     rows = data.get("questions") if isinstance(data, dict) else None
     if not isinstance(rows, list):
         raise RuntimeError("API bundle response missing questions list")
@@ -1235,7 +1285,7 @@ QUY TẮC BẮT BUỘC:
 {qt_mapping_block}
 9. Chỉ trả về JSON, không giải thích gì thêm."""
 
-    data = _call_api(prompt)
+    data = _call_api(prompt, content_task=True)
 
     if "questions" not in data or not isinstance(data["questions"], list):
         raise RuntimeError("Invalid JSON format from LLM: missing 'questions' list")
@@ -1284,7 +1334,7 @@ Yêu cầu:
 OUTPUT PHẢI LÀ MỘT OBJECT JSON (không markdown):
 {{"passage": "nội dung đoạn văn tiếng Trung ở đây"}}"""
 
-    data = _call_api(prompt)
+    data = _call_api(prompt, content_task=True)
     passage = data.get("passage") if isinstance(data, dict) else None
     if not isinstance(passage, str) or len(passage.strip()) < 4:
         raise RuntimeError("LLM không trả về đoạn văn hợp lệ cho chủ đề.")

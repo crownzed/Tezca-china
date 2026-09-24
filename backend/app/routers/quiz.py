@@ -13,6 +13,7 @@ from ..services.output_service import OutputService
 from ..services.quiz_service import QuizService
 from ..services.rate_limiter import RateLimiter
 from ..services.session_service import SessionService
+from ..services.streak_service import StreakService
 from ..services.study_analysis_service import analyze_study_data
 
 router = APIRouter(prefix="/api", tags=["quiz"])
@@ -138,6 +139,11 @@ def complete_session(payload: SessionCompleteRequest, user_id: str = Depends(res
         if str(exc) == "session_not_found":
             raise HTTPException(status_code=404, detail="Session not found") from exc
         raise
+    # Ghi nhận streak khi hoàn thành phiên học (skip_verification vì session đã được verify)
+    try:
+        StreakService(db).record_activity(user_id, skip_verification=True)
+    except Exception:
+        logger.warning("Failed to record streak for user %s after session %s", user_id, payload.session_id, exc_info=True)
     return {"id": session.id, "completed_at": session.completed_at.isoformat()}
 
 @router.post("/session/output", response_model=SessionOutputOut)
@@ -265,6 +271,7 @@ def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get
             func.count().label("answered"),
             func.sum(LearningEvent.correct).label("correct"),
         )
+        .select_from(LearningEvent)
         .join(Question, LearningEvent.question_id == Question.id)
         .where(LearningEvent.user_id == user_id)
         .group_by(Question.quiz_type)
@@ -287,6 +294,7 @@ def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get
             Question.quiz_type,
             func.count().label("null_sessions"),
         )
+        .select_from(LearningEvent)
         .join(Question, LearningEvent.question_id == Question.id)
         .where(LearningEvent.user_id == user_id, LearningEvent.session_id.is_(None))
         .group_by(Question.quiz_type)
@@ -302,6 +310,7 @@ def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get
             func.count().label("answered"),
             func.sum(LearningEvent.correct).label("correct"),
         )
+        .select_from(LearningEvent)
         .join(Question, LearningEvent.question_id == Question.id)
         .where(LearningEvent.user_id == user_id)
         .group_by(Question.level)
@@ -320,6 +329,7 @@ def analytics(user_id: str = Depends(resolve_user_id), db: Session = Depends(get
             Question.level,
             func.count().label("null_sessions"),
         )
+        .select_from(LearningEvent)
         .join(Question, LearningEvent.question_id == Question.id)
         .where(LearningEvent.user_id == user_id, LearningEvent.session_id.is_(None))
         .group_by(Question.level)

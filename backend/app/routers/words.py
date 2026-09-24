@@ -81,6 +81,10 @@ def list_words(
                 component_hint=w.component_hint or "",
                 examples=examples,
                 confusable_words=list(w.confusable_words_json or []),
+                semantic_notes=w.semantic_notes or "",
+                usage_notes=w.usage_notes or "",
+                usage_patterns=list(w.usage_patterns_json or []),
+                character_analysis=w.character_analysis or "",
             )
         )
         key = f"HSK {w.hsk_level}"

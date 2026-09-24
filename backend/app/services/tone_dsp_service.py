@@ -39,9 +39,14 @@ from .tone_dsp_extractor import (
     MIN_VOICED_FRAMES as _MIN_VOICED_FRAMES,
     ToneDspExtractorError,
     center_template as _center_template,
+    contour_distance as _contour_distance,
     decode_wav as _decode_wav,
+    dtw_distance as _dtw_distance,
     extract_f0 as _extract_f0,
     frame_step_sec as _frame_step_sec,
+    huber_cost as _huber_cost,
+    net_slope as _net_slope,
+    resample_linear as _resample_linear,
     shape_normalize as _shape_normalize,
     split_syllables as _split_syllables,
 )
@@ -77,7 +82,7 @@ class ToneDspError(ToneDspExtractorError):
 
 
 # ---------------------------------------------------------------------------
-# DTW and scoring (these stay here — they are SCORING logic, not extraction)
+# DTW and scoring thresholds
 # ---------------------------------------------------------------------------
 
 # A syllable whose mean DTW distance (in Chao levels) is below this is treated
@@ -86,129 +91,14 @@ class ToneDspError(ToneDspExtractorError):
 _TONE_OK_DIST = 0.9
 # Distance at/above which a tone counts as fully wrong, for the 0-1 accuracy map.
 _TONE_MAX_DIST = 2.2
-# Weight on the slope-direction term added to the DTW shape cost. DTW alone
-# warps away wrong-direction errors (a rising contour vs a flat template), so a
-# net-slope penalty (in Chao levels) is what enforces the defining direction of
-# each tone. ~0.6 makes a full one-level wrong direction cost about that much.
+
+# ---------------------------------------------------------------------------
+# DTW and scoring — canonical implementations now live in tone_dsp_extractor.
+# Private aliases kept so internal callers (score_tones, _tone_feedback) work
+# unchanged. The _SLOPE_WEIGHT alias is also kept for any legacy external refs.
+# ---------------------------------------------------------------------------
+
 _SLOPE_WEIGHT = 0.6
-
-
-def _huber_cost(diff: float, delta: float = 0.5) -> float:
-    """Huber loss: quadratic near 0, linear for |diff| > delta.
-
-    Robust to outlier F0 points — prevents single noisy frame from dominating
-    the DTW alignment cost. Delta=0.5 Chao levels ≈ transition zone between
-    in-tune and noticeably off.
-    """
-    ad = abs(diff)
-    if ad <= delta:
-        return 0.5 * diff * diff / delta
-    return ad - 0.5 * delta
-
-
-def _dtw_distance(a: list[float], b: list[float]) -> float:
-    """Dynamic Time Warping with Huber cost and Sakoe-Chiba band constraint.
-
-    v2.1 improvements over plain DTW:
-    - Huber cost replaces absolute difference (robust to F0 outliers)
-    - Sakoe-Chiba band limits warping path to ±w of the diagonal (prevents
-      pathological alignments and reduces O(N×M) → O(N×w))
-
-    The band is centered on the proportional diagonal j ≈ i * m/n so it works
-    correctly for sequences of very different lengths (e.g., 3-point template
-    vs 20-point segment). Without this scaling, a fixed-width band around j=i
-    can make cost[n,m] unreachable when |n-m| > w.
-    """
-    import numpy as np
-
-    n, m = len(a), len(b)
-    if n == 0 or m == 0:
-        return float("inf")
-    # Sakoe-Chiba band width: scaled to handle length mismatches
-    w = max(max(n, m) // 3, abs(n - m) + 2)
-    cost = np.full((n + 1, m + 1), np.inf)
-    cost[0, 0] = 0.0
-    for i in range(1, n + 1):
-        ai = a[i - 1]
-        # Center band on proportional diagonal position
-        j_center = int(round(i * m / n))
-        j_min = max(1, j_center - w)
-        j_max = min(m, j_center + w)
-        for j in range(j_min, j_max + 1):
-            d = _huber_cost(ai - b[j - 1])
-            cost[i, j] = d + min(cost[i - 1, j], cost[i, j - 1], cost[i - 1, j - 1])
-    # backtrack to get path length for normalization
-    i, j, steps = n, m, 0
-    while i > 0 and j > 0:
-        steps += 1
-        diag, up, left = cost[i - 1, j - 1], cost[i - 1, j], cost[i, j - 1]
-        m_ = min(diag, up, left)
-        if m_ == diag:
-            i, j = i - 1, j - 1
-        elif m_ == up:
-            i -= 1
-        else:
-            j -= 1
-    steps += i + j
-    return float(cost[n, m] / max(steps, 1))
-
-
-def _net_slope(seq: list[float]) -> float:
-    """Net rise/fall of a sequence in Chao levels (end region minus start region).
-
-    Uses the mean of the first/last thirds rather than raw endpoints so a single
-    jittery frame can't flip the sign. Positive = rising, negative = falling.
-    """
-    n = len(seq)
-    if n < 2:
-        return 0.0
-    k = max(1, n // 3)
-    head = sum(seq[:k]) / k
-    tail = sum(seq[-k:]) / k
-    return tail - head
-
-
-def _resample_linear(seq: list[float], length: int) -> list[float]:
-    """Linearly resample ``seq`` to exactly ``length`` points."""
-    n = len(seq)
-    if n == 0 or length <= 0:
-        return []
-    if n == length:
-        return list(seq)
-    if length == 1:
-        return [sum(seq) / n]
-    if n == 1:
-        return [seq[0]] * length
-    out = [0.0] * length
-    for i in range(length):
-        pos = i * (n - 1) / (length - 1)
-        i0 = int(pos)
-        i1 = min(i0 + 1, n - 1)
-        frac = pos - i0
-        out[i] = seq[i0] * (1 - frac) + seq[i1] * frac
-    return out
-
-
-def _contour_distance(seg_norm: list[float], template: list[float]) -> float:
-    """Combined tone distance: DTW shape cost + a slope-direction penalty.
-
-    DTW alone tolerates time-warping, which can mask a wrong *direction* (e.g. a
-    clearly rising contour scored against a flat T1 template still warps cheaply).
-    Tones are defined by direction + slope, so we add the absolute difference in
-    net slope between the user's syllable and the template. This is what catches
-    "said with the wrong tone contour" that DTW by itself lets through.
-
-    The slope term compares net rise/fall, but ``_net_slope`` averages over the
-    first/last thirds — so a 3-point template and a 40-point syllable measure
-    slope over very different fractions of their span, inflating the gap for a
-    correctly-realized tone. We resample the template to the segment's length
-    first so both slopes are measured on the same footing. (DTW is unaffected —
-    it already warps across length differences.)
-    """
-    shape = _dtw_distance(seg_norm, template)
-    tpl_for_slope = _resample_linear(template, len(seg_norm)) if seg_norm else template
-    slope_gap = abs(_net_slope(seg_norm) - _net_slope(tpl_for_slope))
-    return shape + _SLOPE_WEIGHT * slope_gap
 
 
 def _dist_to_accuracy(dist: float) -> float:

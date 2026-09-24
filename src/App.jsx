@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, Bell, BellOff, Blocks, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, Clock3, Ear, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Wrench, X, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, BellOff, Blocks, BookOpen, CheckCircle2, ChevronDown, Clock3, Ear, Fish, Flame, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Phone, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Trophy, TrendingUp, Wrench, X, XCircle } from 'lucide-react';
 import { analyzeStudyData, completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
@@ -12,19 +12,27 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 const CustomVocabInput = lazy(() => import('./components/CustomVocabInput.jsx'));
 const PronunciationPractice = lazy(() => import('./components/PronunciationPractice.jsx'));
 const VoiceChat = lazy(() => import('./components/VoiceChat.jsx'));
+const LiveCall = lazy(() => import('./components/LiveCall.jsx'));
 const GrammarLab = lazy(() => import('./components/GrammarLab.jsx'));
 const TranslationPractice = lazy(() => import('./components/TranslationPractice.jsx'));
 const VocabTypingMode = lazy(() => import('./components/VocabTypingMode.jsx'));
 const FlashcardMode = lazy(() => import('./components/FlashcardMode.jsx'));
 const ConfusablePairs = lazy(() => import('./components/ConfusablePairs.jsx'));
 const DictationMode = lazy(() => import('./components/DictationMode.jsx'));
-import { notificationPermission, requestNotificationPermission, scheduleDailyReminder, cancelReminder, showNotification } from './notifications.js';
+const MergeGame = lazy(() => import('./components/MergeGame.jsx'));
 import { resolveDecompositions } from './radicals-db.js';
 import { loadAllFlashcards } from './vocab-loader';
 import { captureWordReview } from './srs-capture.js';
 import { ClickableChineseText, TonedPinyin } from './components/chinese-text.jsx';
 import HskLevelPicker from './components/HskLevelPicker.jsx';
 import { primaryLevel, normalizeLevels, levelMatches, levelsLabel, readStoredLevels } from './hsk-levels.js';
+import { StreakLeaderboard } from './components/StreakDisplay.jsx';
+import { StreakHero } from './components/streak/StreakHero.jsx';
+import { LeaderboardPodium } from './components/streak/LeaderboardPodium.jsx';
+import { LeaderboardList } from './components/streak/LeaderboardList.jsx';
+import { MyPositionBar } from './components/streak/MyPositionBar.jsx';
+import { useStreakData } from './hooks/useStreakData.js';
+import { useLeaderboard } from './hooks/useLeaderboard.js';
 
 // Module-level clock helper. Kept out of component scope so React's purity
 // lint doesn't flag the (intentional) impure read inside event handlers.
@@ -133,6 +141,7 @@ const NAV = [
     items: [
       { id: 'speak', label: 'Phát âm', icon: Mic },
       { id: 'voicechat', label: 'Hội thoại', icon: MessageCircle },
+      { id: 'livecall', label: 'Gọi điện', icon: Phone },
     ],
   },
   {
@@ -147,7 +156,8 @@ const NAV = [
       { id: 'custom', label: 'Tự tạo', icon: PenTool },
     ],
   },
-  { id: 'plan', label: 'Kế hoạch', icon: CalendarCheck },
+  { id: 'plan', label: 'Streak', icon: Flame },
+  { id: 'merge-game', label: 'Ghép chữ', icon: Fish },
 ];
 
 // Danh sách phẳng để tra cứu label theo view id (tiêu đề topbar).
@@ -1056,7 +1066,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
   const isListeningMode = activeQuizType === 'listening' || activeQuizType === 'dialogue';
   const progress = quizItems.length ? Math.round(((index + 1) / quizItems.length) * 100) : 0;
 
-  const resetQuizState = () => {
+  const resetQuizState = useCallback(() => {
     setSession(null);
     setQuizItems([]);
     setPrimaryQuestions([]);
@@ -1074,7 +1084,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     setVoiceDone(false);
     answersRef.current = [];
     stopSpeech();
-  };
+  }, []);
 
   const loadQuiz = useCallback(async () => {
     const loadId = loadIdRef.current + 1;
@@ -1115,7 +1125,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     } finally {
       if (loadIdRef.current === loadId) setLoading(false);
     }
-  }, [levels, limit, quizType, strategy.detail, strategyMode]);
+  }, [level, levels, limit, quizType, resetQuizState, strategy.detail, strategyMode, userId]);
 
   // Hủy chờ tải (khi API treo): tăng loadId để bỏ response đến muộn, đưa người
   // dùng về màn chọn đề thay vì kẹt ở spinner.
@@ -1123,7 +1133,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     loadIdRef.current += 1;
     setLoading(false);
     resetQuizState();
-  }, []);
+  }, [resetQuizState]);
 
   useEffect(() => {
     if (autoStartKey <= 0) return undefined;
@@ -1170,7 +1180,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     };
   }, [activeQuizType, isListeningMode, playAudio, question, showAudioPanel]);
 
-  const queueRepairItem = (review, selectedIndex, confidenceValue) => {
+  const queueRepairItem = useCallback((review, selectedIndex, confidenceValue) => {
     if (!question || isRepair) return;
     setQuizItems(currentItems => {
       if (currentItems.some(row => row.type === 'repair_card' && row.source_question_id === question.id)) return currentItems;
@@ -1191,7 +1201,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
       nextItems.splice(insertAt, 0, repairItem);
       return nextItems;
     });
-  };
+  }, [index, isRepair, question]);
 
   const finishQuiz = useCallback(async () => {
     const finalAnswers = answersRef.current;
@@ -1248,7 +1258,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
       setLoading(false);
       setSubmitting(false);
     }
-  }, [level, primaryQuestions, refreshStats, session]);
+  }, [level, primaryQuestions, refreshStats, session, userId]);
 
   const answerQuestion = useCallback(async (choiceIndex, eventTimeStamp) => {
     if (!question || selected !== null || submitting || feedback || loading) return;
@@ -1296,7 +1306,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     } finally {
       setSubmitting(false);
     }
-  }, [activeQuizType, feedback, isRepair, loading, question, selected, session?.id, submitting, userId]);
+  }, [activeQuizType, feedback, isRepair, loading, question, queueRepairItem, selected, session?.id, submitting, userId]);
 
   const continueQuiz = useCallback(() => {
     if (index + 1 >= quizItems.length) {
@@ -1349,8 +1359,33 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
   }, [feedback, submitting, loading, continueQuiz, selected, activeQuizType, question, answerQuestion]);
 
   // ---- Drag-drop handlers ----
-  const dragSegments = question?.metadata_json?.segments || [];
-  const dragCorrectOrder = question?.metadata_json?.correct_order || [];
+  // Backward compat: câu cũ có segments/correct_order đều là string array.
+  // Format mới: segments = string array (thứ tự đúng), correct_order = index array,
+  // scrambled_indices = index array (thứ tự xáo trộn để hiển thị).
+  const { dragSegments, dragCorrectOrder, dragScrambledIndices, isNewFormat } = useMemo(() => {
+    const rawSegments = question?.metadata_json?.segments || [];
+    const rawCorrectOrder = question?.metadata_json?.correct_order || [];
+    const isNewFormat = rawCorrectOrder.length > 0 && typeof rawCorrectOrder[0] === 'number';
+    const segments = rawSegments;
+    const correctOrder = isNewFormat ? rawCorrectOrder : rawSegments.map((_, i) => i);
+    const scrambledIndices = isNewFormat
+      ? (question?.metadata_json?.scrambled_indices || rawSegments.map((_, i) => i))
+      : (() => {
+          // Format cũ: segments đã là scrambled, cần map ngược về index gốc.
+          // Dùng greedy matching vì có thể có token trùng.
+          const used = new Set();
+          return rawSegments.map(token => {
+            const idx = rawCorrectOrder.findIndex((t, i) => t === token && !used.has(i));
+            if (idx >= 0) { used.add(idx); return idx; }
+            // Không tìm thấy → trả về -1 thay vì 0 để tránh duplicate sai
+            return -1;
+          });
+        })();
+    return { dragSegments: segments, dragCorrectOrder: correctOrder, dragScrambledIndices: scrambledIndices, isNewFormat };
+  }, [question?.metadata_json]);
+
+  // Set cho O(1) lookup khi render drag chips
+  const dragOrderSet = useMemo(() => new Set(dragOrder), [dragOrder]);
 
   const toggleDragToken = (tokenIndex) => {
     setDragOrder(prev => {
@@ -1363,8 +1398,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
 
   const submitDragDrop = () => {
     if (dragOrder.length !== dragCorrectOrder.length) return;
-    const userOrder = dragOrder.map(i => dragSegments[i]);
-    const isCorrect = userOrder.every((token, i) => token === dragCorrectOrder[i]);
+    const isCorrect = dragOrder.every((idx, i) => idx === dragCorrectOrder[i]);
     setSelected(isCorrect ? 0 : 1);
     setPendingLatency(Math.max(0, now() - questionStartedAtRef.current));
     setTimeout(() => handleQuizAnswer(isCorrect), 300);
@@ -1581,20 +1615,20 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
                 )}
               </div>
 
-              {/* Vùng nguồn — các chip chưa chọn, phân cách bằng / */}
+              {/* Vùng nguồn — các chip chưa chọn, hiển thị theo thứ tự xáo trộn */}
               <div className="drag-source-zone">
-                {dragSegments.map((token, i) => {
-                  const used = dragOrder.includes(i);
+                {dragScrambledIndices.map((origIndex, pos) => {
+                  const used = origIndex >= 0 && dragOrderSet.has(origIndex);
                   return (
-                    <Fragment key={`src-${i}`}>
-                      {i > 0 && <span className={`drag-slash ${used ? 'drag-slash--faded' : ''}`}>/</span>}
+                    <Fragment key={`src-${pos}`}>
+                      {pos > 0 && <span className={`drag-slash ${used ? 'drag-slash--faded' : ''}`}>/</span>}
                       <button
                         className={`drag-chip ${used ? 'drag-chip--used' : 'drag-chip--available'}`}
-                        onClick={() => !used && toggleDragToken(i)}
+                        onClick={() => !used && toggleDragToken(origIndex)}
                         disabled={used}
-                        aria-label={used ? `${token} (đã chọn)` : `Chọn ${token}`}
+                        aria-label={used ? `${dragSegments[origIndex]} (đã chọn)` : `Chọn ${dragSegments[origIndex]}`}
                       >
-                        {token}
+                        {dragSegments[origIndex]}
                       </button>
                     </Fragment>
                   );
@@ -1707,7 +1741,9 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
               {!feedback.review.correct && (
                 <small>Đáp án: {
                   activeQuizType === 'drag_drop'
-                    ? (question.metadata_json?.correct_order || []).join('')
+                    ? (isNewFormat
+                        ? (question.metadata_json?.segments || []).join('')
+                        : (question.metadata_json?.correct_order || []).join(''))
                     : (question.options[feedback.review.correct_index] || '-')
                 }</small>
               )}
@@ -1937,7 +1973,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       setCompleted(summary);
       setLoading(false);
     }
-  }, [onComplete, plan, session]);
+  }, [onComplete, plan, session, userId]);
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -1978,7 +2014,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     } finally {
       setLoading(false);
     }
-  }, [level, limit, modeId, plan, quizType, resetTyping]);
+  }, [level, limit, modeId, plan, quizType, resetTyping, userId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => loadSession(), 0);
@@ -2038,7 +2074,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     setIndex(1);
   };
 
-  const queueRepairItem = (review, selectedIndex) => {
+  const queueRepairItem = useCallback((review, selectedIndex) => {
     setItems(currentItems => {
       const nextItems = [...currentItems];
       const repairItem = {
@@ -2056,7 +2092,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
       nextItems.splice(insertAt, 0, repairItem);
       return nextItems;
     });
-  };
+  }, [index, question]);
 
   const answerQuestion = useCallback(async (choiceIndex, eventTimeStamp) => {
     if (!question || selected !== null || submitting || feedback) return;
@@ -2093,7 +2129,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     } finally {
       setSubmitting(false);
     }
-  }, [feedback, isRepair, question, selected, session?.id, submitting, userId]);
+  }, [feedback, isRepair, question, queueRepairItem, selected, session?.id, submitting, userId]);
 
   const continueSession = useCallback(() => {
     if (index + 1 >= items.length) {
@@ -2108,9 +2144,9 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     setPracticeFeedback(null);
     setAudioPlaying(false);
     setAudioPlayed(false);
-  }, [finishSession, index, items.length]);
+  }, [finishSession, index, items.length, resetTyping]);
 
-  const completePracticeItem = async (payload = {}) => {
+  const completePracticeItem = useCallback(async (payload = {}) => {
     if (!item || submitting) return;
     setSubmitting(true);
     try {
@@ -2169,7 +2205,7 @@ function LearningSession({ plan, fallbackLevel, onExit, onComplete }) {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [index, item, session?.id, submitting, textAnswer, userId]);
 
   const submitPinyin = () => {
     const result = assessPinyinInput(textAnswer, item?.word?.pinyin);
@@ -2523,7 +2559,7 @@ function GeneralCheck({ level, onExit, onComplete }) {
     } finally {
       setLoading(false);
     }
-  }, [level]);
+  }, [level, userId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => loadGeneralCheck(), 0);
@@ -3152,6 +3188,51 @@ function VocabLibrary({ focusLevels, theme }) {
                 {selectedWord.mnemonic && <p className="radical-note">{selectedWord.mnemonic}</p>}
               </div>
 
+              {/* Ngữ nghĩa chi tiết — do Giáo sư Ngữ nghĩa sinh */}
+              {selectedWord.semanticNotes && (
+                <div className="vocab-drawer-section">
+                  <span className="vocab-section-title">📖 Ngữ nghĩa</span>
+                  <p className="vocab-note-text">{selectedWord.semanticNotes}</p>
+                </div>
+              )}
+
+              {/* Cách sử dụng & Mẫu câu — merge từ cả 2 giáo sư */}
+              {selectedWord.usagePatterns?.length > 0 && (
+                <div className="vocab-drawer-section">
+                  <span className="vocab-section-title">✏️ Cách sử dụng</span>
+                  <div className="usage-pattern-list">
+                    {selectedWord.usagePatterns.map((p, i) => (
+                      <div key={i} className="usage-pattern-item">
+                        <strong>{p.pattern}</strong>
+                        {p.example_cn && (
+                          <blockquote>
+                            {p.example_cn}
+                            <small>{p.example_vi}</small>
+                          </blockquote>
+                        )}
+                        {p.note && <small className="pattern-note">{p.note}</small>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Lưu ý & Cảnh báo — do Giáo sư Ứng dụng sinh */}
+              {selectedWord.usageNotes && (
+                <div className="vocab-drawer-section">
+                  <span className="vocab-section-title">⚠️ Lưu ý</span>
+                  <p className="vocab-note-text vocab-warning">{selectedWord.usageNotes}</p>
+                </div>
+              )}
+
+              {/* Phân tích chữ Hán — do Giáo sư Ngữ nghĩa sinh */}
+              {selectedWord.characterAnalysis && (
+                <div className="vocab-drawer-section">
+                  <span className="vocab-section-title">🔍 Phân tích chữ Hán</span>
+                  <p className="vocab-note-text">{selectedWord.characterAnalysis}</p>
+                </div>
+              )}
+
               <div className="vocab-drawer-section">
                 <span className="vocab-section-title">Ví dụ mẫu</span>
                 {selectedWord.examples.length ? (
@@ -3353,99 +3434,94 @@ function HandwritingPad({ targetWord, theme }) {
   );
 }
 
-function getInitialPlan() {
-  try {
-    return JSON.parse(window.localStorage.getItem('ifThenPlan')) || { cue: 'Sau bữa tối', time: '20:00', minutes: 5, muted: false, notify: false };
-  } catch {
-    return { cue: 'Sau bữa tối', time: '20:00', minutes: 5, muted: false, notify: false };
-  }
-}
+/**
+ * StreakPage — Trang chuỗi học tập liên tiếp.
+ * Thay thế StudyPlan. Hiển thị hero flame, milestone badges, stats và leaderboard.
+ */
 
-function StudyPlan({ todayPlan }) {
-  const [plan, setPlan] = useState(getInitialPlan);
-  const [saved, setSaved] = useState(false);
-  const [permission, setPermission] = useState(() => notificationPermission());
-  const reminderText = `${plan.time}: ${todayPlan?.dueCount || 3} mục đến hạn. ${plan.minutes} phút là đủ để giữ lịch ôn.`;
-  const reminderBody = `Đến giờ học rồi. ${todayPlan?.dueCount || 3} mục đến hạn, ${plan.minutes} phút là đủ để giữ lịch ôn.`;
-
-  const updatePlan = (patch) => {
-    setPlan(current => ({ ...current, ...patch }));
-    setSaved(false);
-  };
-
-  // Bật nhắc: xin quyền trước. Bị từ chối thì giữ tắt và để UI báo lại.
-  const toggleNotify = async (next) => {
-    if (!next) {
-      updatePlan({ notify: false });
-      return;
-    }
-    const result = await requestNotificationPermission();
-    setPermission(result);
-    updatePlan({ notify: result === 'granted' });
-  };
-
-  const savePlan = () => {
-    window.localStorage.setItem('ifThenPlan', JSON.stringify(plan));
-    window.localStorage.setItem('behaviorNudgeMuted', plan.muted ? '1' : '0');
-    setSaved(true);
-  };
-
-  // Áp lịch nhắc mỗi khi plan đổi (chỉ khi đã bật & có quyền). Cleanup tự hủy
-  // timer cũ để không bắn trùng.
-  useEffect(() => {
-    if (!plan.notify || permission !== 'granted') {
-      cancelReminder();
-      return undefined;
-    }
-    return scheduleDailyReminder({
-      time: plan.time,
-      title: 'Tezca · Nhắc học',
-      body: reminderBody,
-    });
-  }, [plan.notify, plan.time, permission, reminderBody]);
-
-  const denied = permission === 'denied';
-  const unsupported = permission === 'unsupported';
+function StreakPage({ onNavigateToQuiz }) {
+  const { currentStreak, longestStreak, studiedToday, broken, loading, last7Days } = useStreakData();
+  const { entries, me, loading: lbLoading, userId, isAuthenticated } = useLeaderboard({ limit: 20 });
+  const [lbTab, setLbTab] = useState('all');
 
   return (
     <main className="core-page page-enter">
       <section className="core-card core-section-head">
-        <span className="core-eyebrow">Plan</span>
-        <h1>Kế hoạch học</h1>
-        <p>Thiết lập if-then plan và nhắc học có lý do, không streak phạt.</p>
+        <span className="core-eyebrow">Streak</span>
+        <h1>Chuỗi học tập</h1>
+        <p>Duy trì thói quen mỗi ngày để xây dựng chuỗi liên tiếp.</p>
       </section>
 
-      <section className="plan-grid">
-        <div className="core-card plan-form">
-          <label><span>Nếu</span><input value={plan.cue} onChange={event => updatePlan({ cue: event.target.value })} /></label>
-          <label><span>Thì học lúc</span><input type="time" value={plan.time} onChange={event => updatePlan({ time: event.target.value })} /></label>
-          <label><span>Số phút</span><input type="number" min="3" max="45" value={plan.minutes} onChange={event => updatePlan({ minutes: Number(event.target.value) })} /></label>
-          <label className="toggle-row"><input type="checkbox" checked={plan.muted} onChange={event => updatePlan({ muted: event.target.checked })} /><span>Tắt nudge trên Today Queue</span></label>
-          <label className="toggle-row">
-            <input type="checkbox" checked={plan.notify} disabled={denied || unsupported} onChange={event => toggleNotify(event.target.checked)} />
-            <span>Nhắc bằng thông báo trình duyệt lúc {plan.time}</span>
-          </label>
-          {denied && <p className="plan-notify-hint plan-notify-hint--warn">Trình duyệt đang chặn thông báo. Hãy bật lại quyền cho trang này trong cài đặt trình duyệt.</p>}
-          {unsupported && <p className="plan-notify-hint plan-notify-hint--warn">Trình duyệt này không hỗ trợ thông báo.</p>}
-          {plan.notify && !denied && <p className="plan-notify-hint">Thông báo chỉ hiện khi tab Tezca đang mở.</p>}
-          <div className="plan-form-actions">
-            <button className="btn-primary" type="button" onClick={savePlan}><CalendarCheck size={16} /> Lưu kế hoạch</button>
-            <button className="btn-secondary" type="button" disabled={permission !== 'granted'} onClick={() => showNotification('Tezca · Thử thông báo', reminderBody)}><Bell size={16} /> Thử thông báo</button>
-          </div>
-        </div>
+      {!isAuthenticated && (
+        <section className="core-card" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+          <Flame size={48} style={{ color: '#f97316', marginBottom: '1rem', opacity: 0.6 }} />
+          <h2 style={{ margin: '0 0 0.5rem', fontWeight: 700 }}>Đăng nhập để theo dõi streak</h2>
+          <p style={{ color: 'var(--text-muted, #888)', margin: 0 }}>Chuỗi học tập được lưu theo tài khoản của bạn.</p>
+        </section>
+      )}
 
-        <div className="core-card plan-preview">
-          <span className="core-eyebrow">If-Then</span>
-          <h2>Nếu {plan.cue.toLowerCase()}, thì học {plan.minutes} phút.</h2>
-          <p>{reminderText}</p>
-          <div className="metadata-strip">
-            <span><strong>{todayPlan?.behaviorLabel || 'Duy trì'}</strong><small>Trạng thái</small></span>
-            <span><strong>{todayPlan?.dueCount || 0}</strong><small>Đến hạn</small></span>
-            <span><strong>{todayPlan?.newCount || 0}</strong><small>Từ mới</small></span>
+      {isAuthenticated && (
+        <StreakHero
+          currentStreak={currentStreak}
+          longestStreak={longestStreak}
+          studiedToday={studiedToday}
+          broken={broken}
+          last7Days={last7Days}
+          loading={loading}
+          onStudyComplete={onNavigateToQuiz}
+        />
+      )}
+
+      {/* New Leaderboard System */}
+      {isAuthenticated && (
+        <section className="streak-leaderboard-v2 streak-page-leaderboard">
+          <div className="streak-lb-header">
+            <Trophy size={20} />
+            <h3>Bảng xếp hạng streak</h3>
           </div>
-          {saved && <div className="feedback-panel feedback-panel--correct"><p>Đã lưu kế hoạch local.{plan.notify ? ' Đã hẹn nhắc hằng ngày.' : ''}</p></div>}
-        </div>
-      </section>
+
+          {/* Tab bar */}
+          <div className="streak-lb-tabs" role="tablist">
+            <button
+              role="tab"
+              aria-selected={lbTab === 'all'}
+              className={`streak-lb-tab ${lbTab === 'all' ? 'is-active' : ''}`}
+              onClick={() => setLbTab('all')}
+            >
+              Toàn bộ
+            </button>
+            <button
+              role="tab"
+              aria-selected={lbTab === 'friends'}
+              className={`streak-lb-tab ${lbTab === 'friends' ? 'is-active' : ''}`}
+              onClick={() => setLbTab('friends')}
+            >
+              Bạn bè
+            </button>
+          </div>
+
+          {lbLoading ? (
+            <div className="streak-lb-loading">Đang tải bảng xếp hạng...</div>
+          ) : entries.length === 0 ? (
+            <div className="streak-lb-empty">
+              <TrendingUp size={32} />
+              <p>Chưa có ai trong bảng xếp hạng.</p>
+              <small>Hãy học mỗi ngày để xuất hiện ở đây!</small>
+            </div>
+          ) : (
+            <>
+              <LeaderboardPodium entries={entries.slice(0, 3).map((e, i) => ({ ...e, rank: i + 1 }))} />
+              <LeaderboardList entries={entries} currentUserId={userId} />
+              <MyPositionBar me={me} isAuthenticated={isAuthenticated} />
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Fallback old leaderboard for unauthenticated */}
+      {!isAuthenticated && (
+        <StreakLeaderboard limit={20} className="streak-page-leaderboard" />
+      )}
     </main>
   );
 }
@@ -3758,7 +3834,9 @@ export default function App() {
           {!generalCheckLevel && activeTab === 'custom' && <CustomVocabInput onSessionCreated={handleCustomSessionCreated} />}
           {!generalCheckLevel && activeTab === 'speak' && <PronunciationPractice focusLevels={levels} />}
           {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />}
-          {!generalCheckLevel && activeTab === 'plan' && <StudyPlan todayPlan={todayPlan} />}
+          {!generalCheckLevel && activeTab === 'livecall' && <LiveCall onExit={() => setActiveTab('voicechat')} />}
+          {!generalCheckLevel && activeTab === 'plan' && <StreakPage onNavigateToQuiz={() => setActiveTab('quiz')} />}
+          {!generalCheckLevel && activeTab === 'merge-game' && <MergeGame />}
           {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
           </Suspense>
         </ErrorBoundary>

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import JSON, Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
@@ -22,7 +22,10 @@ class User(Base):
     # get_optional_user, throttle 60s). Khác is_active (do admin bấm) — đây là
     # tín hiệu "đang dùng app" thật. Null = chưa từng gọi API sau khi thêm cột.
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # M9: IANA timezone string (e.g., "Asia/Shanghai", "Asia/Ho_Chi_Minh").
+    # Streak tính theo ngày local của user thay vì UTC server.
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Shanghai", server_default="Asia/Shanghai")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class PasswordResetToken(Base):
@@ -37,7 +40,7 @@ class PasswordResetToken(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class QuizType(str, Enum):
@@ -72,6 +75,11 @@ class Word(Base):
     topic: Mapped[str] = mapped_column(String(64), default="core")
     frequency_band: Mapped[str] = mapped_column(String(32), default="core_hsk")
     pos: Mapped[str] = mapped_column(String(16), default="")
+    # Chi tiết ngữ nghĩa, lưu ý, cách dùng — do dual-professor enrichment sinh.
+    semantic_notes: Mapped[str] = mapped_column(Text, default="")
+    usage_notes: Mapped[str] = mapped_column(Text, default="")
+    usage_patterns_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    character_analysis: Mapped[str] = mapped_column(Text, default="")
 
     examples: Mapped[list["Example"]] = relationship(back_populates="word", cascade="all, delete-orphan")
 
@@ -103,7 +111,7 @@ class Question(Base):
     explanation: Mapped[str] = mapped_column(Text, default="")
     audio_text: Mapped[str] = mapped_column(Text, default="")
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     word: Mapped[Word | None] = relationship()
 
@@ -123,7 +131,7 @@ class QuizAttempt(Base):
     score: Mapped[int] = mapped_column(Integer)
     total: Mapped[int] = mapped_column(Integer)
     answers: Mapped[list[dict]] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_quiz_attempts_user_level_type_created", "user_id", "level", "quiz_type", "created_at"),
@@ -142,8 +150,13 @@ class LearningSession(Base):
     target_words_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
     target_skills_json: Mapped[list[str]] = mapped_column(JSON, default=list)
     reason: Mapped[str] = mapped_column(Text, default="")
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        # M6: Index for streak verification queries (WHERE completed_at IS NOT NULL)
+        Index("idx_learning_sessions_user_completed", "user_id", "completed_at"),
+    )
 
 
 class LearningEvent(Base):
@@ -162,7 +175,7 @@ class LearningEvent(Base):
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_tag: Mapped[str] = mapped_column(String(64), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class UserProgress(Base):
@@ -195,4 +208,27 @@ class UserProgress(Base):
         # Single-column index trên next_review_at không hiệu quả vì phải scan toàn bộ
         # rows rồi filter user_id. Composite index cho phép range scan trực tiếp.
         Index("ix_progress_user_next_review", "user_id", "next_review_at"),
+    )
+
+
+class UserStreak(Base):
+    __tablename__ = "user_streaks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), unique=True, index=True)
+    current_streak: Mapped[int] = mapped_column(Integer, default=0)
+    longest_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_active_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # S3: Streak freeze — bảo vệ streak khỏi gãy 1 ngày.
+    # freezes_remaining: số lượt freeze còn lại trong tháng (reset đầu tháng).
+    # last_freeze_date: ngày gần nhất dùng freeze (tránh dùng 2 lần/ngày).
+    freezes_remaining: Mapped[int] = mapped_column(Integer, default=1)
+    last_freeze_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # freeze_month: tháng hiện tại (YYYY-MM) để biết khi nào reset freezes.
+    freeze_month: Mapped[str] = mapped_column(String(7), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        # M6: Composite index for leaderboard queries (ORDER BY longest DESC, current DESC)
+        Index("idx_user_streaks_longest_current", "longest_streak", "current_streak"),
     )

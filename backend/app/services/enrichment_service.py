@@ -199,7 +199,7 @@ def enrich_words(db: Session, words: list[Word]) -> dict[str, int]:
         chunk = words[start:start + WORDS_PER_CALL]
         prompt = _build_enrichment_prompt(chunk)
         try:
-            data = _call_api(prompt)
+            data = _call_api(prompt, content_task=True)
         except Exception as exc:
             logger.warning("enrich chunk failed (%d words): %s", len(chunk), exc)
             time.sleep(1.5)
@@ -247,3 +247,222 @@ def words_needing_enrichment(db: Session, level: int | None = None) -> list[Word
         query = query.where(Word.hsk_level == level)
 
     return list(db.scalars(query).all())
+
+
+# ---------------------------------------------------------------------------
+# Dual-Professor Word Detail Enrichment
+# ---------------------------------------------------------------------------
+# Hai "giáo sư" LLM độc lập cùng sinh nội dung chi tiết cho mỗi từ, sau đó
+# reconciler so sánh và merge bản tốt nhất. Chạy OFFLINE, không nằm trong
+# request path.
+
+DETAIL_WORDS_PER_CALL = 5  # ít hơn enrichment thường vì prompt dài hơn
+
+
+def words_needing_detail_enrichment(
+    db: Session, level: int | None = None, limit: int = 20
+) -> list[Word]:
+    """Từ chưa có semantic_notes (cổng idempotency cho detail enrichment)."""
+    query = select(Word).where(
+        (Word.semantic_notes == "") | Word.semantic_notes.is_(None)
+    )
+    if level is not None:
+        query = query.where(Word.hsk_level == level)
+    query = query.order_by(Word.hsk_level, Word.id).limit(limit)
+    return list(db.scalars(query).all())
+
+
+def _build_professor_a_prompt(words: list[Word]) -> str:
+    """Giáo sư Ngữ nghĩa: nghĩa gốc/mở rộng, sắc thái, phân tích chữ Hán."""
+    lines = []
+    for w in words:
+        lines.append(
+            f'- hanzi="{w.hanzi}", pinyin="{w.pinyin or ""}", '
+            f'nghĩa="{w.meaning_vi or w.meaning_en or ""}", '
+            f'pos="{w.pos or ""}", hsk_level={w.hsk_level}'
+        )
+    words_block = "\n".join(lines)
+
+    return f"""Bạn là GIÁO SƯ NGỮ NGHĨA tiếng Trung (Mandarin) với 30 năm kinh nghiệm nghiên cứu ngữ nghĩa học và tự nguyên học. Nhiệm vụ: phân tích CHI TIẾT ngữ nghĩa và cấu trúc chữ Hán cho người Việt học HSK.
+
+Với MỖI từ dưới đây, hãy cung cấp:
+
+1. **semantic_notes** (200-400 chữ tiếng Việt):
+   - Nghĩa GỐC (etymology ngắn gọn nếu có)
+   - Nghĩa MỞ RỘNG / nghĩa ẩn dụ trong các ngữ cảnh khác nhau
+   - SẮC THÁI cảm xúc/trang trọng/thân mật — khi nào dùng, khi nào KHÔNG nên dùng
+   - PHẠM VI sử dụng: văn nói hay văn viết? khẩu ngữ hay sách vở? miền Bắc/Nam TQ?
+   - So sánh ngắn với từ tiếng Việt tương đương (nếu có sự khác biệt tinh tế)
+
+2. **character_analysis** (100-250 chữ tiếng Việt):
+   - Phân tích BỘ THỦ và các THÀNH PHẦN cấu tạo chữ
+   - Ý nghĩa của từng thành phần (tại sao bộ thủ này lại liên quan đến nghĩa?)
+   - Gợi ý LIÊN TƯỞNG để nhớ chữ (mnemonic dựa trên cấu trúc chữ)
+   - Các chữ KHÁC có chung bộ thủ/thành phần (tạo họ chữ)
+
+3. **usage_patterns** (2-4 mẫu):
+   Mỗi mẫu gồm: pattern (công thức/cấu trúc), example_cn, example_vi, note (lưu ý ngắn)
+   Tập trung vào các CẤU TRÚC NGỮ PHÁP cố định mà từ này tham gia.
+
+Danh sách từ:
+{words_block}
+
+RÀNG BUỘC:
+- Viết HOÀN TOÀN bằng tiếng Việt (trừ example_cn và các trích dẫn chữ Hán)
+- KHÔNG lặp lại nghĩa cơ bản đã có ở trường "nghĩa" — đi SÂU hơn
+- Ví dụ câu phải đúng cấp HSK của từ (không dùng chữ vượt cấp)
+- Phân tích chữ Hán phải CHÍNH XÁC về bộ thủ (tra cứu, không đoán)
+
+OUTPUT JSON (không markdown):
+{{"words":[{{"hanzi":"学习","semantic_notes":"...","character_analysis":"...","usage_patterns":[{{"pattern":"~ + đối tượng","example_cn":"我学习中文。","example_vi":"Tôi học tiếng Trung.","note":"Học một ngôn ngữ/kỹ năng"}}]}}]}}"""
+
+
+def _build_professor_b_prompt(words: list[Word]) -> str:
+    """Giáo sư Ứng dụng: cách dùng thực tế, lỗi thường gặp, phân biệt từ gần nghĩa."""
+    lines = []
+    for w in words:
+        confusables = list(w.confusable_words_json or [])[:5]
+        lines.append(
+            f'- hanzi="{w.hanzi}", pinyin="{w.pinyin or ""}", '
+            f'nghĩa="{w.meaning_vi or w.meaning_en or ""}", '
+            f'pos="{w.pos or ""}", hsk_level={w.hsk_level}, '
+            f'từ_dễ_nhầm={confusables}'
+        )
+    words_block = "\n".join(lines)
+
+    return f"""Bạn là GIÁO SƯ ỨNG DỤNG tiếng Trung (Mandarin) với 30 năm kinh nghiệm giảng dạy người nước ngoài. Nhiệm vụ: cung cấp hướng dẫn SỬ DỤNG THỰC TẾ và cảnh báo lỗi cho người Việt học HSK.
+
+Với MỖI từ dưới đây, hãy cung cấp:
+
+1. **usage_notes** (200-400 chữ tiếng Việt):
+   - LỖI THƯỜNG GẶP của người Việt khi dùng từ này (dịch sai, dùng sai ngữ cảnh, nhầm từ loại)
+   - PHÂN BIỆT với các từ gần nghĩa (đặc biệt các từ trong "từ_dễ_nhầm") — khác nhau ở đâu? khi nào dùng từ nào?
+   - LƯU Ý VĂN HÓA: từ này có hàm ý văn hóa gì? dùng với ai thì phù hợp? tránh dùng trong tình huống nào?
+   - Collocations CỐ ĐỊNH (các từ LUÔN đi kèm, không thay được)
+   - Từ loại THỰC TẾ: có thể làm động từ/danh từ/tính từ? chuyển đổi thế nào?
+
+2. **usage_patterns** (2-4 mẫu):
+   Mỗi mẫu gồm: pattern (công thức/cấu trúc), example_cn, example_vi, note (lưu ý ngắn)
+   Tập trung vào CÁCH DÙNG THỰC TẾ trong giao tiếp hàng ngày, KHÔNG phải cấu trúc sách giáo khoa.
+
+Danh sách từ:
+{words_block}
+
+RÀNG BUỘC:
+- Viết HOÀN TOÀN bằng tiếng Việt (trừ example_cn và các trích dẫn chữ Hán)
+- Lỗi thường gặp phải là lỗi THẬT của người Việt (không bịa)
+- Phân biệt từ gần nghĩa phải CHỈ RA SỰ KHÁC BIỆT CỤ THỂ (không nói chung chung)
+- Ví dụ câu phải đúng cấp HSK của từ
+- Collocations phải là kết hợp từ THẬT, kiểm chứng được
+
+OUTPUT JSON (không markdown):
+{{"words":[{{"hanzi":"学习","usage_notes":"...","usage_patterns":[{{"pattern":"跟/向 + người + ~","example_cn":"我跟他学习太极拳。","example_vi":"Tôi học thái cực quyền với anh ấy.","note":"Nhấn mạnh học từ một người cụ thể"}}]}}]}}"""
+
+
+def _reconcile_details(a: dict, b: dict) -> dict:
+    """So sánh output của 2 giáo sư, merge lấy bản tốt nhất."""
+    result: dict = {}
+
+    # semantic_notes: chỉ Professor A sinh
+    result["semantic_notes"] = (a.get("semantic_notes") or "").strip()
+
+    # character_analysis: chỉ Professor A sinh
+    result["character_analysis"] = (a.get("character_analysis") or "").strip()
+
+    # usage_notes: chỉ Professor B sinh
+    result["usage_notes"] = (b.get("usage_notes") or "").strip()
+
+    # usage_patterns: merge từ cả 2, ưu tiên pattern có example
+    a_patterns = a.get("usage_patterns") or []
+    b_patterns = b.get("usage_patterns") or []
+    merged_patterns: list[dict] = []
+    seen_patterns: set[str] = set()
+
+    for p in [*a_patterns, *b_patterns]:
+        if not isinstance(p, dict):
+            continue
+        pat = (p.get("pattern") or "").strip()
+        if not pat or pat in seen_patterns:
+            continue
+        seen_patterns.add(pat)
+        # Validate: phải có ít nhất pattern + example_cn
+        if not p.get("example_cn"):
+            continue
+        merged_patterns.append({
+            "pattern": pat,
+            "example_cn": (p.get("example_cn") or "").strip(),
+            "example_vi": (p.get("example_vi") or "").strip(),
+            "note": (p.get("note") or "").strip(),
+        })
+
+    result["usage_patterns"] = merged_patterns[:6]  # tối đa 6 patterns
+    return result
+
+
+def enrich_word_details(db: Session, batch_size: int = DETAIL_WORDS_PER_CALL) -> dict[str, int]:
+    """Dual-professor enrichment: sinh ngữ nghĩa/lưu ý/cách dùng cho từ chưa có.
+
+    Trả stats: words_done, errors.
+    """
+    words = words_needing_detail_enrichment(db, limit=batch_size)
+    if not words:
+        return {"words_done": 0, "errors": 0}
+
+    stats = {"words_done": 0, "errors": 0}
+
+    # Gọi Professor A
+    prompt_a = _build_professor_a_prompt(words)
+    try:
+        data_a = _call_api(prompt_a, content_task=True)
+    except Exception as exc:
+        logger.warning("Professor A failed: %s", exc)
+        stats["errors"] += 1
+        return stats
+
+    entries_a = {
+        e.get("hanzi"): e
+        for e in (data_a.get("words") if isinstance(data_a, dict) else [])
+        if isinstance(e, dict) and e.get("hanzi")
+    }
+
+    time.sleep(1.0)
+
+    # Gọi Professor B
+    prompt_b = _build_professor_b_prompt(words)
+    try:
+        data_b = _call_api(prompt_b, content_task=True)
+    except Exception as exc:
+        logger.warning("Professor B failed: %s", exc)
+        stats["errors"] += 1
+        return stats
+
+    entries_b = {
+        e.get("hanzi"): e
+        for e in (data_b.get("words") if isinstance(data_b, dict) else [])
+        if isinstance(e, dict) and e.get("hanzi")
+    }
+
+    # Reconcile và lưu
+    for word in words:
+        a_data = entries_a.get(word.hanzi, {})
+        b_data = entries_b.get(word.hanzi, {})
+
+        if not a_data and not b_data:
+            continue
+
+        merged = _reconcile_details(a_data, b_data)
+
+        # Chỉ lưu nếu có ít nhất 1 field có nội dung
+        if not any([merged.get("semantic_notes"), merged.get("usage_notes"),
+                     merged.get("usage_patterns"), merged.get("character_analysis")]):
+            continue
+
+        word.semantic_notes = merged.get("semantic_notes", "")
+        word.usage_notes = merged.get("usage_notes", "")
+        word.usage_patterns_json = merged.get("usage_patterns", [])
+        word.character_analysis = merged.get("character_analysis", "")
+        stats["words_done"] += 1
+
+    db.commit()
+    logger.info("Detail enrichment done: %d/%d words", stats["words_done"], len(words))
+    return stats

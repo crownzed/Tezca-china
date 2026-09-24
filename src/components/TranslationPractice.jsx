@@ -34,6 +34,20 @@ const MODES = [
   { id: 'mix', label: 'Trộn hai chiều', hint: 'Mỗi câu một chiều ngẫu nhiên' },
 ];
 
+const TOPICS = [
+  { id: '', label: 'Tất cả chủ đề' },
+  { id: 'daily', label: 'Đời sống hàng ngày' },
+  { id: 'family', label: 'Gia đình' },
+  { id: 'shopping', label: 'Mua sắm' },
+  { id: 'work', label: 'Công việc' },
+  { id: 'study', label: 'Học tập' },
+  { id: 'travel', label: 'Du lịch' },
+  { id: 'health', label: 'Sức khỏe' },
+  { id: 'food', label: 'Ẩm thực' },
+  { id: 'weather', label: 'Thời tiết' },
+  { id: 'hobby', label: 'Sở thích' },
+];
+
 // Số câu vừa gặp gửi lên để backend không lặp lại. 40 là mức đủ để một buổi học
 // không thấy câu cũ, mà payload vẫn nhỏ (schema chặn ở 60).
 const RECENT_LIMIT = 40;
@@ -83,6 +97,7 @@ export default function TranslationPractice({ focusLevels }) {
   const [level, setLevel] = useState(() => primaryLevel(focusLevels));
   const [mode, setMode] = useState('cn2vi');
   const [count, setCount] = useState(5);
+  const [topic, setTopic] = useState('');
 
   const [items, setItems] = useState([]);
   const [directions, setDirections] = useState([]);
@@ -114,6 +129,7 @@ export default function TranslationPractice({ focusLevels }) {
         hsk_level: nextLevel,
         count: nextCount,
         exclude: readRecent(),
+        topic: topic || undefined,
       });
       const fresh = data?.items || [];
       if (!fresh.length) throw new Error('Chưa có câu nào để luyện dịch.');
@@ -130,7 +146,7 @@ export default function TranslationPractice({ focusLevels }) {
     } finally {
       setLoading(false);
     }
-  }, [level, mode, count]);
+  }, [level, mode, count, topic]);
 
   useEffect(() => {
     if (!loading && !result && inputRef.current) inputRef.current.focus();
@@ -189,6 +205,14 @@ export default function TranslationPractice({ focusLevels }) {
             <span>Chiều dịch:</span>
             <select style={selectStyle} value={mode} onChange={e => setMode(e.target.value)}>
               {MODES.map(entry => (
+                <option key={entry.id} value={entry.id}>{entry.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="select-label">
+            <span>Chủ đề:</span>
+            <select style={selectStyle} value={topic} onChange={e => setTopic(e.target.value)}>
+              {TOPICS.map(entry => (
                 <option key={entry.id} value={entry.id}>{entry.label}</option>
               ))}
             </select>

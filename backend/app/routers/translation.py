@@ -49,7 +49,7 @@ def items(
             detail="Bạn đang tạo câu quá nhanh. Chờ một chút rồi thử lại nhé.",
         )
     try:
-        picked = take_items(request.hsk_level, request.count, exclude=request.exclude)
+        picked = take_items(request.hsk_level, request.count, exclude=request.exclude, topic=request.topic)
     except RuntimeError as exc:
         logger.warning(f"Translation items generation failed: {exc}")
         raise HTTPException(status_code=502, detail="Không tạo được câu để dịch, thử lại sau.") from exc

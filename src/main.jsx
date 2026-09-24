@@ -11,6 +11,7 @@ import './dashboard.css'
 import './shell.css'
 // Nạp cuối: quiz.css chỉ ăn trong phạm vi .qz nên không đụng tới các trang khác.
 import './quiz.css'
+import './streak.css'
 import App from './App.jsx'
 import { AuthProvider } from './auth-context.jsx'
 import { ResetPasswordPage } from './auth-ui.jsx'

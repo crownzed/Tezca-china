@@ -138,8 +138,11 @@ def _valid_item(item) -> dict | None:
     }
 
 
-def generate_items(hsk_level: int, count: int, avoid: list[str] | None = None) -> list[dict]:
+def generate_items(hsk_level: int, count: int, avoid: list[str] | None = None, topic: str | None = None) -> list[dict]:
     """Một lượt ``_call_api`` sinh ``count`` cặp câu CN/VI ở cấp HSK cho trước.
+
+    ``topic``: khi truyền, tất cả câu PHẢI thuộc chủ đề này. Khi None, LLM tự
+    phân bố chủ đề đa dạng.
 
     Item xấu bị loại từng cái (không fail cả lô) — cùng cách các caller của
     ``_validate_api_quiz_question`` đang làm. Raise RuntimeError khi LLM không trả
@@ -159,6 +162,33 @@ def generate_items(hsk_level: int, count: int, avoid: list[str] | None = None) -
             f"{json.dumps(sample, ensure_ascii=False)}\n"
         )
 
+    # Chỉ thị chủ đề: khi có topic thì TẤT CẢ câu phải thuộc chủ đề đó,
+    # khi không có thì yêu cầu đa dạng chủ đề.
+    _TOPIC_LABELS = {
+        "daily": "đời sống hàng ngày (thói quen, sinh hoạt, thời gian biểu)",
+        "family": "gia đình (cha mẹ, anh chị em, họ hàng, việc nhà)",
+        "shopping": "mua sắm (siêu thị, chợ, mặc cả, thanh toán)",
+        "work": "công việc (văn phòng, họp, email, đồng nghiệp)",
+        "study": "học tập (trường lớp, thi cử, bài tập, thư viện)",
+        "travel": "du lịch (đặt vé, khách sạn, tham quan, phương tiện)",
+        "health": "sức khỏe (bệnh viện, triệu chứng, tập thể dục, ăn uống lành mạnh)",
+        "food": "ẩm thực (nấu ăn, nhà hàng, món ăn, khẩu vị)",
+        "weather": "thời tiết (nắng mưa, nhiệt độ, mùa, dự báo)",
+        "hobby": "sở thích (âm nhạc, thể thao, đọc sách, phim ảnh)",
+    }
+    if topic and topic in _TOPIC_LABELS:
+        topic_instruction = (
+            f"TẤT CẢ {count} cặp PHẢI thuộc chủ đề: {_TOPIC_LABELS[topic]}.\n"
+            f"Đa dạng tình huống/ngữ cảnh TRONG chủ đề này — KHÔNG lặp lại cùng một tình huống."
+        )
+    elif topic:
+        topic_instruction = (
+            f"TẤT CẢ {count} cặp PHẢI thuộc chủ đề: {topic}.\n"
+            f"Đa dạng tình huống/ngữ cảnh TRONG chủ đề này."
+        )
+    else:
+        topic_instruction = "Mỗi cặp phải khác nhau về chủ đề (gia đình, đi lại, mua sắm, công việc, học tập, thời tiết, sức khỏe...)."
+
     prompt = f"""Bạn là giáo viên tiếng Trung cho người Việt. Tạo ĐÚNG {count} cặp câu song ngữ
 để luyện DỊCH CÂU ở cấp HSK {hsk_level}.
 Mã lượt sinh (chỉ để đa dạng hóa, không đưa vào output): {nonce}
@@ -168,18 +198,21 @@ Yêu cầu từng cặp:
   và ngữ pháp HSK {hsk_level}. Câu hoàn chỉnh có ngữ cảnh (chủ ngữ + hành động), KHÔNG phải cụm từ rời.
 - sentence_vi: bản dịch tiếng Việt TỰ NHIÊN nhất (như người Việt thật sẽ nói), không dịch từng chữ.
   TUYỆT ĐỐI không chèn chữ Hán hay pinyin vào bản dịch tiếng Việt.
+  ĐA DẠNG VĂN PHONG: luân phiên giữa (a) dịch sát/trang trọng, (b) dịch thoát/đời thường,
+  (c) dịch ngắn gọn/súc tích, (d) dịch diễn giải/thêm ngữ cảnh. alt_vi cũng phải KHÁC văn phong
+  với sentence_vi.
 - pinyin: pinyin có dấu thanh của sentence_cn.
 - alt_cn: 1-2 cách nói tiếng Trung KHÁC cũng đúng cho cùng ý (đổi hư từ, đổi trật tự cho phép).
   Bỏ trống nếu không có cách nói khác tự nhiên.
-- alt_vi: 1-2 bản dịch tiếng Việt KHÁC cũng đúng và tự nhiên cho cùng ý.
+- alt_vi: 1-2 bản dịch tiếng Việt KHÁC cũng đúng và tự nhiên cho cùng ý, KHÁC văn phong với sentence_vi.
 - key_words: 1-3 từ tiếng Trung then chốt PHẢI xuất hiện NGUYÊN VĂN trong sentence_cn (copy đúng
   ký tự từ sentence_cn, không tự đặt từ khác). Đây là từ mà bản dịch bắt buộc phải thể hiện.
 
-Mỗi cặp phải khác nhau về chủ đề (gia đình, đi lại, mua sắm, công việc, học tập, thời tiết, sức khỏe...).
+{topic_instruction}
 Chỉ trả JSON object (không markdown):
 {{"items":[{{"sentence_cn":"我每天早上七点起床。","sentence_vi":"Tôi thức dậy lúc bảy giờ mỗi sáng.","pinyin":"wǒ měi tiān zǎo shang qī diǎn qǐ chuáng","alt_cn":["我每天早上七点钟起床。"],"alt_vi":["Mỗi sáng tôi thức dậy vào lúc bảy giờ."],"key_words":["起床","七点"]}}]}}"""
 
-    data = _call_api(prompt)
+    data = _call_api(prompt, content_task=True)
     rows = data.get("items") if isinstance(data, dict) else None
     if not isinstance(rows, list):
         raise RuntimeError("LLM không trả về danh sách items cho bài dịch câu.")
@@ -195,6 +228,8 @@ Chỉ trả JSON object (không markdown):
             continue
         seen.add(key)
         item["hsk_level"] = hsk_level
+        if topic:
+            item["topic"] = topic
         items.append(item)
 
     if not items:
@@ -240,11 +275,12 @@ def _save_pool() -> None:
         logger.warning("Không ghi được translation_pool.json", exc_info=True)
 
 
-def take_items(hsk_level: int, count: int, exclude: list[str] | None = None) -> list[dict]:
+def take_items(hsk_level: int, count: int, exclude: list[str] | None = None, topic: str | None = None) -> list[dict]:
     """``count`` cặp câu ở cấp HSK, ưu tiên pool và chỉ gọi LLM khi còn thiếu.
 
     ``exclude``: các ``sentence_cn`` người học vừa gặp (client gửi lên) — không lặp
     lại trong phiên kế tiếp.
+    ``topic``: khi truyền, chỉ lấy/sinh câu thuộc chủ đề này.
     """
     hsk_level = max(1, min(int(hsk_level or 1), 6))
     count = max(1, min(int(count or 5), 15))
@@ -253,7 +289,9 @@ def take_items(hsk_level: int, count: int, exclude: list[str] | None = None) -> 
     banned = {_norm_cn(text) for text in (exclude or [])}
 
     available = [
-        item for item in pool.get(key, []) if _norm_cn(item.get("sentence_cn", "")) not in banned
+        item for item in pool.get(key, [])
+        if _norm_cn(item.get("sentence_cn", "")) not in banned
+        and (not topic or item.get("topic") == topic)
     ]
     random.shuffle(available)
     picked = available[:count]
@@ -262,7 +300,7 @@ def take_items(hsk_level: int, count: int, exclude: list[str] | None = None) -> 
 
     picked_keys = {_norm_cn(item["sentence_cn"]) for item in picked}
     avoid = [item.get("sentence_cn", "") for item in pool.get(key, [])]
-    fresh = generate_items(hsk_level, count - len(picked), avoid=avoid)
+    fresh = generate_items(hsk_level, count - len(picked), avoid=avoid, topic=topic)
 
     added = [
         item for item in fresh

@@ -67,14 +67,19 @@ def _vocab_drafts(words: List[str]) -> QuizDraftOut:
                 level=word.hsk_level,
                 prompt=q.get("prompt", ""),
                 options=opts,
-                correct_index=q.get("correct_index", 0),
+                correct_index=_safe_correct_index(q.get("correct_index", 0)),
                 explanation=q.get("explanation", ""),
                 word=word,
             ))
 
     if not questions:
         raise HTTPException(status_code=400, detail="Khong tao duoc cau hoi nao tu danh sach tu vung.")
-    return QuizDraftOut(quiz_title="Tu vung tu chon", source="vocab", questions=questions)
+    return QuizDraftOut(
+        quiz_title="Tu vung tu chon",
+        source="vocab",
+        questions=questions,
+        generated_count=len(questions),
+    )
 
 
 def _passage_drafts(text: str, hsk_level: int, count: int, subtypes: List[str] | None,
@@ -90,7 +95,7 @@ def _passage_drafts(text: str, hsk_level: int, count: int, subtypes: List[str] |
             level=hsk_level,
             prompt=q.get("prompt", ""),
             options=opts,
-            correct_index=q.get("correct_index", 0),
+            correct_index=_safe_correct_index(q.get("correct_index", 0)),
             explanation=q.get("explanation", ""),
             subtype=q.get("question_subtype", ""),
         ))
@@ -101,6 +106,9 @@ def _passage_drafts(text: str, hsk_level: int, count: int, subtypes: List[str] |
         passage=passage_text or text,
         source=source,
         questions=questions,
+        requested_count=count,
+        generated_count=len(questions),
+        partial=len(questions) < count,
     )
 
 @router.post("/generate", response_model=CustomVocabGenerateResponse)
@@ -216,8 +224,13 @@ def generate_from_text(
     try:
         user_id = user.id
 
-        # 1. Goi LLM de sinh 5 cau hoi suy luan ngon ngu tu doan van
-        data = generate_questions_for_passage(request.text)
+        # 1. Goi LLM sinh cau hoi theo cap do, so luong va dang da chon
+        data = generate_questions_for_passage(
+            request.text,
+            hsk_level=request.hsk_level,
+            count=request.count,
+            question_subtypes=request.question_types,
+        )
         questions_data = data.get("questions", [])
         if not questions_data:
             raise HTTPException(status_code=500, detail="Khong tao duoc cau hoi nao tu doan van.")
@@ -241,7 +254,7 @@ def generate_from_text(
 
             q = Question(
                 word_id=None,
-                level=1,
+                level=request.hsk_level,
                 quiz_type=q_type,
                 prompt=q_data.get("prompt", ""),
                 options=options,

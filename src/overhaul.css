@@ -1474,6 +1474,61 @@ main.core-page{
   letter-spacing: 0.05em !important;
   margin-bottom: 10px !important;
   display: block !important;
+}
+
+/* Dual-professor enrichment: ngữ nghĩa, lưu ý, cách dùng, phân tích chữ */
+.vocab-note-text{
+  font-size: 0.92rem !important;
+  line-height: 1.7 !important;
+  color: var(--text) !important;
+  white-space: pre-line !important;
+  margin: 0 !important;
+}
+.vocab-warning{
+  background: rgba(234, 179, 8, 0.08) !important;
+  border-left: 3px solid #eab308 !important;
+  padding: 10px 12px !important;
+  border-radius: 6px !important;
+}
+[data-theme='dark'] .vocab-warning{
+  background: rgba(234, 179, 8, 0.12) !important;
+}
+.usage-pattern-list{
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+.usage-pattern-item{
+  background: var(--paper) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+}
+.usage-pattern-item strong{
+  font-size: 0.95rem !important;
+  color: var(--accent) !important;
+  display: block !important;
+  margin-bottom: 4px !important;
+}
+.usage-pattern-item blockquote{
+  margin: 6px 0 0 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  font-size: 0.9rem !important;
+  color: var(--text) !important;
+}
+.usage-pattern-item blockquote small{
+  display: block !important;
+  color: var(--muted) !important;
+  font-size: 0.82rem !important;
+  margin-top: 2px !important;
+}
+.pattern-note{
+  display: block !important;
+  margin-top: 4px !important;
+  font-size: 0.8rem !important;
+  color: var(--dim) !important;
+  font-style: italic !important;
 }/* Hanzi Hero Box */
 .hanzi-hero{
   width: 100% !important;

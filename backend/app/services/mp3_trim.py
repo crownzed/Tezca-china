@@ -104,7 +104,7 @@ def _voiced_bounds(data: bytes) -> tuple[float, float, float] | None:
     """
     try:
         import numpy as np
-        import parselmouth
+        import parselmouth  # type: ignore[import-untyped]
     except Exception as exc:  # noqa: BLE001 — thiếu dep thì bỏ cắt, không làm chết request
         logger.warning("Không giải mã được để cắt lặng: %s", exc)
         return None

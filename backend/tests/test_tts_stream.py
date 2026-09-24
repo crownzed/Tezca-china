@@ -29,13 +29,29 @@ from fastapi.testclient import TestClient
 
 from app.routers import tts as tts_module
 from app.routers.tts import router as tts_router
-from app.services import tts_cache, tts_socket_pool
+from app.services import tts_cache, tts_payload, tts_socket_pool
 
 # Khối MP3 giả. Khối đầu mang header ID3 để giống luồng thật; các khối sau là
 # payload trần — đúng cách mp3_stream hoạt động.
 _CHUNKS = [b"ID3" + b"\x01" * 300, b"\x02" * 300, b"\x03" * 300]
 _JOINED = b"".join(_CHUNKS)
 _HTTP_MP3 = b"ID3" + b"\xff" * 900  # bytes của nhánh HTTP, khác _JOINED để phân biệt
+
+
+def _setup_frame(event_type, *, event_id="evt-setup", session_id="sid-1", data=True):
+    """Tạo frame setup, hoặc frame thiếu ``data`` khi ``data=False``."""
+    event = {"type": event_type, "event_id": event_id}
+    if data is True:
+        event["data"] = {"session_id": session_id}
+    elif data is not False:
+        event["data"] = data
+    return json.dumps(event)
+
+
+_DEFAULT_SETUP_FRAMES = [
+    _setup_frame("tts.connection.done", event_id="evt-connection"),
+    _setup_frame("tts.response.created", event_id="evt-created"),
+]
 
 
 class _FakeSocket:
@@ -45,15 +61,18 @@ class _FakeSocket:
     nhau (chưa phát gì / đã phát một phần).
     """
 
-    def __init__(self, chunks=None, fail_after=None, error_event=False):
+    def __init__(
+        self, chunks=None, fail_after=None, error_event=False, done_audio=None,
+        setup_frames=None,
+    ):
         self.sent = []
         self.closed = 0
         self._fail_after = fail_after
         self._chunks = list(_CHUNKS if chunks is None else chunks)
-        self._outbox = [
-            json.dumps({"type": "tts.connection.done", "data": {"session_id": "sid-1"}}),
-            json.dumps({"type": "tts.response.created", "data": {"session_id": "sid-1"}}),
-        ]
+        self._done_audio = done_audio
+        self._outbox = list(
+            _DEFAULT_SETUP_FRAMES if setup_frames is None else setup_frames
+        )
         for chunk in self._chunks:
             self._outbox.append(json.dumps({
                 "type": "tts.response.audio.delta",
@@ -65,8 +84,11 @@ class _FakeSocket:
                 "data": {"code": "500", "message": "engine overloaded"},
             }))
         else:
+            done_data = {"session_id": "sid-1"}
+            if done_audio is not None:
+                done_data["audio"] = base64.b64encode(done_audio).decode()
             self._outbox.append(json.dumps({
-                "type": "tts.response.audio.done", "data": {"session_id": "sid-1"},
+                "type": "tts.response.audio.done", "data": done_data,
             }))
         self._delivered_audio = 0
 
@@ -77,7 +99,11 @@ class _FakeSocket:
         if not self._outbox:
             raise AssertionError("test đọc quá số event đã dựng")
         item = self._outbox.pop(0)
-        if json.loads(item).get("type") == "tts.response.audio.delta":
+        try:
+            event = json.loads(item)
+        except (TypeError, ValueError, UnicodeError):
+            event = None
+        if isinstance(event, dict) and event.get("type") == "tts.response.audio.delta":
             self._delivered_audio += 1
             if self._fail_after is not None and self._delivered_audio > self._fail_after:
                 raise OSError("socket chết giữa stream")
@@ -87,6 +113,7 @@ class _FakeSocket:
         return self
 
     def __exit__(self, *exc):
+        self.close()
         return False
 
     def close(self):
@@ -137,6 +164,29 @@ class TtsStreamTest(unittest.TestCase):
         self.assertEqual(res.content, _JOINED)
         self.assertEqual(res.headers["content-type"], "audio/mpeg")
 
+    def test_audio_in_done_event_is_emitted_without_deltas(self):
+        """Một số phản hồi chỉ mang toàn bộ audio ở ``audio.done``."""
+        done_audio = b"ID3" + b"\x04" * 600
+        socket = _FakeSocket(chunks=[], done_audio=done_audio)
+        with patch.object(tts_module.settings, "stepfun_api_keys", "fake-key"):
+            with patch("websockets.sync.client.connect", _connect_returning(socket)):
+                res = self._get()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.content, done_audio)
+
+    def test_done_event_audio_is_not_replayed_after_deltas(self):
+        """``audio.done`` có thể là bản ghép đầy đủ, không được phát lại sau delta."""
+        socket = _FakeSocket(done_audio=_HTTP_MP3)
+        with patch.object(tts_module.settings, "stepfun_api_keys", "fake-key"):
+            with patch("websockets.sync.client.connect", _connect_returning(socket)):
+                res = self._get()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.content, _JOINED)
+
+    def test_rejects_text_over_stepfun_limit(self):
+        res = self.client.get("/tts/stream", params={"text": "字" * 1001})
+        self.assertEqual(res.status_code, 422)
+
     def test_disables_proxy_buffering(self):
         """Không có header này thì fly/nginx gom trọn response — mất đúng phần
         streaming mà endpoint tồn tại để có, và độ trễ TỆ HƠN /tts."""
@@ -167,6 +217,37 @@ class TtsStreamTest(unittest.TestCase):
             data["instruction"], tts_module.settings.stepfun_tts_instruction_chat
         )
         self.assertEqual(data["response_format"], "mp3_stream")
+        self.assertEqual(data["text_normalization"], tts_payload.STREAM_TEXT_NORMALIZATION)
+        self.assertEqual(data["language"], tts_module.settings.stepfun_tts_language)
+
+    def test_warm_and_cold_create_payloads_match(self):
+        """Inspect the actual warm handshake, not just the shared builder's return value."""
+        warm_ws = _FakeSocket()
+        cold_ws = _FakeSocket()
+        with patch.object(tts_module.settings, "stepfun_api_keys", "fake-key"):
+            with patch.object(tts_module.settings, "stepfun_tts_language", "zh"):
+                with patch("websockets.sync.client.connect", _connect_returning(warm_ws)):
+                    warm = tts_socket_pool._open_warm_socket()
+                with patch("websockets.sync.client.connect", _connect_returning(cold_ws)):
+                    response = self.client.get("/tts/stream", params={"text": "你好"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, _JOINED)
+        warm_create = next(m for m in warm_ws.sent if m["type"] == "tts.create")
+        cold_create = next(m for m in cold_ws.sent if m["type"] == "tts.create")
+        self.assertEqual(warm_create, cold_create)
+        self.assertEqual(warm_create["data"]["language"], "zh")
+        self.assertEqual(warm_create["data"]["response_format"], "mp3_stream")
+        warm.close()
+
+    def test_accepts_text_at_stepfun_limit(self):
+        socket = _FakeSocket()
+        text = "字" * 1000
+        with patch.object(tts_module.settings, "stepfun_api_keys", "fake-key"):
+            with patch("websockets.sync.client.connect", _connect_returning(socket)):
+                response = self._get(text)
+        self.assertEqual(response.status_code, 200, response.text)
+        delta = next(m for m in socket.sent if m["type"] == "tts.text.delta")
+        self.assertEqual(delta["data"]["text"], text)
 
     def test_chat_instruction_keeps_the_tone_accuracy_clause(self):
         """Đây là app học tiếng: biểu cảm mà sai thanh điệu thì phản tác dụng.
@@ -303,6 +384,157 @@ class TtsStreamTest(unittest.TestCase):
                 )
         self.assertEqual(over.status_code, 429, over.text)
         self.assertEqual(over.headers.get("Retry-After"), "30")
+
+
+class TtsStreamHandshakeTest(unittest.TestCase):
+    """Setup phải hợp lệ trước khi gửi text hoặc đưa socket vào pool."""
+
+    @classmethod
+    def setUpClass(cls):
+        app = FastAPI()
+        app.include_router(tts_router)
+        cls.client = TestClient(app, client=("203.0.113.7", 50000))
+
+    def setUp(self):
+        tts_cache.clear()
+        tts_module._tts_rate_limiter._hits.clear()
+        tts_socket_pool.reset_for_test()
+
+    def tearDown(self):
+        tts_socket_pool.reset_for_test()
+
+    def _assert_cold_rejects(self, setup_frames, expected_sent, text):
+        tts_cache.clear()
+        tts_module._tts_rate_limiter._hits.clear()
+        tts_socket_pool.reset_for_test()
+        socket = _FakeSocket(setup_frames=setup_frames)
+        with patch.object(tts_module.settings, "stepfun_api_keys", "fake-key"):
+            with patch("websockets.sync.client.connect", _connect_returning(socket)):
+                with patch.object(tts_module, "_stepfun_synth", return_value=_HTTP_MP3) as http:
+                    response = self.client.get("/tts/stream", params={"text": text})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, _HTTP_MP3)
+        self.assertEqual(socket.closed, 1)
+        sent_types = [message["type"] for message in socket.sent]
+        self.assertEqual(sent_types, expected_sent)
+        self.assertNotIn("tts.text.delta", sent_types)
+        self.assertNotIn("tts.text.done", sent_types)
+        http.assert_called_once()
+
+    def test_cold_socket_rejects_invalid_greeting_without_create_or_text(self):
+        cases = [
+            ("malformed-json", "{"),
+            ("non-object", "[]"),
+            ("wrong-type", _setup_frame("tts.response.created")),
+            ("provider-error", json.dumps({
+                "type": "tts.response.error", "data": {"message": "busy"},
+            })),
+            ("missing-event-id", json.dumps({
+                "type": "tts.connection.done", "data": {"session_id": "sid-1"},
+            })),
+            ("empty-event-id", _setup_frame("tts.connection.done", event_id=" ")),
+            ("invalid-event-id", _setup_frame("tts.connection.done", event_id=7)),
+            ("missing-data", _setup_frame("tts.connection.done", data=False)),
+            ("invalid-data", _setup_frame("tts.connection.done", data=[])),
+            ("missing-session-id", _setup_frame("tts.connection.done", data={})),
+            ("empty-session-id", _setup_frame("tts.connection.done", session_id=" ")),
+            ("invalid-session-id", _setup_frame("tts.connection.done", session_id=7)),
+        ]
+        for index, (name, frame) in enumerate(cases):
+            with self.subTest(name=name):
+                self._assert_cold_rejects([frame], [], f"greeting-{index}")
+
+    def test_cold_socket_rejects_invalid_ack_without_text(self):
+        cases = [
+            ("malformed-json", "{"),
+            ("non-object", "[]"),
+            ("wrong-type", _setup_frame("tts.connection.done")),
+            ("provider-error", json.dumps({
+                "type": "tts.response.error", "data": {"message": "busy"},
+            })),
+            ("missing-event-id", json.dumps({
+                "type": "tts.response.created", "data": {"session_id": "sid-1"},
+            })),
+            ("empty-event-id", _setup_frame("tts.response.created", event_id=" ")),
+            ("invalid-event-id", _setup_frame("tts.response.created", event_id=7)),
+            ("missing-data", _setup_frame("tts.response.created", data=False)),
+            ("invalid-data", _setup_frame("tts.response.created", data=[])),
+            ("missing-session-id", _setup_frame("tts.response.created", data={})),
+            ("empty-session-id", _setup_frame("tts.response.created", session_id=" ")),
+            ("invalid-session-id", _setup_frame("tts.response.created", session_id=7)),
+            ("mismatched-session-id", _setup_frame(
+                "tts.response.created", session_id="sid-other",
+            )),
+        ]
+        for index, (name, frame) in enumerate(cases):
+            with self.subTest(name=name):
+                self._assert_cold_rejects(
+                    [_DEFAULT_SETUP_FRAMES[0], frame], ["tts.create"], f"ack-{index}"
+                )
+
+    def test_invalid_warm_greeting_closes_socket_and_does_not_publish(self):
+        socket = _FakeSocket(setup_frames=["{"])
+        with patch.object(tts_socket_pool.settings, "stepfun_api_keys", "fake-key"):
+            with patch("websockets.sync.client.connect", _connect_returning(socket)):
+                with self.assertRaises(RuntimeError):
+                    tts_socket_pool._open_warm_socket()
+        self.assertEqual(socket.closed, 1)
+        self.assertEqual(socket.sent, [])
+        stats = tts_socket_pool.stats()
+        self.assertFalse(stats["warm"])
+        self.assertEqual(stats["opened"], 0)
+
+    def test_invalid_warm_ack_closes_socket_after_create_and_does_not_publish(self):
+        socket = _FakeSocket(setup_frames=[
+            _DEFAULT_SETUP_FRAMES[0],
+            _setup_frame("tts.response.created", session_id="sid-other"),
+        ])
+        with patch.object(tts_socket_pool.settings, "stepfun_api_keys", "fake-key"):
+            with patch("websockets.sync.client.connect", _connect_returning(socket)):
+                with self.assertRaises(RuntimeError):
+                    tts_socket_pool._open_warm_socket()
+        self.assertEqual(socket.closed, 1)
+        self.assertEqual([message["type"] for message in socket.sent], ["tts.create"])
+        self.assertFalse(tts_socket_pool.stats()["warm"])
+        self.assertEqual(tts_socket_pool.stats()["opened"], 0)
+    def test_maintainer_never_publishes_a_failed_handshake(self):
+        provider_error = json.dumps({
+            "type": "tts.response.error", "data": {"message": "busy"},
+        })
+        cases = [
+            ("invalid-greeting", ["{"], []),
+            ("greeting-error", [provider_error], []),
+            ("mismatched-ack", [
+                _DEFAULT_SETUP_FRAMES[0],
+                _setup_frame("tts.response.created", session_id="sid-other"),
+            ], ["tts.create"]),
+            ("ack-error", [_DEFAULT_SETUP_FRAMES[0], provider_error], ["tts.create"]),
+        ]
+
+        def stop_on_wait(timeout):
+            tts_socket_pool._stop.set()
+
+        for name, frames, expected_sent in cases:
+            with self.subTest(name=name):
+                tts_socket_pool.reset_for_test()
+                socket = _FakeSocket(setup_frames=frames)
+                tts_socket_pool.note_demand()
+                # Chạy vòng maintain thật; dừng ở lần chờ đầu, không sleep/thread.
+                with (
+                    patch.object(tts_socket_pool.settings, "stepfun_api_keys", "fake-key"),
+                    patch("websockets.sync.client.connect", return_value=socket) as connect,
+                    patch.object(tts_socket_pool._stop, "wait", side_effect=stop_on_wait) as backoff,
+                    patch.object(tts_socket_pool._wake, "wait", side_effect=stop_on_wait) as idle,
+                ):
+                    tts_socket_pool._maintain()
+                connect.assert_called_once()
+                backoff.assert_called_once_with(tts_socket_pool._RETRY_BACKOFF_SEC[0])
+                idle.assert_not_called()
+                self.assertEqual(socket.closed, 1)
+                self.assertEqual([message["type"] for message in socket.sent], expected_sent)
+                self.assertFalse(tts_socket_pool.stats()["warm"])
+                self.assertEqual(tts_socket_pool.stats()["opened"], 0)
+                self.assertIsNone(tts_socket_pool.acquire())
 
 
 class TtsStreamHoldTest(unittest.TestCase):

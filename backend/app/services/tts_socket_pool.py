@@ -31,6 +31,7 @@ import threading
 import time
 
 from ..settings import settings
+from .tts_payload import build_stream_create_payload, parse_stream_handshake
 
 logger = logging.getLogger(__name__)
 
@@ -103,21 +104,18 @@ def _open_warm_socket() -> WarmSocket:
         close_timeout=3,
     )
     try:
-        session_id = json.loads(ws.recv(timeout=10))["data"]["session_id"]
+        session_id = parse_stream_handshake(
+            ws.recv(timeout=10), "tts.connection.done",
+        )
         ws.send(json.dumps({
             "type": "tts.create",
-            "data": {
-                "session_id": session_id,
-                "voice_id": settings.stepfun_tts_voice,
-                "response_format": "mp3_stream",
-                "sample_rate": settings.stepfun_tts_sample_rate,
-                "mode": "sentence",
-                "speed_ratio": settings.stepfun_tts_speed,
-                "instruction": settings.stepfun_tts_instruction_chat,
-                "text_normalization": "standard",
-            },
+            "data": build_stream_create_payload(
+                session_id, settings.stepfun_tts_speed
+            ),
         }, ensure_ascii=False))
-        ws.recv(timeout=15)  # tts.response.created
+        parse_stream_handshake(
+            ws.recv(timeout=15), "tts.response.created", session_id=session_id,
+        )
     except Exception:
         try:
             ws.close()

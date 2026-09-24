@@ -31,7 +31,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
 from ..deps import client_ip, is_loopback_request
-from ..services import mp3_trim, tts_cache, tts_socket_pool
+from ..services import mp3_trim, tts_cache, tts_payload, tts_socket_pool
 from ..services.rate_limiter import RateLimiter
 from ..settings import settings
 
@@ -41,7 +41,8 @@ router = APIRouter(prefix="/tts", tags=["tts"])
 
 _SPEECH_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 _SAMPLE_RATE = 24000  # Provider phụ xuất PCM 24kHz mono 16-bit
-MAX_TEXT_LEN = 500
+MAX_TEXT_LEN = 1000  # Giới hạn mỗi request/delta của StepFun TTS.
+MAX_FEEDBACK_TEXT_LEN = 500  # Giữ giới hạn cũ cho TTS phản hồi tiếng Việt.
 
 # Rate-limit theo IP cho /tts và /tts/feedback.
 #
@@ -243,6 +244,7 @@ def _stepfun_synth(text: str, key_index: int | None = None,
             "speed": _resolve_speed(speed),
             "sample_rate": settings.stepfun_tts_sample_rate,
             "text_normalization": settings.stepfun_tts_text_normalization,
+            "language": settings.stepfun_tts_language,
         },
         ensure_ascii=False,
     ).encode("utf-8")
@@ -331,33 +333,16 @@ def _stepfun_stream_synth(text: str, speed: float | None = None):
         open_timeout=15,
         close_timeout=3,
     ) as ws:
-        session_id = json.loads(ws.recv(timeout=10))["data"]["session_id"]
+        session_id = tts_payload.parse_stream_handshake(
+            ws.recv(timeout=10), "tts.connection.done",
+        )
         ws.send(json.dumps({
             "type": "tts.create",
-            "data": {
-                "session_id": session_id,
-                "voice_id": settings.stepfun_tts_voice,
-                # mp3_stream: các khối PHẢI nối theo thứ tự đến mới thành file hợp
-                # lệ (khác "mp3" — mỗi khối là một file trọn vẹn). Đã kiểm: nối lại
-                # cho 132 frame MPEG liền mạch, đúng 3.17s, không dư byte nào.
-                "response_format": "mp3_stream",
-                "sample_rate": settings.stepfun_tts_sample_rate,
-                # "sentence": text đã hoàn chỉnh, không cần engine tự gom câu. Ta
-                # gửi trọn một câu mỗi request nên chờ gom chỉ thêm độ trễ.
-                # ("stream" bị từ chối: 400 "invalid mode".)
-                "mode": "sentence",
-                "speed_ratio": rate,
-                # Chỉ dẫn của HỘI THOẠI, không phải bản trung tính của /tts: ở đây
-                # giọng đóng vai người đối thoại. Đo được +11% F0 và +2dB mà ASR
-                # chép lại vẫn khớp (thanh điệu không méo) — xem settings.py.
-                "instruction": settings.stepfun_tts_instruction_chat,
-                # "standard" cho hội thoại: provider khuyến nghị đúng thế cho đường
-                # realtime, còn "enhanced" (mặc định của /tts) là cho bản thu phát
-                # thanh, đổi lấy độ trễ.
-                "text_normalization": "standard",
-            },
+            "data": tts_payload.build_stream_create_payload(session_id, rate),
         }, ensure_ascii=False))
-        ws.recv(timeout=15)  # tts.response.created
+        tts_payload.parse_stream_handshake(
+            ws.recv(timeout=15), "tts.response.created", session_id=session_id,
+        )
         yield from _pump_sentence(ws, session_id, text)
 
 
@@ -374,14 +359,22 @@ def _pump_sentence(ws, session_id: str, text: str):
     }, ensure_ascii=False))
     ws.send(json.dumps({"type": "tts.text.done", "data": {"session_id": session_id}}))
 
+    received_delta = False
     while True:
         event = json.loads(ws.recv(timeout=45))
         kind = event.get("type")
         if kind == "tts.response.audio.delta":
             chunk = base64.b64decode(event["data"]["audio"])
             if chunk:
+                received_delta = True
                 yield chunk
         elif kind == "tts.response.audio.done":
+            # Một số phản hồi chỉ đặt audio ở done; nếu đã nhận delta thì done
+            # có thể chứa toàn bộ bản ghép và không được phát lại lần nữa.
+            if not received_delta and event.get("data", {}).get("audio"):
+                chunk = base64.b64decode(event["data"]["audio"])
+                if chunk:
+                    yield chunk
             return
         elif kind == "tts.response.error":
             raise RuntimeError(
@@ -393,7 +386,7 @@ def _pump_sentence(ws, session_id: str, text: str):
 @router.get("/feedback")
 def synthesize_feedback(
     request: Request,
-    text: str = Query(..., min_length=1, max_length=MAX_TEXT_LEN),
+    text: str = Query(..., min_length=1, max_length=MAX_FEEDBACK_TEXT_LEN),
 ):
     """Đọc phản hồi/gợi ý sửa lỗi (tiếng Việt) qua TTS fallback.
 
@@ -461,6 +454,9 @@ def synthesize(
         stepfun_speed=rate,
         stepfun_instruction=settings.stepfun_tts_instruction,
         stepfun_sample_rate=settings.stepfun_tts_sample_rate,
+        stepfun_response_format="mp3",
+        stepfun_text_normalization=settings.stepfun_tts_text_normalization,
+        stepfun_language=settings.stepfun_tts_language,
         gemini_model=settings.gemini_tts_model,
         gemini_voice=settings.gemini_tts_voice,
         eleven_model=settings.elevenlabs_model,
@@ -627,6 +623,9 @@ def synthesize_stream(
         # làm mất hiệu lực cache, và người học vẫn nghe bản đọc theo chỉ dẫn cũ.
         stepfun_instruction=settings.stepfun_tts_instruction_chat,
         stepfun_sample_rate=settings.stepfun_tts_sample_rate,
+        stepfun_response_format="mp3_stream",
+        stepfun_text_normalization="standard",
+        stepfun_language=settings.stepfun_tts_language,
     )
     cached = tts_cache.get(key)
     if cached is not None:

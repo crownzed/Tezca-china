@@ -64,7 +64,20 @@ def main() -> None:
                 skipped_no_segments += 1
                 logger.warning("id=%s thiếu segments, giữ nguyên prompt", row.id)
                 continue
-            new_prompt = build_prompt(segments)
+            # Format mới: segments là thứ tự đúng, scrambled_indices cho biết
+            # thứ tự xáo trộn để hiển thị trong prompt. Fallback về segments nếu
+            # không có scrambled_indices (format cũ hoặc câu viết tay).
+            scrambled_indices = metadata.get("scrambled_indices")
+            if isinstance(scrambled_indices, list) and len(scrambled_indices) == len(segments):
+                # Bounds-check: mọi index phải nằm trong [0, len(segments))
+                if all(isinstance(i, int) and 0 <= i < len(segments) for i in scrambled_indices):
+                    display_tokens = [segments[i] for i in scrambled_indices]
+                else:
+                    logger.warning("id=%s scrambled_indices out of bounds, fallback to segments", row.id)
+                    display_tokens = segments
+            else:
+                display_tokens = segments
+            new_prompt = build_prompt(display_tokens)
             key = (row.level, new_prompt)
             if key in seen:
                 collisions += 1

@@ -5,7 +5,6 @@ import {
   Languages,
   MessageCircle,
   Mic,
-  RotateCcw,
   Send,
   Settings2,
   Sparkles,
@@ -33,7 +32,7 @@ const SPEECH_RATES = [
   { value: 0.95, label: '0.95x · Nhanh lưu loát' },
 ];
 
-export const CONVERSATION_SCENARIOS = [
+const CONVERSATION_SCENARIOS = [
   {
     id: 'cafe',
     title: 'Quán cà phê & Trà sữa',
@@ -90,7 +89,7 @@ export const CONVERSATION_SCENARIOS = [
   },
 ];
 
-export const QUICK_PROMPTS = [
+const QUICK_PROMPTS = [
   { cn: '请用简单的HSK 1-2词汇和我练习。', vi: 'Hãy dùng từ vựng HSK 1-2 đơn giản luyện tập với tôi.' },
   { cn: '如果我句子有错误，请帮我指出来并纠正。', vi: 'Nếu câu tôi có lỗi, xin hãy chỉ ra và sửa giúp tôi.' },
   { cn: '今天北京天气怎么样？', vi: 'Hôm nay thời tiết Bắc Kinh thế nào?' },
@@ -663,7 +662,9 @@ export default function VoiceChat() {
         className="cv-composer-container"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!recording) sendText();
+          if (!recording) {
+            sendText();
+          }
         }}
       >
         <div className="cv-composer-shell">

@@ -624,6 +624,7 @@ class QuestionGeneratorService:
                 return {
                     "segments": dd.get("segments", []),
                     "correct_order": dd.get("correct_order", []),
+                    "scrambled_indices": dd.get("scrambled_indices", []),
                     "sentence_vi": dd.get("sentence_vi", ""),
                 }
         if quiz_type == QuizType.voice:
@@ -1037,17 +1038,19 @@ class QuestionGeneratorService:
             return None
         # Đảm bảo scrambled luôn khác correct_order (tránh shuffle trả về y hệt).
         rng = random.Random(seed) if seed is not None else random.Random()
-        scrambled = list(result)
+        indices = list(range(len(result)))
         for _ in range(10):
-            rng.shuffle(scrambled)
-            if scrambled != result:
+            rng.shuffle(indices)
+            if [result[i] for i in indices] != result:
                 break
+        scrambled = [result[i] for i in indices]
         return {
             "sentence_cn": sentence,
             "sentence_vi": example.sentence_vi or "",
             "scrambled": " · ".join(scrambled),
-            "segments": scrambled,
-            "correct_order": result,
+            "segments": result,
+            "correct_order": list(range(len(result))),
+            "scrambled_indices": indices,
         }
 
 
@@ -1140,19 +1143,19 @@ class QuestionGeneratorService:
         variants = [
             {
                 "cn": f"今天上午，我在学校学习中文。老师先说：「{first.sentence_cn}」 然后让我们解释「{word.hanzi}」的意思。下课以后，我把这个词、拼音和例句写在本子上，晚上再复习一遍。",
-                "vi": f"Sang nay, toi hoc tieng Trung o truong. Giao vien noi truoc: 「{first.sentence_vi}」 Sau do, giao vien yeu cau chung toi giai thich nghia cua 「{word.hanzi}」. Sau gio hoc, toi ghi tu nay, pinyin va cau vi du vao vo, buoi toi on lai mot lan nua.",
+                "vi": f"Sáng nay tôi học tiếng Trung ở trường. Giáo viên nói trước: 「{first.sentence_vi}」 Sau đó yêu cầu chúng tôi giải thích nghĩa của 「{word.hanzi}」. Tan học, tôi ghi từ này kèm pinyin và câu ví dụ vào vở, tối về ôn lại một lượt.",
             },
             {
                 "cn": f"昨天晚上，我和朋友练习口语。我们用「{word.hanzi}」造了一个句子：「{first.sentence_cn}」 因为这个词和日常生活有关，所以我觉得它很容易记住，也很适合在聊天时使用。",
-                "vi": f"Toi hom qua, toi luyen noi voi ban. Chung toi dung 「{word.hanzi}」 de dat mot cau: 「{first.sentence_vi}」 Vi tu nay lien quan den doi song hang ngay, nen toi thay no de nho va cung phu hop de dung khi tro chuyen.",
+                "vi": f"Tối qua tôi luyện nói với bạn. Chúng tôi dùng 「{word.hanzi}」 đặt một câu: 「{first.sentence_vi}」 Vì từ này gắn liền với đời sống hằng ngày nên tôi thấy dễ nhớ, lại hợp dùng khi trò chuyện.",
             },
             {
                 "cn": f"这周我给自己定了一个小目标：每天记十个汉语词。今天的重点词是「{word.hanzi}」，意思是「{meaning}」。我先读例句「{first.sentence_cn}」，再听发音，最后用自己的话说一遍。",
-                "vi": f"Tuan nay toi dat cho minh mot muc tieu nho: moi ngay ghi nho muoi tu tieng Trung. Tu trong tam hom nay la 「{word.hanzi}」, nghia la 「{meaning}」. Toi doc cau vi du 「{first.sentence_vi}」 truoc, sau do nghe phat am, cuoi cung noi lai bang loi cua minh.",
+                "vi": f"Tuần này tôi đặt mục tiêu nhỏ: mỗi ngày học thuộc mười từ tiếng Trung. Từ trọng tâm hôm nay là 「{word.hanzi}」, nghĩa là 「{meaning}」. Tôi đọc câu ví dụ 「{first.sentence_vi}」 trước, rồi nghe phát âm, cuối cùng tự diễn đạt lại bằng lời mình.",
             },
             {
                 "cn": f"如果只看生词，我常常忘得很快。现在我把「{word.hanzi}」放进完整的句子里学习，比如：「{first.sentence_cn}」 这样我不仅知道它的意思，还知道它出现在什么场景、和哪些词一起使用。",
-                "vi": f"Neu chi nhin tu moi, toi thuong quen rat nhanh. Bay gio toi dat 「{word.hanzi}」 vao cau hoan chinh de hoc, vi du: 「{first.sentence_vi}」 Nhu vay toi khong chi biet nghia cua no, ma con biet no xuat hien trong ngu canh nao va di cung nhung tu nao.",
+                "vi": f"Nếu chỉ nhìn từ mới riêng lẻ, tôi thường quên rất nhanh. Giờ tôi đặt 「{word.hanzi}」 vào câu hoàn chỉnh để học, chẳng hạn: 「{first.sentence_vi}」 Nhờ vậy tôi không chỉ biết nghĩa mà còn rõ nó xuất hiện trong ngữ cảnh nào, đi kèm những từ gì.",
             },
         ]
         return _within_cap(variants[word.id % len(variants)])
