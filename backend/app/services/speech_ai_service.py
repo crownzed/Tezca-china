@@ -193,6 +193,7 @@ def score_pronunciation(
     mime_type: str,
     target_hanzi: str,
     target_pinyin: str = "",
+    speaker_id: str = "",
 ) -> dict:
     """Score the user's recording against ``target_hanzi``.
 
@@ -209,6 +210,9 @@ def score_pronunciation(
     The final score blends both. The acoustic layer is best-effort: if the
     audio isn't decodable WAV or no F0 is found, scoring degrades gracefully to
     the identity layer alone rather than failing the request.
+
+    When ``settings.use_new_scoring_pipeline`` is True, uses the 6-agent
+    pipeline with confidence-weighted fusion instead of min() veto.
     """
     transcribe_prompt = (
         "Bạn là giám khảo phát âm tiếng Trung. Người học vừa cố đọc câu mục tiêu.\n"
@@ -239,6 +243,18 @@ def score_pronunciation(
 
     breakdown = score_pinyin(resolved_target, actual_pinyin)
     identity_score = breakdown["score"]
+
+    # --- NEW 6-agent pipeline (behind feature flag) -------------------------
+    if settings.use_new_scoring_pipeline:
+        return _score_pronunciation_new(
+            audio_b64=audio_b64,
+            target_hanzi=target_hanzi,
+            target_pinyin=resolved_target,
+            actual_pinyin=actual_pinyin,
+            actual_hanzi=actual_hanzi,
+            pinyin_breakdown=breakdown,
+            speaker_id=speaker_id,
+        )
 
     # --- Acoustic layer (best-effort) --------------------------------------
     target_tones = [_extract_tone(s) for s in resolved_target.split() if s]
@@ -311,6 +327,207 @@ def score_pronunciation(
         "detailed_feedback": dsp_feedback,
         "macro_feedback": macro_feedback,
         "tip": tip,
+    }
+
+
+def _score_pronunciation_new(
+    audio_b64: str,
+    target_hanzi: str,
+    target_pinyin: str,
+    actual_pinyin: str,
+    actual_hanzi: str,
+    pinyin_breakdown: dict,
+    speaker_id: str,
+) -> dict:
+    """New 6-agent pronunciation scoring pipeline.
+
+    Runs all agents in dependency order, fuses scores with confidence weighting,
+    and generates explainable feedback. Falls back gracefully if any agent fails.
+    """
+    import base64 as _b64
+
+    from .adaptive_tone_analyzer import analyze_tones_adaptive
+    from .confidence_fuser import fuse_scores
+    from .fluency_prosody_analyzer import analyze_delivery
+    from .phoneme_verifier import verify_phonemes
+    from .replay_detector import detect_replay
+    from .score_explainer import explain_score
+    from .tone_dsp_extractor import ToneDspExtractorError, decode_wav, extract_tone_features_from_samples
+
+    # Decode audio bytes once for all agents (eliminates 4 redundant decodes)
+    try:
+        audio_bytes = _b64.b64decode(audio_b64, validate=True)
+    except Exception:
+        audio_bytes = b""
+
+    # Pre-decode WAV once — passed to extractor, replay detector, phoneme verifier
+    predecoded: tuple[list[float], int] | None = None
+    try:
+        if audio_bytes:
+            predecoded = decode_wav(audio_bytes)
+    except Exception as e:
+        logger.info("New pipeline: WAV decode failed (%s)", e)
+
+    target_syls = [s for s in target_pinyin.split() if s]
+    actual_syls = [s for s in actual_pinyin.split() if s]
+    target_tones = [_extract_tone(s) for s in target_syls]
+
+    # --- Agent 1: Tone DSP Extractor ----------------------------------------
+    extract_output = None
+    try:
+        if predecoded and target_syls:
+            samples, sr = predecoded
+            extract_output = extract_tone_features_from_samples(samples, sr, len(target_syls))
+    except (ToneDspExtractorError, Exception) as e:
+        logger.info("New pipeline: extractor failed (%s), degrading", e)
+
+    extraction_quality = extract_output["extraction_quality"] if extract_output else 0.0
+
+    # --- Agent 2: Phoneme Verifier ------------------------------------------
+    phoneme_output = None
+    try:
+        if audio_bytes and target_syls and actual_syls:
+            phoneme_output = verify_phonemes(
+                audio_bytes, target_syls, actual_syls,
+                predecoded=predecoded,
+                precomputed_f0=extract_output["f0_contour"] if extract_output else None,
+                precomputed_segments=extract_output["segments"] if extract_output else None,
+            )
+    except Exception as e:
+        logger.info("New pipeline: phoneme verifier failed (%s)", e)
+
+    phoneme_confidence = phoneme_output["phoneme_score"] if phoneme_output else 1.0
+
+    # --- Replay Detection (anti-gaming) -------------------------------------
+    # Check before adaptive update to prevent profile poisoning by replayed audio.
+    # Does NOT block scoring — only skips adaptive calibration if replay detected.
+    is_replay = False
+    try:
+        if audio_bytes and speaker_id:
+            replay_result = detect_replay(audio_bytes, speaker_id, predecoded=predecoded)
+            is_replay = replay_result["is_replay"]
+            if is_replay:
+                logger.warning(
+                    "New pipeline: replay detected for speaker %s (%s), "
+                    "skipping adaptive update",
+                    speaker_id[:8], replay_result["reason"],
+                )
+    except Exception as e:
+        logger.info("New pipeline: replay detection failed (%s)", e)
+
+    # --- Agent 3: Adaptive Tone Analyzer ------------------------------------
+    adaptive_output = None
+    dsp_tone_accuracy = 0.0
+    per_syllable_acoustic: list[dict] = []
+    try:
+        if extract_output and target_tones and speaker_id and not is_replay:
+            adaptive_output = analyze_tones_adaptive(
+                segments=extract_output["segments"],
+                normalized_segments=extract_output["normalized_segments"],
+                target_tones=target_tones,
+                speaker_id=speaker_id,
+            )
+            dsp_tone_accuracy = adaptive_output["adaptive_accuracy"]
+            per_syllable_acoustic = adaptive_output.get("per_syllable", [])
+    except Exception as e:
+        logger.info("New pipeline: adaptive analyzer failed (%s)", e)
+
+    # Fallback to legacy DSP if adaptive failed. Extractor có thể thành công
+    # nhưng adaptive fail (exception caught ở trên) — khi đó dsp_tone_accuracy
+    # vẫn 0.0, nên phải fallback bất kể extractor status. Legacy score_tones()
+    # tự extract lại nếu cần, không phụ thuộc vào extract_output.
+    if adaptive_output is None:
+        tone_result = _score_tones_safe(audio_b64, target_tones)
+        if tone_result is not None:
+            dsp_tone_accuracy = tone_result["tone_accuracy"]
+            per_syllable_acoustic = tone_result.get("per_syllable", [])
+
+    # --- Agent 4: Fluency/Prosody Analyzer ----------------------------------
+    fluency_output = None
+    try:
+        if extract_output:
+            fluency_output = analyze_delivery(
+                f0_contour=extract_output["f0_contour"],
+                frame_step_sec=extract_output["frame_step_sec"],
+                n_syllables=len(target_syls),
+                duration_sec=extract_output["duration_sec"],
+            )
+    except Exception as e:
+        logger.info("New pipeline: fluency analyzer failed (%s)", e)
+
+    # --- Agent 5: Confidence Fuser ------------------------------------------
+    n_tone_slots = pinyin_breakdown.get("tone_total", 0)
+    if n_tone_slots > 0:
+        identity_tone_ratio = max(0.0, 1.0 - len(pinyin_breakdown.get("tone_errors", [])) / n_tone_slots)
+    else:
+        identity_tone_ratio = 1.0
+
+    fuse_input = {
+        "base_score": pinyin_breakdown["base_score"],
+        "identity_tone_ratio": identity_tone_ratio,
+        "dsp_tone_accuracy": dsp_tone_accuracy,
+        "phoneme_confidence": phoneme_confidence,
+        "extraction_quality": extraction_quality,
+        "adaptive_used": adaptive_output["used_adaptive"] if adaptive_output else False,
+        "n_tone_slots": n_tone_slots,
+        "per_syllable_identity": pinyin_breakdown.get("syllable_errors", []),
+        "per_syllable_acoustic": per_syllable_acoustic,
+    }
+    fuse_result = fuse_scores(fuse_input)
+
+    final_score = fuse_result["final_score"]
+    tone_accuracy = fuse_result["tone_accuracy"]
+
+    # --- Agent 6: Score Explainer -------------------------------------------
+    explain_output = explain_score(
+        target_hanzi=target_hanzi,
+        target_pinyin=target_pinyin,
+        actual_pinyin=actual_pinyin,
+        fuse_output=fuse_result,
+        phoneme_output=phoneme_output,
+        adaptive_output=adaptive_output,
+        fluency_output=fluency_output,
+        pinyin_breakdown=pinyin_breakdown,
+    )
+
+    tip = explain_output["tip"]
+    macro_feedback = explain_output.get("macro_feedback", "")
+
+    # Extract fluency/prosody dicts for backward-compatible response shape
+    fluency = fluency_output.get("fluency") if fluency_output else None
+    prosody = fluency_output.get("prosody") if fluency_output else None
+    f0_contour = extract_output["f0_contour"] if extract_output else []
+    per_syllable = per_syllable_acoustic
+
+    # DSP feedback from acoustic per-syllable
+    dsp_feedback_parts = [
+        d.get("feedback", "") for d in per_syllable_acoustic if d.get("feedback")
+    ]
+    dsp_feedback = " ".join(dsp_feedback_parts[:2])
+
+    return {
+        "score": final_score,
+        "base_score": pinyin_breakdown["base_score"],
+        "identity_score": pinyin_breakdown["score"],
+        "tone_accuracy": tone_accuracy,
+        "target_hanzi": target_hanzi,
+        "target_pinyin": target_pinyin,
+        "actual_hanzi": actual_hanzi,
+        "actual_pinyin": actual_pinyin,
+        "tone_errors": pinyin_breakdown["tone_errors"],
+        "syllable_errors": pinyin_breakdown["syllable_errors"],
+        "tone_syllables": per_syllable,
+        "user_f0_contour": f0_contour,
+        "fluency": fluency,
+        "prosody": prosody,
+        "detailed_feedback": dsp_feedback,
+        "macro_feedback": macro_feedback,
+        "tip": tip,
+        # New fields from 6-agent pipeline
+        "fusion_method": fuse_result["fusion_method"],
+        "dimension_scores": explain_output.get("dimension_scores"),
+        "per_syllable_explanation": fuse_result.get("per_syllable_explanation"),
+        "confidence_breakdown": fuse_result.get("confidence_breakdown"),
     }
 
 

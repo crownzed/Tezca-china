@@ -195,6 +195,11 @@ class Settings(BaseSettings):
     # được đặt đúng hay không — đặt sai tên biến thì mặc định vẫn là an toàn.
     email_debug_log: bool = False
 
+    # Bật pipeline chấm phát âm mới (6-agent). Mặc định TẮT để giữ backward
+    # compatibility. Khi bật, score_pronunciation() dùng confidence-weighted fusion
+    # thay vì min() veto, adaptive tone templates, và phoneme verification.
+    use_new_scoring_pipeline: bool = False
+
     # extra="ignore": biến môi trường không khớp field nào thì BỎ QUA thay vì
     # ném ValidationError. Mặc định của pydantic-settings là "forbid", nên khi bỏ
     # một field mà .env hoặc secret store của môi trường triển khai vẫn còn dòng
