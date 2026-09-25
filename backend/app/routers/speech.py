@@ -6,6 +6,7 @@ leaves the backend.
 """
 import base64
 import binascii
+import hashlib
 import json
 import logging
 import random
@@ -157,6 +158,7 @@ def pronunciation(
             mime_type=mime,
             target_hanzi=request.target_hanzi,
             target_pinyin=request.target_pinyin,
+            speaker_id=current_user.id,
         )
         return PronunciationScoreOut(**result)
     except HTTPException:
@@ -414,12 +416,18 @@ def demo_pronunciation(request: DemoPronunciationRequest, http_request: Request)
         raise HTTPException(status_code=413, detail="Đoạn ghi âm quá dài (tối đa 8 giây).")
 
     # 5) Chấm điểm qua service dùng chung (speech API + DSP). Không log audio/base64.
+    # Tạo deterministic pseudo-ID từ IP + sentence_id để mỗi anonymous user có
+    # profile adaptive riêng, tránh corrupt shared profile key "".
+    demo_speaker_id = hashlib.sha256(
+        f"{ip}:{request.sentence_id}".encode()
+    ).hexdigest()[:16]
     try:
         result = score_pronunciation(
             audio_b64=request.audio_base64,
             mime_type=mime,
             target_hanzi=sentence["hanzi"],
             target_pinyin=sentence["pinyin"],
+            speaker_id=f"demo_{demo_speaker_id}",
         )
         return PronunciationScoreOut(**result)
     except RuntimeError as e:

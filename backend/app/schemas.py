@@ -597,6 +597,12 @@ class PronunciationScoreOut(BaseModel):
     detailed_feedback: str = ""
     macro_feedback: str = ""
     tip: str = ""
+    # New pipeline fields (only populated when use_new_scoring_pipeline=True).
+    # Có default để backward compatible với legacy pipeline.
+    fusion_method: str = ""
+    dimension_scores: dict[str, float | None] = Field(default_factory=dict)
+    per_syllable_explanation: list[dict] = Field(default_factory=list)
+    confidence_breakdown: dict[str, float] = Field(default_factory=dict)
 
 
 # Trần dùng chung cho mọi tin nhắn hội thoại. Phải >= maxLength của textarea
