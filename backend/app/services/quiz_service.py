@@ -28,6 +28,8 @@ from .question_generator import (
     QUESTION_SUBTYPE_SENTENCE,
     QuestionGeneratorService,
 )
+from .question_quality import question_is_approved, question_is_servable
+from .ordering_contract import grade_ordering, normalize_ordering
 from .srs_service import SRSService
 
 logger = logging.getLogger(__name__)
@@ -324,6 +326,8 @@ def _inject_user_distractors(
     word_by_id: dict[int, Word],
 ) -> None:
     """Thay thế tối đa 1 distractor bằng từ người dùng từng nhầm với từ đích."""
+    if (question.metadata_json or {}).get("qa_status") == "approved":
+        return  # Bản đã ký QA (kể cả khi audit cũ) không được đổi nội dung.
     if not question.word_id or question.word_id not in confusion_map:
         return
     confused_ids = confusion_map[question.word_id]
@@ -388,6 +392,8 @@ def _inject_stage_confusable(
     KHÔNG phải đáp án đúng, giữ nguyên ``correct_index`` nên không ảnh hưởng
     chấm điểm; không commit (row bank dùng chung không đổi trên DB).
     """
+    if (question.metadata_json or {}).get("qa_status") == "approved":
+        return  # Bản đã ký QA (kể cả khi audit cũ) không được đổi nội dung.
     if not target_word or not question.word_id:
         return
     confusables = target_word.confusable_words_json or []
@@ -475,10 +481,13 @@ class QuizService:
             .order_by(Question.created_at.desc())
             .limit(bank_size * 2)
         )
-        # dialogue: eager-load question.word để tránh N+1 lazy-load khi lọc/rank.
-        if quiz_type == QuizType.dialogue:
-            candidates_query = candidates_query.options(selectinload(Question.word))
+        # Batch-load audit dependencies; freshness checks must never lazy-load.
+        candidates_query = candidates_query.options(
+            selectinload(Question.word).selectinload(Word.examples)
+        )
         candidates = self.db.scalars(candidates_query).all()
+        # Gate before subtype access: malformed metadata must fail closed too.
+        candidates = [q for q in candidates if question_is_servable(q)]
         if quiz_type == QuizType.listening:
             candidates = [q for q in candidates if (q.metadata_json or {}).get("question_subtype") == QUESTION_SUBTYPE_SENTENCE]
         if quiz_type == QuizType.dialogue:
@@ -502,6 +511,10 @@ class QuizService:
                 if (q.metadata_json or {}).get("question_subtype")
                 in (QUESTION_SUBTYPE_SENTENCE, QUESTION_SUBTYPE_GUIDED_CLOZE)
             ]
+        # Lọc TRƯỚC rank và fallback: QA chưa duyệt, bị cách ly hoặc bản
+        # approved có fingerprint cũ không được lọt vào bất kỳ nhánh phục vụ nào.
+        # Câu legacy không có qa_status vẫn dùng được khi bank approved thiếu.
+        candidates = [q for q in candidates if question_is_servable(q)]
         if not candidates:
             return []
 
@@ -512,29 +525,45 @@ class QuizService:
         fresh = self._rank_questions(
             candidates, progress_by_word, last_question_ids, recent_question_ids, difficulty_stats
         )
-        selected = self._blend_ai_template(fresh, limit)
+        approved, legacy = [], []
+        for question in fresh:
+            (approved if question_is_approved(question) else legacy).append(question)
+        # QA được ưu tiên nhưng không xoá bank legacy: thiếu câu đã duyệt thì
+        # dùng legacy, và mỗi nhóm vẫn giữ blend AI/template theo thứ tự rank.
+        selected = self._blend_ai_template(approved, limit)
+        if len(selected) < limit:
+            remaining_ai_slots = max(0, limit // 2 - sum(_is_ai_question(q) for q in selected))
+            selected.extend(self._blend_ai_template(legacy, limit - len(selected), ai_slots=remaining_ai_slots))
         if len(selected) < limit:
             selected_ids = {q.id for q in selected}
-            fallback = [q for q in candidates if q.id not in selected_ids]
+            fallback = [
+                q for q in candidates
+                if q.id not in selected_ids and question_is_servable(q)
+            ]
             shuffle(fallback)
+            fallback.sort(key=lambda q: not question_is_approved(q))
             selected = [*selected, *fallback[: limit - len(selected)]]
 
         self._personalize_distractors(user_id, selected)
         return selected
 
-    def _blend_ai_template(self, ranked: list[Question], limit: int) -> list[Question]:
+    def _blend_ai_template(
+        self, ranked: list[Question], limit: int, ai_slots: int | None = None
+    ) -> list[Question]:
         """Chọn ``limit`` câu, blend tối đa ~50% câu AI khi bank có sẵn.
 
         Câu AI sinh nền chỉ xuất hiện từ lượt sau; khi chưa có câu AI nào thì
         hàm trả về đúng ``ranked[:limit]`` (hành vi template-only như cũ). Khi
         đã có, dành tối đa nửa số slot cho câu AI, phần còn lại là template —
         cả hai nhóm đều giữ nguyên thứ tự rank. Thiếu nhóm nào thì nhóm kia bù.
+        ``ai_slots`` cho phép nhóm legacy dùng phần quota AI còn lại sau khi đã
+        ưu tiên nhóm approved.
         """
         ai = [q for q in ranked if _is_ai_question(q)]
         template = [q for q in ranked if not _is_ai_question(q)]
         if not ai:
             return template[:limit]
-        ai_slots = min(len(ai), limit // 2)
+        ai_slots = min(len(ai), limit // 2 if ai_slots is None else ai_slots)
         selected = [*ai[:ai_slots], *template[: limit - ai_slots]]
         if len(selected) < limit:
             chosen_ids = {q.id for q in selected}
@@ -625,22 +654,51 @@ class QuizService:
             _inject_stage_confusable(q, tw, stage, conf_word_by_hanzi)
 
     def submit(self, payload: QuizSubmitRequest) -> QuizSubmitResponse:
-        question_ids = [answer.question_id for answer in payload.answers]
-        questions = self.db.scalars(select(Question).where(Question.id.in_(question_ids))).all()
-        by_id = {q.id: q for q in questions}
-
         score = 0
         results: list[AnswerResult] = []
         stored_answers = []
-        srs = SRSService(self.db)
-        events = LearningEventService(self.db)
-        for answer in payload.answers:
-            question = by_id.get(answer.question_id)
-            if not question:
-                continue
-            correct = answer.selected_index == question.correct_index
-            score += 1 if correct else 0
-            if payload.record_events:
+        prepared = []
+        # Validate the entire batch before SRS/events/attempts or caller autoflush.
+        with self.db.no_autoflush:
+            question_ids = [answer.question_id for answer in payload.answers]
+            questions = self.db.scalars(select(Question).where(Question.id.in_(question_ids))).all()
+            by_id = {q.id: q for q in questions}
+            for answer in payload.answers:
+                question = by_id.get(answer.question_id)
+                if question is None:
+                    raise ValueError("question_not_found")
+                ordering_fields = {}
+                if question.quiz_type == QuizType.drag_drop:
+                    ordering = normalize_ordering(question.metadata_json)
+                    correct = grade_ordering(question.metadata_json, answer.selected_order)
+                    ordering_fields = {
+                        "selected_order": list(answer.selected_order),
+                        "ordering_version": ordering.version,
+                    }
+                else:
+                    correct = answer.selected_index == question.correct_index
+                score += int(correct)
+                results.append(AnswerResult(
+                    question_id=question.id,
+                    correct=correct,
+                    correct_index=question.correct_index,
+                    explanation=question.explanation or "",
+                ))
+                stored_answers.append({
+                    "question_id": question.id,
+                    "selected_index": answer.selected_index,
+                    **ordering_fields,
+                    "correct": correct,
+                    "confidence": answer.confidence,
+                    "latency_ms": answer.latency_ms,
+                    "error_tag": answer.error_tag,
+                })
+                prepared.append((answer, question, correct))
+
+        if payload.record_events:
+            srs = SRSService(self.db)
+            events = LearningEventService(self.db)
+            for answer, question, correct in prepared:
                 srs.update_from_answer(payload.user_id, question, correct, answer.confidence, answer.latency_ms)
                 events.record_quiz_answer(
                     payload.user_id,
@@ -651,21 +709,6 @@ class QuizService:
                     answer.error_tag,
                     session_id=payload.session_id,
                 )
-            result = AnswerResult(
-                question_id=question.id,
-                correct=correct,
-                correct_index=question.correct_index,
-                explanation=question.explanation,
-            )
-            results.append(result)
-            stored_answers.append({
-                "question_id": question.id,
-                "selected_index": answer.selected_index,
-                "correct": correct,
-                "confidence": answer.confidence,
-                "latency_ms": answer.latency_ms,
-                "error_tag": answer.error_tag,
-            })
 
         attempt = QuizAttempt(
             user_id=payload.user_id,

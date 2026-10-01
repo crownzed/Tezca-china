@@ -1,7 +1,7 @@
 """
 Cron QA Runner — aggregates all content quality checks.
 
-Called by GitHub Actions cron (every 8 hours) or manually:
+Run manually against a seeded database:
     python backend/app/scripts/cron_qa_runner.py
 
 Checks performed:

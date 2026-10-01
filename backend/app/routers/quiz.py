@@ -10,6 +10,7 @@ from ..db import get_db
 from ..models import LearningEvent, Question, QuizAttempt, QuizType, UserProgress, Word
 from ..schemas import AnalyticsOut, QuizOut, QuizStartRequest, QuizSubmitRequest, QuizSubmitResponse, QuestionOut, QuestionWordOut, SessionCompleteOut, SessionCompleteRequest, SessionEventOut, SessionEventRequest, SessionOutputOut, SessionOutputRequest, SessionStartOut, SessionStartRequest, StatsOut, StudyAnalysisOut, TodaySessionOut
 from ..services.output_service import OutputService
+from ..services.ordering_contract import OrderingError
 from ..services.quiz_service import QuizService
 from ..services.rate_limiter import RateLimiter
 from ..services.session_service import SessionService
@@ -66,7 +67,14 @@ def start_quiz(payload: QuizStartRequest, user_id: str = Depends(resolve_user_id
 @router.post("/quiz/submit", response_model=QuizSubmitResponse)
 def submit_quiz(payload: QuizSubmitRequest, user_id: str = Depends(resolve_user_id), db: Session = Depends(get_db)):
     payload.user_id = user_id
-    return QuizService(db).submit(payload)
+    try:
+        return QuizService(db).submit(payload)
+    except OrderingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        if str(exc) == "question_not_found":
+            raise HTTPException(status_code=404, detail="Question not found") from exc
+        raise
 
 
 def _parse_topics(topics: str | None) -> list[str] | None:
@@ -125,7 +133,10 @@ def record_session_event(payload: SessionEventRequest, user_id: str = Depends(re
             error_tag=payload.error_tag,
             session_id=payload.session_id,
             item_type=payload.item_type,
+            selected_order=payload.selected_order,
         )
+    except OrderingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         if str(exc) == "question_not_found":
             raise HTTPException(status_code=404, detail="Question not found") from exc

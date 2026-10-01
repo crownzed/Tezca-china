@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 from .models import QuizType
 
@@ -72,6 +72,7 @@ class QuizOut(BaseModel):
 class AnswerIn(BaseModel):
     question_id: int
     selected_index: int
+    selected_order: list[StrictInt] | None = None
     confidence: int | None = Field(default=None, ge=1, le=4)
     latency_ms: int | None = Field(default=None, ge=0)
     error_tag: str | None = None
@@ -299,6 +300,7 @@ class SessionEventRequest(BaseModel):
     session_id: int | None = None
     question_id: int
     selected_index: int
+    selected_order: list[StrictInt] | None = None
     confidence: int | None = Field(default=None, ge=1, le=4)
     latency_ms: int | None = Field(default=None, ge=0)
     error_tag: str | None = None

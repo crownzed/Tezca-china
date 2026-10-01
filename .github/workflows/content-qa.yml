@@ -1,85 +1,59 @@
-# Content Quality Check — runs every 8 hours and on relevant pushes
 name: Content QA
 
 on:
-  schedule:
-    - cron: '0 */8 * * *'
   push:
     branches: [main]
     paths:
-      - 'backend/app/data/**'
-      - 'backend/app/models.py'
-      - 'backend/app/services/question_generator.py'
-      - 'backend/app/services/template_engine.py'
-      - 'backend/app/scripts/**'
-      # Cổng dữ liệu nằm ở hai chỗ này: sửa luật mà không sửa data thì vẫn phải
-      # chạy lại, nếu không luật mới không bao giờ được kiểm trên CI.
-      - 'backend/tests/**'
-      - 'scripts/validate-*.mjs'
-      # Cổng validate cũng là mã: sửa luật mà không sửa data thì vẫn phải chạy lại.
+      - 'backend/app/data/conversation_scenarios.json'
+      - 'backend/app/data/exam_passages.json'
+      - 'backend/app/services/conversation_bank_service.py'
+      - 'backend/app/services/exam_passage_service.py'
       - 'backend/tests/test_conversation_bank.py'
       - 'backend/tests/test_exam_passages.py'
       - 'scripts/validate-conversation-bank.mjs'
       - 'scripts/validate-exam-passages.mjs'
+      - '.github/workflows/content-qa.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/app/data/conversation_scenarios.json'
+      - 'backend/app/data/exam_passages.json'
+      - 'backend/app/services/conversation_bank_service.py'
+      - 'backend/app/services/exam_passage_service.py'
+      - 'backend/tests/test_conversation_bank.py'
+      - 'backend/tests/test_exam_passages.py'
+      - 'scripts/validate-conversation-bank.mjs'
+      - 'scripts/validate-exam-passages.mjs'
+      - '.github/workflows/content-qa.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   content-qa:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          pip install -r backend/requirements.txt
-          pip install pypinyin
-
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # Cổng dữ liệu tất định: không cần DB, không gọi LLM. Chạy TRƯỚC QA vì QA
-      # tự skip khi không có DB (secret trống), còn lỗi trong các bank JSON thì
-      # phải chặn ngay. Cùng bộ luật với tests/test_conversation_bank.py.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Validate content banks
         run: |
           node scripts/validate-conversation-bank.mjs
           node scripts/validate-exam-passages.mjs
-          cd backend && python -m pytest tests/test_conversation_bank.py tests/test_exam_passages.py -q
 
-      - name: Run Content QA
-        id: qa
-        env:
-          # QA cần DB đã seed để có gì kiểm. Trỏ vào prod (Postgres/Turso) qua
-          # secret; nếu secret trống, runner rơi về SQLite rỗng -> db_is_ready()
-          # false -> QA skip sạch (exit 0) thay vì crash.
-          # Secret rỗng -> fallback sqlite để không ghi đè default bằng "" (create_engine("") crash).
-          # Khi chưa có secret: sqlite rỗng -> guard db_is_ready() bắt -> exit 0. Có secret prod -> QA chạy thật.
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'sqlite:///./dev.db' }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python backend/app/scripts/cron_qa_runner.py
-
-      - name: Upload QA Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-report
-          path: backend/app/data/qa_report.json
-          retention-days: 30
-
-      - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK_URL != ''
-        uses: slackapi/slack-github-action@v2
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            text: "🚨 Tezca Content QA failed on ${{ github.ref_name }} by ${{ github.actor }} — check ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - name: Test content-bank services
+        working-directory: backend
+        run: python -m unittest tests.test_conversation_bank tests.test_exam_passages -q

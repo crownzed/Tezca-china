@@ -549,7 +549,7 @@ python -m pytest tests -q
 python -m app.scripts.audit_grammar
 python app/scripts/cron_qa_runner.py
 ```
-Hệ thống CI/CD trên GitHub Actions (`content-qa.yml`) được cấu hình tự động chạy **mỗi 8 giờ một lần** và báo cáo trạng thái kiểm định chất lượng tức thời.
+Workflow GitHub Actions [Content QA](.github/workflows/content-qa.yml) tự động chạy khi có thay đổi liên quan trong pull request vào `main` hoặc push lên `main`, và có thể chạy thủ công. Workflow chỉ chạy các kiểm tra tất định không cần database: hai validator nội dung và bộ test `unittest` cho ngân hàng hội thoại, đoạn văn đề thi. Phần QA cơ sở dữ liệu vẫn cần chạy thủ công với `DATABASE_URL` trỏ tới database đã seed.
 </details>
 
 <br/>
@@ -617,7 +617,7 @@ $$\text{Priority} = 0.35 \times \text{Urgency} + 0.20 \times \text{ForgettingRis
 
 ```text
 Tezca-china/
-├── .github/workflows/          # CI/CD pipelines (content-qa.yml chạy mỗi 8 giờ)
+├── .github/workflows/          # CI/CD pipelines (content-qa.yml kiểm tra bank nội dung)
 ├── backend/                    # Mã nguồn máy chủ FastAPI & Python Engine
 │   ├── app/
 │   │   ├── data/               # Kho JSON ngữ liệu chuẩn: passages, scenarios, QA reports

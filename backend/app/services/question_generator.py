@@ -22,6 +22,7 @@ from .gloss_senses import (
     normalize_text,
     senses,
 )
+from .ordering_contract import ORDERING_VERSION, OrderingError, normalize_ordering, scramble_order
 from .template_engine import get_template_engine
 from .viet_distractor import get_vietnamese_aware_distractors
 
@@ -69,8 +70,9 @@ def _valid_question_payload(
 ) -> bool:
     """Cổng QA cuối trước khi ghi bank.
 
-    Template/LLM đều phải đi qua cùng một contract: 4 lựa chọn khác nhau,
-    đáp án hợp lệ, prompt có nội dung và dạng đặc biệt có metadata cần thiết.
+    Template/LLM đều phải đi qua cùng một contract: 4 lựa chọn (khác nhau
+    với MCQ; placeholder với drag-drop), đáp án hợp lệ, prompt có nội dung
+    và dạng đặc biệt có metadata cần thiết.
     Điều này ngăn dữ liệu lỗi lọt vào DB khi nguồn ví dụ hoặc template thiếu.
 
     ``target_hanzi`` chỉ dùng cho ``vocab``: xem ``_GLOSS_OPTION_TYPES``.
@@ -79,16 +81,21 @@ def _valid_question_payload(
         return False
     if not isinstance(explanation, str) or len(explanation.strip()) < 3:
         return False
+    if not isinstance(metadata, dict):
+        return False
     if not isinstance(options, list) or len(options) != 4:
         return False
-    cleaned = [str(item).strip() for item in options]
-    if any(not item for item in cleaned) or len(set(cleaned)) != 4:
+    if any(not isinstance(item, str) or not item.strip() for item in options):
         return False
-    # So chuỗi thô ở trên bỏ sót cặp chỉ khác chữ hoa/thường: 14 câu trong bank
-    # có hai lựa chọn như ``'Có lẽ'`` / ``'có lẽ'`` (câu 8357, từ 可能).
+    cleaned = [item.strip() for item in options]
+    if type(correct_index) is not int or not 0 <= correct_index < 4:
+        return False
+    # Drag-drop options are storage placeholders; canonical indices determine correctness.
+    if quiz_type == QuizType.drag_drop:
+        from .question_quality import drag_contract_errors
+        return not drag_contract_errors(metadata)
+    # So chuỗi thô bỏ sót cặp chỉ khác chữ hoa/thường hoặc dấu câu.
     if duplicate_after_normalize(cleaned):
-        return False
-    if not isinstance(correct_index, int) or not 0 <= correct_index < 4:
         return False
     if quiz_type in _GLOSS_OPTION_TYPES and not _valid_gloss_options(
         cleaned, correct_index, target_hanzi
@@ -96,11 +103,6 @@ def _valid_question_payload(
         return False
     if quiz_type == QuizType.cloze and "____" not in prompt:
         return False
-    if quiz_type == QuizType.drag_drop:
-        segments = metadata.get("segments") or []
-        order = metadata.get("correct_order") or []
-        if len(segments) < 2 or len(order) < 2:
-            return False
     return True
 
 
@@ -621,12 +623,9 @@ class QuestionGeneratorService:
         if quiz_type == QuizType.drag_drop:
             dd = self._drag_drop_for_word(word, seed)
             if dd:
-                return {
-                    "segments": dd.get("segments", []),
-                    "correct_order": dd.get("correct_order", []),
-                    "scrambled_indices": dd.get("scrambled_indices", []),
-                    "sentence_vi": dd.get("sentence_vi", ""),
-                }
+                return {key: dd[key] for key in (
+                    "ordering_version", "segments", "correct_order", "scrambled_indices", "sentence_vi"
+                )}
         if quiz_type == QuizType.voice:
             vp = self._voice_prompt_for_word(word, seed)
             if vp:
@@ -634,10 +633,18 @@ class QuestionGeneratorService:
         return {}
 
     def _get_or_create_question(self, word: Word, level: int, quiz_type: QuizType, seed: int | None = None) -> Question | None:
-        base_prompt = self._prompt_for(word, quiz_type, seed)
+        # Build ordering once: with seed=None each call shuffles independently,
+        # so re-running the helpers would disagree on the prompt and metadata.
+        drag = self._drag_drop_for_word(word, seed) if quiz_type == QuizType.drag_drop else None
+        if quiz_type == QuizType.drag_drop:
+            if not drag:
+                return None
+            base_prompt = f"Sắp xếp từ thành câu đúng: {drag['scrambled']}"
+        else:
+            base_prompt = self._prompt_for(word, quiz_type, seed)
         if not base_prompt:
             return None
-            
+
         duplicate_prompt = self.db.scalar(
             select(Question).where(
                 Question.word_id == word.id,
@@ -650,7 +657,7 @@ class QuestionGeneratorService:
 
         prompt = base_prompt
 
-        audio_text = self._audio_for(word, quiz_type, seed)
+        audio_text = drag["sentence_cn"] if drag else self._audio_for(word, quiz_type, seed)
         if audio_text and quiz_type != QuizType.vocab:
             duplicate = self.db.scalar(
                 select(Question).where(
@@ -662,11 +669,26 @@ class QuestionGeneratorService:
             if duplicate:
                 return duplicate
 
-        options, correct_index, option_word_ids = self._options_with_words(word, quiz_type, seed)
+        if drag:
+            # These four placeholders are not the answer; grading uses the
+            # indexed ordering in metadata, including repeated token values.
+            options = [drag["sentence_cn"], "__drag_drop_dummy_1__",
+                       "__drag_drop_dummy_2__", "__drag_drop_dummy_3__"]
+            correct_index, option_word_ids = 0, [word.id, None, None, None]
+            extra_metadata = {key: drag[key] for key in (
+                "ordering_version", "segments", "correct_order", "scrambled_indices", "sentence_vi"
+            )}
+            explanation = (
+                f"Câu đúng: {drag['sentence_cn']} · {word.pinyin} · "
+                f"{word.meaning_vi or word.meaning_en}"
+            )
+        else:
+            options, correct_index, option_word_ids = self._options_with_words(word, quiz_type, seed)
+            extra_metadata = self._extra_metadata(word, quiz_type, seed)
+            explanation = self._explanation_for(word, quiz_type, seed)
         if len(options) < 4:
             return None
 
-        extra_metadata = self._extra_metadata(word, quiz_type, seed)
         metadata = {
             "source": "generated",
             "option_word_ids": option_word_ids,
@@ -675,8 +697,7 @@ class QuestionGeneratorService:
         }
         if not _valid_question_payload(
             quiz_type, prompt, options, correct_index,
-            self._explanation_for(word, quiz_type, seed), metadata,
-            target_hanzi=word.hanzi,
+            explanation, metadata, target_hanzi=word.hanzi,
         ):
             return None
 
@@ -687,7 +708,7 @@ class QuestionGeneratorService:
             prompt=prompt,
             options=options,
             correct_index=correct_index,
-            explanation=self._explanation_for(word, quiz_type, seed),
+            explanation=explanation,
             audio_text=audio_text,
             metadata_json=metadata,
         )
@@ -803,6 +824,15 @@ class QuestionGeneratorService:
         Mapping option->word_id cho phép suy ra ``selected_word`` khi người học
         chọn sai (đáp án đã shuffle), làm đầu vào cho bộ phân loại lỗi.
         """
+        # Ordering has no MCQ distractors. Do not make it depend on the word
+        # pool (which can legitimately contain fewer than three other words).
+        if quiz_type == QuizType.drag_drop:
+            dd = self._drag_drop_for_word(word, seed)
+            if not dd:
+                return [], 0, []
+            return [dd["sentence_cn"], "__drag_drop_dummy_1__",
+                    "__drag_drop_dummy_2__", "__drag_drop_dummy_3__"], 0, [word.id, None, None, None]
+
         # Pool distractor lấy từ cache theo (hsk_level, pos); loại từ đích ở
         # Python vì pool được chia sẻ giữa các từ cùng cấp.
         if word.pos:
@@ -862,19 +892,6 @@ class QuestionGeneratorService:
                 item_paragraph = self._paragraph_for_word(item, seed)
                 if item_paragraph:
                     pairs.append((item_paragraph["vi"], item.id))
-        elif quiz_type == QuizType.drag_drop:
-            # Vấn đề 2: drag_drop không dùng multiple-choice options.
-            # UI sắp xếp token trực tiếp — chỉ cần dummy options để pass validation.
-            dd = self._drag_drop_for_word(word, seed)
-            if not dd:
-                return [], 0, []
-            # Trả về 4 dummy options, correct_index=0 (không dùng trên UI)
-            pairs = [
-                (dd['sentence_cn'], word.id),
-                ('__drag_drop_dummy_1__', None),
-                ('__drag_drop_dummy_2__', None),
-                ('__drag_drop_dummy_3__', None),
-            ]
         elif quiz_type == QuizType.voice:
             # Voice is self-assessment: no correct answer leaked in options
             pairs = [("Đã đọc xong", word.id), ("Chưa đọc được", word.id), ("Cần luyện thêm", word.id), ("Quá dễ", word.id)]
@@ -912,11 +929,9 @@ class QuestionGeneratorService:
         # chỉ câu do LLM sinh (đi đường khác) mới vào được. ``clean[0]`` là đáp án
         # đúng nên cắt phần đuôi luôn giữ đáp án.
         clean = clean[:4]
-        # drag_drop và voice: UI coi index 0 là đáp án chuẩn (drag_drop chấm
-        # cục bộ rồi gửi selected_index=0 khi đúng; voice dùng options[0] làm
-        # "Đã đọc xong"). Shuffle sẽ làm correct_index lệch khỏi 0 → backend
-        # chấm sai. Giữ nguyên thứ tự, correct_index=0 cho 2 dạng này.
-        if quiz_type in (QuizType.drag_drop, QuizType.voice):
+        # Voice self-assessment keeps "Đã đọc xong" at index 0. Ordering
+        # returned above and is graded by selected_order, not option position.
+        if quiz_type == QuizType.voice:
             options = [text for text, _ in clean]
             option_word_ids = [wid for _, wid in clean]
             return options, 0, option_word_ids
@@ -1009,48 +1024,47 @@ class QuestionGeneratorService:
             return ex.sentence_cn if ex and ex.sentence_cn else word.hanzi
         return ""
 
-    def _drag_drop_for_word(self, word: Word, seed: int | None = None) -> dict[str, str] | None:
+    def _drag_drop_for_word(self, word: Word, seed: int | None = None) -> dict | None:
         examples = self._examples_for(word)
         example = random.Random(seed).choice(examples) if examples and seed is not None else (examples[0] if examples else None)
-        if not example or not example.sentence_cn or word.hanzi not in example.sentence_cn:
+        if not example or not example.sentence_cn or not word.hanzi or word.hanzi not in example.sentence_cn:
             return None
-        import re as _re
         sentence = example.sentence_cn
-        # Split sentence into segments around the target word
-        escaped = _re.escape(word.hanzi)
-        parts = _re.split(f'({escaped})', sentence)
-        segments = [p for p in parts if p]
-        # Further split long segments (>3 CJK chars) into smaller chunks
-        result = []
-        for seg in segments:
-            if seg == word.hanzi:
-                result.append(seg)
-            elif len(seg) <= 3:
-                result.append(seg)
+        parts = re.split(f'({re.escape(word.hanzi)})', sentence)
+        fragments = []
+        for part in parts:
+            if part == word.hanzi or len(part) <= 3:
+                fragments.append(part)
             else:
-                # Split long segments at punctuation first
-                sub = _re.split(r'([，。！？、：])', seg)
-                result.extend(p for p in sub if p)
-        # Cần ít nhất 2 token KHÁC NHAU mới thành bài sắp xếp: nếu chỉ 1 token
-        # hoặc mọi token giống hệt nhau thì không xáo trộn nào khác được thứ tự
-        # gốc → câu hỏi hiện ra đã đúng sẵn. Bỏ qua, không sinh câu này.
-        if len(set(result)) < 2:
+                fragments.extend(re.split(r'([，。！？、：])', part))
+
+        # Punctuation belongs to a meaningful chip, never to a separate identity.
+        # Keep leading quotes/spaces and every repeated occurrence of the target.
+        segments = []
+        prefix = ""
+        for fragment in fragments:
+            if any(char.isalnum() for char in fragment):
+                segments.append(prefix + fragment)
+                prefix = ""
+            elif segments:
+                segments[-1] += fragment
+            else:
+                prefix += fragment
+        correct_order = list(range(len(segments)))
+        try:
+            ordering = normalize_ordering({
+                "ordering_version": ORDERING_VERSION,
+                "segments": segments,
+                "correct_order": correct_order,
+                "scrambled_indices": scramble_order(segments, correct_order, random.Random(seed)),
+            })
+        except OrderingError:
             return None
-        # Đảm bảo scrambled luôn khác correct_order (tránh shuffle trả về y hệt).
-        rng = random.Random(seed) if seed is not None else random.Random()
-        indices = list(range(len(result)))
-        for _ in range(10):
-            rng.shuffle(indices)
-            if [result[i] for i in indices] != result:
-                break
-        scrambled = [result[i] for i in indices]
         return {
             "sentence_cn": sentence,
             "sentence_vi": example.sentence_vi or "",
-            "scrambled": " · ".join(scrambled),
-            "segments": result,
-            "correct_order": list(range(len(result))),
-            "scrambled_indices": indices,
+            "scrambled": " · ".join(ordering.segments[i] for i in ordering.scrambled_indices),
+            **ordering.as_metadata(),
         }
 
 

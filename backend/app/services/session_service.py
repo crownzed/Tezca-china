@@ -7,6 +7,7 @@ from ..models import LearningEvent, LearningSession, QuizType, Question, UserPro
 from .behavior_service import BehaviorService
 from .chinese_metadata_service import ChineseMetadataService
 from .event_service import LearningEventService
+from .ordering_contract import grade_ordering
 from .priority_service import extract_features, priority_score
 from .repair_service import RepairService
 from .retrieval_ladder_service import describe_level
@@ -55,12 +56,16 @@ class SessionService:
         error_tag: str | None = None,
         session_id: int | None = None,
         item_type: str = "quiz",
+        selected_order: list[int] | None = None,
     ) -> dict:
-        question = self.db.scalar(select(Question).where(Question.id == question_id))
-        if not question:
-            raise ValueError("question_not_found")
+        with self.db.no_autoflush:
+            question = self.db.scalar(select(Question).where(Question.id == question_id))
+            if question is None:
+                raise ValueError("question_not_found")
+            correct = (grade_ordering(question.metadata_json, selected_order)
+                       if question.quiz_type == QuizType.drag_drop
+                       else selected_index == question.correct_index)
 
-        correct = selected_index == question.correct_index
         progress = SRSService(self.db).update_from_answer(user_id, question, correct, confidence, latency_ms)
         event = LearningEventService(self.db).record_quiz_answer(
             user_id,

@@ -5,8 +5,10 @@ import re
 import time
 import logging
 import random
+from copy import deepcopy
 from typing import List, Dict, Any, Tuple
 from ..settings import NO_LLM_KEY_MESSAGE, settings
+from .ordering_contract import ORDERING_VERSION, OrderingError, normalize_ordering, scramble_order
 from .gloss_senses import (
     conflicting_option_indexes,
     duplicate_after_normalize,
@@ -88,10 +90,14 @@ _LISTENING_SPEC = (
     "explanation bằng tiếng Việt: ghi lại audio_text kèm bản dịch để đối chiếu sau khi trả lời."
 )
 _DRAG_DROP_SPEC = (
-    "drag_drop: chỉ cần tạo metadata.correct_order là các từ/cụm từ tiếng Trung theo "
-    "thứ tự đúng của câu (2-8 token, mỗi token là một từ/cụm có nghĩa — KHÔNG tách "
-    "rời từng chữ Hán của một từ hai âm tiết). Backend tự xáo trộn thành segments và "
-    "tạo placeholder options, nên KHÔNG tự xáo trộn và KHÔNG cần điền options. "
+    "drag_drop: đề xuất câu mới bằng metadata.correct_order là các từ/cụm từ tiếng "
+    "Trung theo thứ tự đúng (2-8 token, mỗi token là một từ/cụm có nghĩa — KHÔNG "
+    "tách rời từng chữ Hán của một từ hai âm tiết). Gắn dấu câu vào token có nghĩa, "
+    "KHÔNG tạo token chỉ chứa dấu câu. Chỉ gửi danh sách token đề xuất; KHÔNG gửi "
+    "segments, scrambled_indices hay ordering_version. Backend tạo contract "
+    "ordering-v1: segments giữ identity từng token (kể cả token trùng), correct_order "
+    "và scrambled_indices là permutation index, rồi tạo placeholder options. "
+    "KHÔNG cần điền options và KHÔNG dùng accepted_orders. "
     "Nên đặt metadata.sentence_vi là bản dịch tiếng Việt của câu đúng. "
     "Câu phải kiểm tra một điểm trật tự từ thật (vị trí trạng ngữ thời gian, 把-câu, "
     "bổ ngữ trình độ, trạng ngữ nơi chốn) chứ không phải câu ngẫu nhiên. "
@@ -496,7 +502,7 @@ def _call_provider(url: str, api_key: str, model: str, payload: dict, retries: i
                 result_json = json.loads(result_body)
                 content = _extract_content(result_json)
                 if content is None:
-                    last_error = f"Unexpected response shape: {result_body[:200]}"
+                    last_error = "Unexpected response shape"
                     time.sleep(1)
                     continue
                 cleaned = _clean_json_response(content)
@@ -510,19 +516,19 @@ def _call_provider(url: str, api_key: str, model: str, payload: dict, retries: i
             if e.code == 429 or 500 <= e.code < 600:
                 time.sleep(2 * (attempt + 1))
                 continue
-            if hasattr(e, 'read'):
-                last_error += f": {e.read().decode('utf-8')[:200]}"
+            # Error bodies may echo Authorization headers or private prompts.
+            # Keep only the status code in exceptions and downstream logs.
             break
-        except urllib.error.URLError as e:
-            last_error = str(e)
+        except urllib.error.URLError:
+            last_error = "Transport error"
             time.sleep(1)
             continue
-        except json.JSONDecodeError as e:
-            last_error = f"JSON parse error: {str(e)}"
+        except json.JSONDecodeError:
+            last_error = "Invalid JSON response"
             time.sleep(1)
             continue
 
-    raise RuntimeError(f"Provider {model} failed after {retries} retries: {last_error}")
+    raise RuntimeError(f"Provider failed after {retries} retries: {last_error}") from None
 
 
 # ── Circuit Breaker cho LLM API calls ────────────────────────────────────────
@@ -675,7 +681,9 @@ def _call_api(
             _cb_record_success(provider, model)
             return result
         except Exception as e:
-            err_msg = f"LLM key #{i + 1}: {str(e)}"
+            # Provider exceptions can contain response bodies, URLs and keys.
+            # Do not interpolate their message into logs or aggregate errors.
+            err_msg = f"LLM key #{i + 1}: request failed ({type(e).__name__})"
             errors.append(err_msg)
             logger.warning(err_msg)
             if i < len(keys) - 1:
@@ -872,22 +880,10 @@ def _validate_api_quiz_question(item: dict, quiz_type: str) -> Tuple[bool, str]:
     if quiz_type == "listening" and len(str(item.get("audio_text", "")).strip()) < 2:
         return False, "listening missing audio_text"
     if quiz_type == "drag_drop":
-        metadata = item.get("metadata") or {}
-        segments = metadata.get("segments") or []
-        correct_order = metadata.get("correct_order") or []
-        if len(segments) < 2 or len(correct_order) < 2:
-            return False, "drag_drop missing segments/correct_order"
-        # Format mới: segments là mảng string (thứ tự đúng), correct_order là
-        # mảng index [0,1,2,...]. Kiểm tra tính nhất quán thay vì so sánh giá trị.
-        if isinstance(correct_order[0], int):
-            if correct_order != list(range(len(segments))):
-                return False, "drag_drop correct_order indices mismatch"
-        else:
-            # Format cũ (pre-normalize): cả hai đều là string array
-            if sorted(map(str, segments)) != sorted(map(str, correct_order)):
-                return False, "drag_drop tokens do not match"
-            if list(segments) == list(correct_order):
-                return False, "drag_drop is not scrambled"
+        try:
+            normalize_ordering(item.get("metadata"))
+        except OrderingError as exc:
+            return False, f"drag_drop {exc}"
     return True, "ok"
 
 
@@ -920,48 +916,66 @@ def _shuffle_options(row: dict) -> dict:
 
 
 def _normalize_api_quiz_question(item: dict, quiz_type: str) -> dict:
-    """Hoàn thiện các trường cơ học, không thay đổi nội dung do API tạo."""
-    row = dict(item)
-    # Validator chỉ đòi KHÓA ``target_hanzi`` tồn tại, không đòi có nội dung —
-    # và giá trị rỗng vốn hợp lệ: 130/265 câu translation trong bank hiện tại để
-    # rỗng kèm word_id=NULL, vì đề của chúng là cả đoạn văn chứ không nhắm vào
-    # một từ nào. Thiếu KHÓA lại loại sạch cả lượt: log vừa bắt được một bundle
-    # HSK5 mất trắng 5/5 câu translation chỉ vì model không ghi khóa này.
-    # Điền rỗng cho mọi dạng: caller tra ``word_by_hanzi`` không thấy thì ghi
-    # word_id=NULL, đúng như các row đang có.
+    """Complete mechanical fields without rewriting API-authored content.
+
+    A drag row may contain a *fresh proposal* in ``metadata.correct_order``:
+    an array of token strings with no explicit ordering contract yet. Only that
+    narrow shape is converted into ordering-v1. Once any contract field is
+    present, the metadata is authoritative input and is left untouched for the
+    shared validator to accept or reject.
+    """
+    row = deepcopy(item)
+    # Validator only requires the ``target_hanzi`` key. Translation rows may
+    # legitimately leave it empty because they target a whole passage.
     row.setdefault("target_hanzi", "")
     if quiz_type != "drag_drop":
-        # Bỏ nhãn A./B./C./D. TRƯỚC khi xáo: nhãn gắn theo vị trí cũ, xáo xong
-        # thì không còn cách nào biết nhãn nào từng ứng với option nào.
+        # Strip labels before shuffling: labels belong to the old positions.
         if isinstance(row.get("options"), list):
             row["options"] = _strip_option_labels(row["options"])
-        # drag_drop dùng options placeholder (frontend không đọc) nên không xáo.
         return _shuffle_options(row)
-    # drag_drop kiểm tra thứ tự cả câu, không nhắm vào một từ mục tiêu nào — spec
-    # trong prompt bundle cũng chỉ đòi metadata.correct_order.
-    metadata = dict(row.get("metadata") or {})
-    correct_order = [str(token).strip() for token in metadata.get("correct_order") or [] if str(token).strip()]
-    if len(correct_order) >= 2:
-        # Shuffle bằng index để tránh bug token trùng.
-        indices = list(range(len(correct_order)))
-        rng = random.Random("|".join(correct_order))
-        for _ in range(12):
-            rng.shuffle(indices)
-            if [correct_order[i] for i in indices] != correct_order:
-                break
-        scrambled = [correct_order[i] for i in indices]
-        metadata["correct_order"] = list(range(len(correct_order)))
-        metadata["segments"] = correct_order
-        metadata["scrambled_indices"] = indices
+
+    raw_metadata = row.get("metadata")
+    if not isinstance(raw_metadata, dict):
+        return row
+    metadata = deepcopy(raw_metadata)
+    structural_keys = {
+        "ordering_version", "segments", "scrambled_indices", "accepted_orders",
+    }
+    proposal = metadata.get("correct_order")
+    is_fresh_proposal = (
+        not structural_keys.intersection(metadata)
+        and isinstance(proposal, list)
+        and all(isinstance(token, str) for token in proposal)
+    )
+    if is_fresh_proposal:
+        # Fresh LLM output supplies token text, not identities. Do not coerce
+        # numbers/objects or repair mixed arrays; those shapes stay invalid.
+        segments = list(proposal)
+        correct_order = list(range(len(segments)))
+        try:
+            canonical = {
+                **metadata,
+                "ordering_version": ORDERING_VERSION,
+                "segments": segments,
+                "correct_order": correct_order,
+                "scrambled_indices": scramble_order(
+                    segments,
+                    correct_order,
+                    random.Random("|".join(segments)),
+                ),
+            }
+            ordering = normalize_ordering(canonical)
+        except OrderingError:
+            # Keep the proposal untouched so validation reports it as invalid;
+            # never turn an impossible or malformed proposal into a fake item.
+            return row
+        metadata.update(ordering.as_metadata())
         row["metadata"] = metadata
-        # Nhúng token vào prompt, đúng định dạng các câu drag_drop viết tay
-        # ("Sắp xếp từ thành câu đúng: A · B · C"). LLM để nguyên câu lệnh chung
-        # cho mọi câu, nên 15 dòng HSK3 chỉ có 3 prompt phân biệt: caller dedup
-        # theo (level, type, prompt) coi mọi câu mới là trùng -> created=0 vĩnh
-        # viễn, bank không bao giờ lấp đủ. Prompt chứa token thì mỗi câu là một
-        # khóa riêng, và người học cũng đọc được đề mà không cần metadata.
-        row["prompt"] = f"Sắp xếp từ thành câu đúng: {' · '.join(scrambled)}"
-        # Frontend Drag-drop không dùng option text, nhưng DB schema yêu cầu 4.
+        # Mechanical display fields come from this one indexed proposal.
+        row["prompt"] = (
+            "Sắp xếp từ thành câu đúng: "
+            + " · ".join(ordering.segments[i] for i in ordering.scrambled_indices)
+        )
         row["options"] = ["__drag_1__", "__drag_2__", "__drag_3__", "__drag_4__"]
         row["correct_index"] = 0
     return row
@@ -1017,13 +1031,15 @@ Quy tắc từng loại:
 - cloze: {_CLOZE_SPEC}
 - drag_drop: {_DRAG_DROP_SPEC}
 
-Chỉ dùng từ vựng/ngữ pháp phù hợp HSK {hsk_level}. Mỗi câu có đúng 4 lựa chọn duy nhất, correct_index 0..3 và giải thích tiếng Việt rõ ràng. Không markdown.
+Chỉ dùng từ vựng/ngữ pháp phù hợp HSK {hsk_level}. Các câu trắc nghiệm (không phải drag_drop) có đúng 4 lựa chọn duy nhất và correct_index 0..3. Với drag_drop, chỉ gửi token đề xuất trong metadata.correct_order và metadata.sentence_vi; backend tạo prompt xáo trộn, options và correct_index. Mọi câu cần giải thích tiếng Việt rõ ràng. Không markdown.
 ĐA DẠNG VĂN PHONG DỊCH: các câu translation PHẢI luân phiên văn phong đáp án đúng (trang trọng / đời thường / ngắn gọn / diễn giải), KHÔNG để mọi câu cùng một kiểu dịch.
 Mỗi option chỉ chứa nội dung lựa chọn. KHÔNG thêm nhãn "A.", "B)", "C、", "D:" vào đầu option — giao diện tự đánh nhãn theo vị trí.
 explanation TUYỆT ĐỐI không được trỏ đáp án bằng chữ cái ("đáp án đúng là B", "phương án C sai"). Backend xáo lại vị trí 4 options sau khi nhận, nên chữ cái sẽ trỏ sai ô. Hãy TRÍCH NGUYÊN VĂN nội dung option khi cần nhắc tới nó.
 Văn bản tiếng Trung (prompt, options của reading/cloze, audio_text) phải THUẦN tiếng Trung: không chèn từ tiếng Anh/tiếng Việt/tiếng Hàn/tiếng Nhật vào giữa câu.
-Chỉ trả JSON object:
-{{"questions":[{{"quiz_type":"vocab","target_hanzi":"词","prompt":"...","options":["lựa chọn 1","lựa chọn 2","lựa chọn 3","lựa chọn 4"],"correct_index":0,"explanation":"...","audio_text":"","metadata":{{"segments":[],"correct_order":[],"sentence_vi":""}}}}]}}
+Chỉ trả JSON object có mảng questions. Mẫu câu trắc nghiệm:
+{{"questions":[{{"quiz_type":"vocab","target_hanzi":"词","prompt":"...","options":["lựa chọn 1","lựa chọn 2","lựa chọn 3","lựa chọn 4"],"correct_index":0,"explanation":"...","audio_text":"","metadata":{{}}}}]}}
+Mẫu đề xuất drag_drop trong cùng mảng (chỉ sinh loại có trong phân bố):
+{{"quiz_type":"drag_drop","target_hanzi":"学习","explanation":"Trạng ngữ thời gian đứng trước động từ.","metadata":{{"correct_order":["我","今天","学习中文。"],"sentence_vi":"Hôm nay tôi học tiếng Trung."}}}}
 """
     data = _call_api(prompt, content_task=True)
     rows = data.get("questions") if isinstance(data, dict) else None
@@ -1033,6 +1049,9 @@ Chỉ trả JSON object:
     accepted: Dict[str, List[dict]] = {kind: [] for kind in requested}
     rejected: List[str] = []
     for row in rows:
+        if not isinstance(row, dict):
+            rejected.append("question must be an object")
+            continue
         kind = str(row.get("quiz_type", ""))
         if kind not in requested:
             rejected.append(f"unexpected type {kind}")
@@ -1078,7 +1097,7 @@ Chỉ trả JSON object:
 PASSAGE_SUBTYPES = {
     "cloze_translation",      # quiz_type=cloze
     "error_id",               # quiz_type=reading
-    "sentence_scramble",      # quiz_type=drag_drop
+    "sentence_scramble",      # quiz_type=reading (four-option MCQ)
     "info_extraction",        # quiz_type=reading
     "contextual_translation", # quiz_type=translation
 }
