@@ -275,8 +275,11 @@ def _generate_tip(
 
     # 6. Divergence warning (ASR vs acoustic mismatch)
     if fuse_output and len(parts) < 2:
-        cb = fuse_output.get("confidence_breakdown", {})
-        div_warning = cb.get("divergence_warning")
+        div_warning = fuse_output.get("divergence_warning", "")
+        if not div_warning:
+            legacy_breakdown = fuse_output.get("confidence_breakdown", {})
+            candidate = legacy_breakdown.get("divergence_warning")
+            div_warning = candidate if isinstance(candidate, str) else ""
         if div_warning:
             parts.append(div_warning)
 

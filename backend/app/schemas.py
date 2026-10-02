@@ -612,6 +612,7 @@ class PronunciationScoreOut(BaseModel):
     dimension_scores: dict[str, float | None] = Field(default_factory=dict)
     per_syllable_explanation: list[dict] = Field(default_factory=list)
     confidence_breakdown: dict[str, float] = Field(default_factory=dict)
+    divergence_warning: str = ""
 
 
 # Trần dùng chung cho mọi tin nhắn hội thoại. Phải >= maxLength của textarea

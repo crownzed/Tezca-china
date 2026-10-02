@@ -119,6 +119,24 @@ class PronunciationGuardTest(unittest.TestCase):
         self.assertEqual(res.json()["score"], 78)
         m.assert_called_once()
 
+    def test_divergence_warning_serializes_without_server_error(self):
+        self._login()
+        divergent = {
+            **_FAKE_SCORE,
+            "fusion_method": "weighted_divergent",
+            "confidence_breakdown": {
+                "asr_weight": 0.8,
+                "dsp_weight": 1.0,
+                "adaptive_bonus": 1.0,
+                "divergence": 1.0,
+            },
+            "divergence_warning": "ASR và acoustic chênh lệch 100% — kết quả có thể không chính xác",
+        }
+        with patch.object(speech_module, "score_pronunciation", return_value=divergent):
+            res = self.client.post("/api/speech/pronunciation", json=_payload())
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["divergence_warning"], divergent["divergence_warning"])
+
     # --- Siết audio --------------------------------------------------------
 
     def test_rejects_audio_over_500kb(self):

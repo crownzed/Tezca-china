@@ -37,7 +37,8 @@ class ConfidenceFuseOutput(TypedDict):
     tone_accuracy: float            # 0-1, the fused tone component
     per_syllable_explanation: list[dict]  # [{pos, identity_contrib, acoustic_contrib, weight, reason}]
     fusion_method: str              # "weighted" | "fallback_identity" | "identity_only"
-    confidence_breakdown: dict      # {asr_weight, dsp_weight, adaptive_bonus}
+    confidence_breakdown: dict      # numeric {asr_weight, dsp_weight, adaptive_bonus, divergence}
+    divergence_warning: str         # human-readable ASR/acoustic mismatch warning
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +84,7 @@ def fuse_scores(input: ConfidenceFuseInput) -> ConfidenceFuseOutput:
             per_syllable_explanation=[],
             fusion_method="identity_only",
             confidence_breakdown={"asr_weight": 0.0, "dsp_weight": 0.0, "adaptive_bonus": 0.0},
+            divergence_warning="",
         )
 
     # Compute weights
@@ -140,10 +142,12 @@ def fuse_scores(input: ConfidenceFuseInput) -> ConfidenceFuseOutput:
             "asr_weight": round(asr_w, 3),
             "dsp_weight": round(dsp_w, 3),
             "adaptive_bonus": round(adaptive_bonus, 1),
-            **({"divergence": round(divergence, 3),
-                "divergence_warning": f"ASR và acoustic chênh lệch {divergence:.0%} — kết quả có thể không chính xác"}
-               if method == "weighted_divergent" else {}),
+            **({"divergence": round(divergence, 3)} if method == "weighted_divergent" else {}),
         },
+        divergence_warning=(
+            f"ASR và acoustic chênh lệch {divergence:.0%} — kết quả có thể không chính xác"
+            if method == "weighted_divergent" else ""
+        ),
     )
 
 

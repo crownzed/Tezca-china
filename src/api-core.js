@@ -4,6 +4,7 @@ import { inferConfidence } from './auto-confidence.js';
 import { loadAllFlashcards } from './vocab-loader';
 import { effectiveLevels, primaryLevel } from './hsk-levels';
 import { buildExamQuestions } from './exam-items';
+import { ORDERING_VERSION, OrderingError, normalizeOrdering, gradeOrdering, scrambleOrder } from './ordering-contract.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000');
 
@@ -111,7 +112,7 @@ async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
       const body = await res.json();
       if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
     } catch { /* ignore */ }
-    throw new Error(detail);
+    throw Object.assign(new Error(detail), { status: res.status });
   }
   // Bảo vệ: nếu VITE_API_BASE trỏ nhầm sang host phục vụ SPA (trả index.html),
   // fetch vẫn 200 nhưng body là HTML. res.json() khi đó ném SyntaxError khó đọc.
@@ -223,49 +224,47 @@ function dialogueLine(card, index = 0) {
   return variants[index % variants.length];
 }
 
-// Bài sắp xếp câu (drag_drop) offline — bản song song với backend
-// _drag_drop_for_word. Tách câu ví dụ NGẮN quanh từ mục tiêu thành các token
-// THẬT (không cắt 2 ký tự tuỳ tiện), đảm bảo ≥2 token khác nhau và thứ tự xáo
-// trộn khác thứ tự đúng. Trả null nếu câu không đủ điều kiện để bỏ qua từ đó.
+// Giữ nguyên từ mục tiêu và các cụm xung quanh, không cắt đôi từ hay tạo chip
+// chỉ có dấu câu. Identity là index: hai token giống chữ vẫn là hai chip riêng.
 function localDragDrop(card) {
   const sentence = cleanText(card.exampleSentence || card.example_cn);
   const target = cleanText(card.character);
   if (!sentence || !target || !sentence.includes(target)) return null;
 
-  // Tách quanh từ mục tiêu, giữ chính từ mục tiêu làm một token.
-  const parts = sentence.split(target);
   const segments = [];
-  parts.forEach((part, i) => {
-    if (i > 0) segments.push(target);
-    part = part.trim();
+  let prefix = '';
+  const append = (part) => {
     if (!part) return;
-    // Tách tiếp theo dấu câu; phần còn lại dài thì chia khối ≤2 ký tự.
-    part.split(/([，。！？、：])/).filter(Boolean).forEach(sub => {
-      if (sub.length <= 2 || /[，。！？、：]/.test(sub)) {
-        segments.push(sub);
-      } else {
-        for (let i = 0; i < sub.length; i += 2) segments.push(sub.slice(i, i + 2));
-      }
-    });
+    if (/[\p{L}\p{N}]/u.test(part)) {
+      segments.push(prefix + part);
+      prefix = '';
+    } else if (segments.length) {
+      segments[segments.length - 1] += part;
+    } else {
+      prefix += part;
+    }
+  };
+  sentence.split(target).forEach((part, index) => {
+    if (index > 0) append(target);
+    append(part);
   });
 
-  const correctOrder = segments.filter(Boolean);
-  if (new Set(correctOrder).size < 2) return null;
-
-  // Shuffle bằng index để tránh bug token trùng.
-  let indices = correctOrder.map((_, i) => i);
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    indices = shuffle(indices);
-    if (indices.some((idx, i) => idx !== i)) break;
+  try {
+    const correctOrder = segments.map((_, index) => index);
+    return {
+      ...normalizeOrdering({
+        ordering_version: ORDERING_VERSION,
+        segments,
+        correct_order: correctOrder,
+        scrambled_indices: scrambleOrder(segments, correctOrder),
+      }),
+      sentence_cn: sentence,
+      sentence_vi: cleanText(card.exampleVi || card.example_vi || card.meaning),
+    };
+  } catch (error) {
+    if (error instanceof OrderingError) return null;
+    throw error;
   }
-
-  return {
-    sentence_cn: sentence,
-    sentence_vi: cleanText(card.exampleVi || card.example_vi || card.meaning),
-    segments: correctOrder,
-    correct_order: correctOrder.map((_, i) => i),
-    scrambled_indices: indices,
-  };
 }
 
 async function localQuestions({ level, levels, quiz_type, limit }) {
@@ -336,7 +335,7 @@ async function localQuestions({ level, levels, quiz_type, limit }) {
         ? listeningLine(card).cn
         : quiz_type === 'translation'
             ? paragraph.cn
-            : '',
+            : dragData?.sentence_cn || '',
       explanation: quiz_type === 'translation'
         ? `${paragraph.cn} · ${paragraph.vi}`
         : quiz_type === 'dialogue'
@@ -354,6 +353,7 @@ async function localQuestions({ level, levels, quiz_type, limit }) {
         confusable_words: [],
       },
       metadata_json: dragData ? {
+        ordering_version: dragData.ordering_version,
         segments: dragData.segments,
         correct_order: dragData.correct_order,
         scrambled_indices: dragData.scrambled_indices,
@@ -429,9 +429,35 @@ function autoConfidence(payload, question, correct) {
   });
 }
 
+function gradeQuizAnswer(payload, question) {
+  if (!question || question.id !== payload.question_id) throw new Error('question_not_found');
+  if (question.quiz_type !== 'drag_drop') {
+    return { correct: payload.selected_index === question.correct_index };
+  }
+  const ordering = normalizeOrdering(question.metadata_json);
+  return {
+    correct: gradeOrdering(question.metadata_json, payload.selected_order),
+    selected_order: [...payload.selected_order],
+    ordering_version: ordering.ordering_version,
+  };
+}
+
+function copyAnswer(payload) {
+  return {
+    ...payload,
+    ...(Array.isArray(payload.selected_order) ? { selected_order: [...payload.selected_order] } : {}),
+  };
+}
+
+function isClientRejection(error) {
+  return error.status >= 400 && error.status < 500;
+}
+
 function localLearningEvent(payload, question = null) {
-  const correctIndex = question?.correct_index ?? 0;
-  const correct = payload.selected_index === correctIndex;
+  // Validate trước mọi SRS write; placeholder selected_index không chấm drag.
+  const graded = gradeQuizAnswer(payload, question);
+  const { correct } = graded;
+  const correctIndex = question.correct_index;
   // Suy confidence TRƯỚC recordWordReview: hàm suy đọc lapses/repetition hiện tại
   // của từ, gọi sau thì đã bị lượt này ghi đè.
   const confidence = autoConfidence(payload, question, correct);
@@ -448,7 +474,7 @@ function localLearningEvent(payload, question = null) {
   return {
     event_id: null,
     question_id: payload.question_id,
-    correct,
+    ...graded,
     correct_index: correctIndex,
     confidence,
     explanation: question?.explanation || '',
@@ -459,16 +485,15 @@ function localLearningEvent(payload, question = null) {
 }
 
 export async function recordLearningEvent(payload, question = null) {
-  if (question?.local || question?.offline) return localLearningEvent(payload, question);
-  // Đường remote: backend chấm lại câu, nhưng correct_index đã có sẵn trong
-  // QuestionOut nên suy được confidence ngay tại đây và gửi kèm — nếu không,
-  // srs_service._quality sẽ rơi về mặc định và mọi câu đúng nhận cùng quality.
-  const confidence = autoConfidence(payload, question, payload.selected_index === (question?.correct_index ?? 0));
-  const body = { ...payload, confidence };
+  const body = copyAnswer(payload);
+  if (question?.local || question?.offline) return localLearningEvent(body, question);
+  // Chấm canonical để suy confidence; review của backend vẫn là kết quả cuối.
+  if (question) body.confidence = autoConfidence(body, question, gradeQuizAnswer(body, question).correct);
   try {
     const review = await request('/api/session/event', { method: 'POST', body: JSON.stringify(body) });
-    return { ...review, confidence: review.confidence ?? confidence };
-  } catch {
+    return { ...review, confidence: review.confidence ?? autoConfidence(payload, question, review.correct) };
+  } catch (error) {
+    if (isClientRejection(error)) throw error;
     return localLearningEvent(body, question);
   }
 }
@@ -540,56 +565,58 @@ export async function submitOutputEvent(payload) {
 }
 
 export async function submitQuiz(payload, questions = []) {
+  const body = { ...payload, answers: payload.answers.map(copyAnswer) };
+  const byId = new Map(questions.map(q => [q.id, q]));
+  const prepare = () => body.answers.map(answer => {
+    const question = byId.get(answer.question_id);
+    return { answer, question, graded: gradeQuizAnswer(answer, question) };
+  });
+  // Kiểm tra cả batch trước request và trước mọi local write. Không bỏ qua câu
+  // không tồn tại hoặc biến metadata/selection lỗi thành một đáp án sai.
+  const prepared = questions.length ? prepare() : null;
   const hasLocalQuestions = questions.some(question => question?.local || question?.offline);
-  try {
-    if (hasLocalQuestions) throw new Error('Local quiz questions');
-    const submitted = await request('/api/quiz/submit', { method: 'POST', body: JSON.stringify(payload) });
-    if (!questions.length || (submitted.total || 0) >= payload.answers.length) return submitted;
-    throw new Error('Remote submit missed local questions');
-  } catch {
-    const byId = new Map(questions.map(q => [q.id, q]));
-    const results = payload.answers.map(answer => {
-      const q = byId.get(answer.question_id);
-      const correct = q ? answer.selected_index === q.correct_index : false;
-      return {
-        question_id: answer.question_id,
-        correct,
-        correct_index: q?.correct_index ?? 0,
-        explanation: q?.explanation || '',
-      };
-    });
-    const score = results.filter(r => r.correct).length;
-    const stats = readLocalStats();
-    const next = {
-      attempts: stats.attempts + 1,
-      answered: stats.answered + results.length,
-      correct: stats.correct + score,
-    };
-    const answerDetails = payload.answers.map(answer => {
-      const q = byId.get(answer.question_id);
-      return {
-        question_id: answer.question_id,
-        selected_index: answer.selected_index,
-        latency_ms: answer.latency_ms ?? null,
-        confidence: answer.confidence ?? null,
-        error_tag: answer.error_tag ?? null,
-        correct: q ? answer.selected_index === q.correct_index : false,
-        prompt: q?.prompt || '',
-        word: q?.word || null,
-      };
-    });
-    localStorage.setItem(scopedKey('coreStats'), JSON.stringify(next));
-    writeLocalHistory({
-      id: Date.now(),
-      created_at: new Date().toISOString(),
-      level: payload.level,
-      quiz_type: payload.quiz_type,
-      score,
-      total: results.length,
-      answers: answerDetails,
-    });
-    return { score, total: results.length, results, offline: true };
+  if (!hasLocalQuestions) {
+    try {
+      return await request('/api/quiz/submit', { method: 'POST', body: JSON.stringify(body) });
+    } catch (error) {
+      if (isClientRejection(error)) throw error;
+    }
   }
+  const validated = prepared || prepare();
+  const results = validated.map(({ answer, question, graded }) => ({
+    question_id: answer.question_id,
+    correct: graded.correct,
+    correct_index: question.correct_index,
+    explanation: question.explanation || '',
+  }));
+  const score = results.filter(r => r.correct).length;
+  const stats = readLocalStats();
+  const next = {
+    attempts: stats.attempts + 1,
+    answered: stats.answered + results.length,
+    correct: stats.correct + score,
+  };
+  const answerDetails = validated.map(({ answer, question, graded }) => ({
+    question_id: answer.question_id,
+    selected_index: answer.selected_index,
+    ...graded,
+    latency_ms: answer.latency_ms ?? null,
+    confidence: answer.confidence ?? null,
+    error_tag: answer.error_tag ?? null,
+    prompt: question.prompt || '',
+    word: question.word || null,
+  }));
+  localStorage.setItem(scopedKey('coreStats'), JSON.stringify(next));
+  writeLocalHistory({
+    id: Date.now(),
+    created_at: new Date().toISOString(),
+    level: body.level,
+    quiz_type: body.quiz_type,
+    score,
+    total: results.length,
+    answers: answerDetails,
+  });
+  return { score, total: results.length, results, offline: true };
 }
 
 function readLocalStats() {

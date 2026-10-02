@@ -100,6 +100,42 @@ class TestConfidenceFuser:
         })
         assert len(result["per_syllable_explanation"]) > 0
         assert "identity_contrib" in result["per_syllable_explanation"][0]
+    def test_divergent_fusion_keeps_breakdown_numeric_and_surfaces_warning(self):
+        from app.schemas import PronunciationScoreOut
+        from app.services.confidence_fuser import fuse_scores
+        from app.services.score_explainer import explain_score
+
+        result = fuse_scores({
+            "base_score": 80,
+            "identity_tone_ratio": 1.0,
+            "dsp_tone_accuracy": 0.0,
+            "phoneme_confidence": 1.0,
+            "extraction_quality": 1.0,
+            "adaptive_used": False,
+            "n_tone_slots": 2,
+            "per_syllable_identity": [],
+            "per_syllable_acoustic": [],
+        })
+
+        assert result["fusion_method"] == "weighted_divergent"
+        assert result["divergence_warning"]
+        assert all(isinstance(value, float) for value in result["confidence_breakdown"].values())
+
+        response = PronunciationScoreOut(
+            score=result["final_score"], base_score=80, identity_score=80,
+            target_hanzi="你好", target_pinyin="nǐ hǎo",
+            fusion_method=result["fusion_method"],
+            confidence_breakdown=result["confidence_breakdown"],
+            divergence_warning=result["divergence_warning"],
+        )
+        assert response.divergence_warning == result["divergence_warning"]
+
+        feedback = explain_score(
+            target_hanzi="你好", target_pinyin="nǐ hǎo", actual_pinyin="nǐ hǎo",
+            fuse_output=result, phoneme_output=None, adaptive_output=None,
+            fluency_output=None, pinyin_breakdown={"tone_errors": [], "syllable_errors": []},
+        )
+        assert result["divergence_warning"] in feedback["tip"]
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +297,55 @@ class TestToneDspExtractor:
         contour = [0.0] * 90 + [150.0] * 10
         quality = _compute_extraction_quality(contour)
         assert quality < 0.3
+
+    def test_syllable_ranges_preserve_unvoiced_gap_positions(self):
+        from app.services.tone_dsp_extractor import split_syllable_ranges, split_syllables
+
+        contour = [0.0, 100.0, 101.0, 102.0, 0.0, 0.0, 0.0, 200.0, 201.0, 202.0]
+        assert split_syllable_ranges(contour, 2) == [(1, 4), (7, 10)]
+        assert split_syllables(contour, 2) == [[100.0, 101.0, 102.0], [200.0, 201.0, 202.0]]
+
+    def test_asr_count_mismatch_resegments_absolute_frame_ranges(self, monkeypatch):
+        import app.services.phoneme_verifier as verifier
+
+        observed = {}
+        contour = [0.0, 100.0, 101.0, 102.0, 0.0, 0.0, 0.0, 200.0, 201.0, 202.0]
+        monkeypatch.setattr(verifier, "_estimate_syllable_count_from_energy", lambda *_args, **_kwargs: 3)
+
+        def capture(_audio_bytes, ranges, step, **_kwargs):
+            observed["ranges"] = ranges
+            observed["step"] = step
+            return [None] * len(ranges)
+
+        monkeypatch.setattr(verifier, "_extract_formants_at_midpoint", capture)
+        verifier.verify_phonemes(
+            b"", ["a", "a"], ["a", "a", "a"],
+            predecoded=([0.0] * 100, 100),
+            precomputed_f0=contour,
+            precomputed_segment_frame_ranges=[(1, 4), (7, 10)],
+            precomputed_frame_step_sec=0.01,
+        )
+
+        assert observed == {"ranges": [(1, 2), (2, 4), (7, 10)], "step": 0.01}
+
+    def test_formant_midpoints_use_absolute_f0_frames(self):
+        from app.services.phoneme_verifier import _extract_formants_at_midpoint
+
+        queried_times = []
+
+        class Formant:
+            def get_value_at_time(self, _formant, time_sec):
+                queried_times.append(time_sec)
+                return 500.0
+
+        formants = _extract_formants_at_midpoint(
+            b"", [(1, 4), (7, 10)], 0.01,
+            predecoded=([0.0] * 16_000, 16_000),
+            formant_factory=lambda _samples, _sr: Formant(),
+        )
+
+        assert formants == [(500.0, 500.0, 500.0), (500.0, 500.0, 500.0)]
+        assert queried_times == [0.025, 0.025, 0.025, 0.085, 0.085, 0.085]
 
 
 if __name__ == "__main__":

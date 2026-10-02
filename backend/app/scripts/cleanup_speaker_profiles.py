@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
-_PROFILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "speaker_profiles"
-_DEFAULT_REGULAR_TTL_DAYS = 90
-_DEFAULT_DEMO_TTL_DAYS = 7
+from ..services.adaptive_tone_analyzer import (
+    _DEMO_PROFILE_TTL_DAYS,
+    _PROFILE_TTL_DAYS,
+    _PROFILES_DIR,
+)
+from ..services.speaker_profile_lock import profile_lock
 
 
 def cleanup(
@@ -38,50 +39,59 @@ def cleanup(
     errors = 0
 
     for path in sorted(_PROFILES_DIR.glob("*.json")):
+        # The cleanup decision and unlink must share the writer's lock. Reading
+        # before entering this block would let a fresh os.replace happen between
+        # the TTL decision and deletion.
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                profile = json.load(f)
-        except (json.JSONDecodeError, OSError) as e:
-            print(f"  ERROR reading {path.name}: {e}")
+            with profile_lock(path):
+                if not path.exists():
+                    continue
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        profile = json.load(f)
+                except (json.JSONDecodeError, OSError) as e:
+                    print(f"  ERROR reading {path.name}: {e}")
+                    errors += 1
+                    continue
+
+                updated_str = profile.get("updated_at", "")
+                if not updated_str:
+                    if dry_run:
+                        print(f"  [DRY-RUN] Would delete {path.name} (no updated_at)")
+                    else:
+                        path.unlink(missing_ok=True)
+                        print(f"  Deleted {path.name} (no updated_at)")
+                    deleted += 1
+                    continue
+
+                try:
+                    updated = datetime.fromisoformat(updated_str)
+                except ValueError:
+                    print(f"  ERROR invalid date in {path.name}: {updated_str}")
+                    errors += 1
+                    continue
+
+                age_days = (now - updated).days
+                is_demo = path.stem.startswith("demo_")
+                ttl = (
+                    max_age_days
+                    if max_age_days is not None
+                    else (_DEMO_PROFILE_TTL_DAYS if is_demo else _PROFILE_TTL_DAYS)
+                )
+
+                if age_days > ttl:
+                    label = "demo" if is_demo else "regular"
+                    if dry_run:
+                        print(f"  [DRY-RUN] Would delete {path.name} ({label}, {age_days}d old, TTL={ttl}d)")
+                    else:
+                        path.unlink(missing_ok=True)
+                        print(f"  Deleted {path.name} ({label}, {age_days}d old, TTL={ttl}d)")
+                    deleted += 1
+                else:
+                    kept += 1
+        except OSError as e:
+            print(f"  ERROR locking {path.name}: {e}")
             errors += 1
-            continue
-
-        updated_str = profile.get("updated_at", "")
-        if not updated_str:
-            # No timestamp — treat as expired
-            if dry_run:
-                print(f"  [DRY-RUN] Would delete {path.name} (no updated_at)")
-            else:
-                path.unlink(missing_ok=True)
-                print(f"  Deleted {path.name} (no updated_at)")
-            deleted += 1
-            continue
-
-        try:
-            updated = datetime.fromisoformat(updated_str)
-        except ValueError:
-            print(f"  ERROR invalid date in {path.name}: {updated_str}")
-            errors += 1
-            continue
-
-        age_days = (now - updated).days
-        is_demo = path.stem.startswith("demo_")
-
-        if max_age_days is not None:
-            ttl = max_age_days
-        else:
-            ttl = _DEFAULT_DEMO_TTL_DAYS if is_demo else _DEFAULT_REGULAR_TTL_DAYS
-
-        if age_days > ttl:
-            label = "demo" if is_demo else "regular"
-            if dry_run:
-                print(f"  [DRY-RUN] Would delete {path.name} ({label}, {age_days}d old, TTL={ttl}d)")
-            else:
-                path.unlink(missing_ok=True)
-                print(f"  Deleted {path.name} ({label}, {age_days}d old, TTL={ttl}d)")
-            deleted += 1
-        else:
-            kept += 1
 
     return {"deleted": deleted, "kept": kept, "errors": errors}
 

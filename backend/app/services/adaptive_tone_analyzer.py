@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
 
+from .speaker_profile_lock import profile_lock
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,35 +91,45 @@ def _profile_path(speaker_id: str) -> Path:
     return _PROFILES_DIR / f"{safe_id}.json"
 
 
-def _load_profile(speaker_id: str) -> dict | None:
-    """Load a speaker's profile from disk. Returns None if not found or expired."""
-    path = _profile_path(speaker_id)
+def _read_profile(path: Path, speaker_id: str) -> dict | None:
+    """Read one profile while its caller holds ``profile_lock``."""
     if not path.exists():
         return None
     try:
         with open(path, "r", encoding="utf-8") as f:
-            profile = json.load(f)
+            return json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Failed to load speaker profile %s: %s", speaker_id, e)
         return None
 
-    # TTL check: auto-expire stale profiles (v2.1 privacy compliance)
-    ttl_days = _DEMO_PROFILE_TTL_DAYS if speaker_id.startswith("demo_") else _PROFILE_TTL_DAYS
-    updated_str = profile.get("updated_at", "")
-    if updated_str:
-        try:
-            updated = datetime.fromisoformat(updated_str)
-            if (datetime.now(timezone.utc) - updated).days > ttl_days:
-                logger.info(
-                    "Speaker profile %s expired (%d days old), deleting",
-                    speaker_id[:8], (datetime.now(timezone.utc) - updated).days,
-                )
-                path.unlink(missing_ok=True)
-                return None
-        except ValueError:
-            pass  # invalid date format, keep profile
 
-    return profile
+def _load_profile(speaker_id: str) -> dict | None:
+    """Load a speaker's profile from disk. Returns None if not found or expired."""
+    path = _profile_path(speaker_id)
+    with profile_lock(path):
+        profile = _read_profile(path, speaker_id)
+        if profile is None:
+            return None
+
+        # TTL check: auto-expire stale profiles (v2.1 privacy compliance).
+        # The same per-profile lock is used by cleanup and writes, so this delete
+        # cannot race an atomic replacement made by a live scoring request.
+        ttl_days = _DEMO_PROFILE_TTL_DAYS if speaker_id.startswith("demo_") else _PROFILE_TTL_DAYS
+        updated_str = profile.get("updated_at", "")
+        if updated_str:
+            try:
+                updated = datetime.fromisoformat(updated_str)
+                if (datetime.now(timezone.utc) - updated).days > ttl_days:
+                    logger.info(
+                        "Speaker profile %s expired (%d days old), deleting",
+                        speaker_id[:8], (datetime.now(timezone.utc) - updated).days,
+                    )
+                    path.unlink(missing_ok=True)
+                    return None
+            except ValueError:
+                pass  # invalid date format, keep profile
+
+        return profile
 
 
 def _save_profile(speaker_id: str, profile: dict) -> None:
@@ -132,21 +144,22 @@ def _save_profile(speaker_id: str, profile: dict) -> None:
     try:
         _PROFILES_DIR.mkdir(parents=True, exist_ok=True)
         path = _profile_path(speaker_id)
-        # Write to temp file in same directory (same filesystem → atomic rename)
-        fd, tmp_path = tempfile.mkstemp(
-            suffix=".tmp", prefix=f"{path.stem}_", dir=str(_PROFILES_DIR),
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(profile, f, indent=2, ensure_ascii=False)
-            os.replace(tmp_path, str(path))  # atomic on POSIX and Windows
-        except BaseException:
-            # Clean up temp file on any failure
+        with profile_lock(path):
+            # Write to temp file in same directory (same filesystem → atomic rename)
+            fd, tmp_path = tempfile.mkstemp(
+                suffix=".tmp", prefix=f"{path.stem}_", dir=str(_PROFILES_DIR),
+            )
             try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(profile, f, indent=2, ensure_ascii=False)
+                os.replace(tmp_path, str(path))  # atomic on POSIX and Windows
+            except BaseException:
+                # Clean up temp file on any failure
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
     except OSError as e:
         logger.warning("Failed to save speaker profile %s: %s", speaker_id, e)
 

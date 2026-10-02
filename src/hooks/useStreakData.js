@@ -6,9 +6,14 @@ const API_BASE =
   import.meta.env.VITE_API_BASE ||
   (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000');
 
+export function normalizeFreezesRemaining(value) {
+  const remaining = Number(value);
+  return Number.isFinite(remaining) ? Math.max(0, Math.floor(remaining)) : 0;
+}
+
 /**
  * Hook lấy thông tin streak hiện tại của user + last 7 days cho WeekChain.
- * @returns {{ currentStreak, longestStreak, studiedToday, broken, loading, last7Days, refresh }}
+ * @returns {{ currentStreak, longestStreak, studiedToday, broken, freezesRemaining, loading, last7Days, refresh }}
  */
 export function useStreakData() {
   const { userId, isAuthenticated } = useAuth();
@@ -18,6 +23,7 @@ export function useStreakData() {
     last_active_date: null,
     studied_today: false,
     broken: false,
+    freezes_remaining: 0,
     last_7_days: [],
   });
   const [loadedKey, setLoadedKey] = useState(null);
@@ -71,6 +77,7 @@ export function useStreakData() {
     longestStreak: data.longest_streak,
     studiedToday: data.studied_today,
     broken: data.broken,
+    freezesRemaining: normalizeFreezesRemaining(data.freezes_remaining),
     loading: shouldFetch && loadedKey !== requestKey,
     last7Days,
     refresh: fetchStreak,

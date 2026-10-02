@@ -1,6 +1,7 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, AlertTriangle, ArrowLeft, BarChart3, BellOff, Blocks, BookOpen, CheckCircle2, ChevronDown, Clock3, Ear, Fish, Flame, GitCompare, Headphones, Keyboard, Languages, Layers, LineChart, Loader2, MessageCircle, Mic, Moon, PenTool, Phone, Play, RotateCcw, Search, ScrollText, ShieldCheck, Sparkles, Sun, Trophy, TrendingUp, Wrench, X, XCircle } from 'lucide-react';
 import { analyzeStudyData, completeLearningSession, getAnalytics, getStats, getTodaySession, localLearningSession, localQuiz, recordLearningEvent, submitOutputEvent, submitQuiz } from './api-core';
+import { OrderingError, normalizeOrdering } from './ordering-contract.js';
 import { markLearningSessionCompleted } from './behavior-engine';
 import { assessPinyinInput, buildChineseLearningItems } from './chinese-learning-items';
 import { buildTodaySessionPlan, markLearningSessionStarted, SESSION_MODES } from './learning-session-planner';
@@ -19,7 +20,9 @@ const VocabTypingMode = lazy(() => import('./components/VocabTypingMode.jsx'));
 const FlashcardMode = lazy(() => import('./components/FlashcardMode.jsx'));
 const ConfusablePairs = lazy(() => import('./components/ConfusablePairs.jsx'));
 const DictationMode = lazy(() => import('./components/DictationMode.jsx'));
-const MergeGame = lazy(() => import('./components/MergeGame.jsx'));
+// Game stays in the bundle but is intentionally unavailable while paused.
+const GAME_ENABLED = false;
+const MergeGame = GAME_ENABLED ? lazy(() => import('./components/MergeGame.jsx')) : null;
 import { resolveDecompositions } from './radicals-db.js';
 import { loadAllFlashcards } from './vocab-loader';
 import { captureWordReview } from './srs-capture.js';
@@ -157,7 +160,7 @@ const NAV = [
     ],
   },
   { id: 'plan', label: 'Streak', icon: Flame },
-  { id: 'merge-game', label: 'Ghép chữ', icon: Fish },
+  ...(GAME_ENABLED ? [{ id: 'merge-game', label: 'Ghép chữ', icon: Fish }] : []),
 ];
 
 // Danh sách phẳng để tra cứu label theo view id (tiêu đề topbar).
@@ -476,6 +479,7 @@ function shuffleItems(items) {
 }
 
 function skillTone(value) {
+  if (value === null) return 'unavailable';
   if (value >= 80) return 'strong';
   if (value >= 55) return 'steady';
   return 'weak';
@@ -489,12 +493,13 @@ function strategyLabel(strategy) {
 
 function AnalyticsPanel({ analytics, onStartRecommended }) {
   const { userId } = useAuth();
-  // AI phân tích on-demand. Chỉ khả dụng khi backend online — analytics.offline
-  // là tín hiệu online/offline duy nhất ở frontend (không có state toàn cục).
-  const aiAvailable = !analytics?.offline;
+  // AI chỉ dùng lịch sử từ máy chủ, không phân tích dữ liệu local chưa đồng bộ.
+  const aiAvailable = Boolean(analytics) && !analytics.offline && !analytics.backend_empty;
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState(null);
   const [aiError, setAiError] = useState('');
+  const [hoveredTrendIndex, setHoveredTrendIndex] = useState(null);
+  const [focusedTrendIndex, setFocusedTrendIndex] = useState(null);
 
   const runAiAnalysis = async () => {
     if (aiLoading) return;
@@ -512,30 +517,62 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
 
   const recommendation = analytics?.recommendation || { level: 1, quiz_type: 'vocab', title: 'HSK 1 · Từ vựng', reason: 'Chưa đủ dữ liệu, nên bắt đầu bằng từ vựng HSK 1 để tạo đường chuẩn.', focus_words: [], recommended_strategy: 'targeted' };
   const recommendedStrategy = recommendation.recommended_strategy || 'targeted';
-  const eventCount = analytics?.event_count || 0;
-  const dueCount = analytics?.due_count || 0;
-  const confidenceAvg = Number(analytics?.confidence_avg || 0);
-  const latencyAvg = analytics?.latency_avg_ms || 0;
-  const latencyLabel = latencyAvg ? (latencyAvg < 1000 ? 'Dưới 1s phản hồi' : Math.round(latencyAvg / 1000) + 's phản hồi') : 'Chưa đo latency';
+  const hasData = (analytics?.answered || 0) > 0;
+  const numericMetric = value => (
+    value === null || value === undefined || value === '' || !Number.isFinite(Number(value))
+      ? null
+      : Number(value)
+  );
+  const percentMetric = value => (
+    hasData && numericMetric(value) !== null ? clampPercent(value) : null
+  );
+  const eventCount = numericMetric(analytics?.event_count);
+  const dueCount = numericMetric(analytics?.due_count);
+  const confidenceAvg = numericMetric(analytics?.confidence_avg);
+  const latencyAvg = numericMetric(analytics?.latency_avg_ms);
+  const accuracy = hasData ? numericMetric(analytics?.accuracy) : null;
+  const attemptCount = hasData ? (eventCount ?? numericMetric(analytics?.attempts)) : null;
+  const completionPercent = hasData && eventCount !== null
+    ? Math.round(Math.min(100, (eventCount / 50) * 100))
+    : null;
+  const latencyLabel = latencyAvg !== null && latencyAvg > 0
+    ? (latencyAvg < 1000 ? 'Dưới 1s phản hồi' : Math.round(latencyAvg / 1000) + 's phản hồi')
+    : 'Chưa đo latency';
   const typeRows = analytics?.type_breakdown?.length
     ? analytics.type_breakdown
     : QUIZ_TYPES.map(type => ({ quiz_type: type.id, label: type.label, attempts: 0, answered: 0, correct: 0, accuracy: 0 }));
   const levelRows = analytics?.level_breakdown?.length
     ? analytics.level_breakdown
     : LEVELS.map(item => ({ level: item, attempts: 0, answered: 0, correct: 0, accuracy: 0 }));
-  const trendRows = analytics?.recent_trend || [];
+  const trendRows = Array.isArray(analytics?.recent_trend) ? analytics.recent_trend : [];
   const weakWords = analytics?.weak_word_list || [];
-  const hasData = (analytics?.answered || 0) > 0;
-  const chartRows = trendRows.length ? trendRows : [{ label: 'P1', accuracy: 0, score: 0, total: 0 }];
+  const analyticsState = !analytics
+    ? { tone: 'loading', label: 'Đang tải dữ liệu học', detail: 'Đang đồng bộ tiến độ và kế hoạch của bạn.' }
+    : analytics.backend_empty
+      ? { tone: 'backend-empty', label: 'Dữ liệu cục bộ chưa đồng bộ', detail: 'Máy chủ chưa có bản ghi mới hơn, nên số liệu hiện tại có thể đến từ thiết bị này.' }
+      : analytics.offline
+        ? { tone: 'offline', label: 'Đang dùng dữ liệu trên thiết bị', detail: 'Tiến độ cục bộ vẫn hiển thị; AI tạm thời không khả dụng.' }
+        : !hasData
+          ? { tone: 'empty', label: 'Chưa có lịch sử học', detail: 'Hoàn thành một phiên để bắt đầu thấy các chỉ số thật.' }
+          : null;
+  const chartRows = trendRows.filter(item => item && typeof item === 'object' && numericMetric(item.accuracy) !== null);
   const maxIndex = Math.max(1, chartRows.length - 1);
-  
+
   // Tạo đường cong Bezier mượt mà cho biểu đồ xu hướng (Doc 7.2)
   let trendPath = '';
   let trendAreaPath = '';
   const trendPointsList = chartRows.map((item, index) => {
     const x = 12 + (index / maxIndex) * 176;
-    const y = 90 - clampPercent(item.accuracy) * 0.72; // y chạy từ 18 (100%) đến 90 (0%)
-    return { x, y, ...item };
+    const accuracy = clampPercent(item.accuracy);
+    const y = 90 - accuracy * 0.72; // y chạy từ 18 (100%) đến 90 (0%)
+    return {
+      x,
+      y,
+      label: item.label ?? `Phiên ${index + 1}`,
+      accuracy,
+      score: item.score ?? '-',
+      total: item.total ?? '-',
+    };
   });
 
   if (trendPointsList.length > 0) {
@@ -551,220 +588,347 @@ function AnalyticsPanel({ analytics, onStartRecommended }) {
     }
     trendAreaPath = `${trendPath} L ${trendPointsList[trendPointsList.length - 1].x} 90 L ${trendPointsList[0].x} 90 Z`;
   }
-  const bestType = typeRows.filter(item => item.answered > 0).sort((a, b) => b.accuracy - a.accuracy)[0];
-  const weakType = typeRows.filter(item => item.answered > 0).sort((a, b) => a.accuracy - b.accuracy)[0];
+  const activeTrendIndex = hoveredTrendIndex ?? focusedTrendIndex;
+  const activeTrendPoint = activeTrendIndex === null ? null : trendPointsList[activeTrendIndex] || null;
+  const readoutTrendPoint = activeTrendPoint || trendPointsList.at(-1);
+  const handleTrendPointerMove = event => {
+    if (!trendPointsList.length) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
+    const pointerX = ((event.clientX - rect.left) / rect.width) * 200;
+    const chartX = Math.max(12, Math.min(188, pointerX));
+    let nearestIndex = 0;
+    for (let index = 1; index < trendPointsList.length; index += 1) {
+      if (Math.abs(trendPointsList[index].x - chartX) < Math.abs(trendPointsList[nearestIndex].x - chartX)) {
+        nearestIndex = index;
+      }
+    }
+    setHoveredTrendIndex(nearestIndex);
+  };
+  const handleTrendPointerLeave = () => setHoveredTrendIndex(null);
+  const handleTrendFocus = index => {
+    setHoveredTrendIndex(null);
+    setFocusedTrendIndex(index);
+  };
+  const handleTrendBlur = () => setFocusedTrendIndex(null);
+  const bestType = typeRows.filter(item => item.answered > 0 && numericMetric(item.accuracy) !== null).sort((a, b) => b.accuracy - a.accuracy)[0];
+  const weakType = typeRows.filter(item => item.answered > 0 && numericMetric(item.accuracy) !== null).sort((a, b) => a.accuracy - b.accuracy)[0];
   // Readiness theo kỹ năng (doc 7.2): dashboard ưu tiên hiện độ sẵn sàng từng
   // năng lực thay vì chỉ accuracy tổng.
   const readinessRows = [
-    { key: 'memory', label: 'Trí nhớ bền', value: clampPercent(analytics?.memory_stability) },
-    { key: 'listening', label: 'Nghe', value: clampPercent(analytics?.listening_readiness) },
-    { key: 'context', label: 'Ngữ cảnh', value: clampPercent(analytics?.context_transfer) },
-    { key: 'production', label: 'Sản sinh', value: clampPercent(analytics?.production_readiness) },
+    { key: 'memory', label: 'Trí nhớ bền', detail: 'Ghi nhớ từ đã học', value: percentMetric(analytics?.memory_stability) },
+    { key: 'listening', label: 'Nghe', detail: 'Nhận diện qua âm thanh', value: percentMetric(analytics?.listening_readiness) },
+    { key: 'context', label: 'Ngữ cảnh', detail: 'Hiểu từ trong câu', value: percentMetric(analytics?.context_transfer) },
+    { key: 'production', label: 'Sản sinh', detail: 'Chủ động sử dụng', value: percentMetric(analytics?.production_readiness) },
   ];
 
+  const reviewWords = (weakWords.length ? weakWords : recommendation.focus_words?.map(word => ({ hanzi: word, pinyin: '', meaning_vi: '' })) || []).slice(0, 6);
+
   return (
-    // Khu thống kê: không bọc thẻ nữa, phân tách bằng kẻ 1px và khoảng trắng.
-    // Vòng tiến độ + tiêu đề neo trái, KPI dồn phải để trục lệch.
-    <section className="dash-stats" aria-label="Phân tích dữ liệu người học">
-      <div className="dash-stats-head">
-        <div className="dash-ring" aria-hidden="true">
-          <svg width="64" height="64" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r="28" fill="none" stroke="var(--dash-hair)" strokeWidth="5" />
-            <circle cx="32" cy="32" r="28" fill="none" stroke="var(--jade)" strokeWidth="5" strokeDasharray="175" strokeDashoffset={175 - (175 * Math.min(100, (eventCount / 50) * 100) / 100)} transform="rotate(-90 32 32)" strokeLinecap="round" />
-          </svg>
-          <b>{Math.round(Math.min(100, (eventCount / 50) * 100))}<i>%</i></b>
-        </div>
-        <div className="dash-stats-title">
-          <span className="dash-eyebrow">Phong độ</span>
-          <h2>Nhìn lại phong độ của bạn</h2>
-          <p className="hide-mobile">Hôm nay đã hoàn thành {eventCount}/50 thử thách.</p>
-        </div>
-        <dl className="dash-kpis">
-          <div><dt>Đúng</dt><dd className="dash-figure">{analytics?.accuracy || 0}<i>%</i></dd></div>
-          <div><dt>Ôn</dt><dd className="dash-figure">{dueCount}</dd></div>
-          <div className="hide-mobile"><dt>Độ vững</dt><dd className="dash-figure">{confidenceAvg ? confidenceAvg.toFixed(1) : '-'}</dd></div>
-          <div className="hide-mobile"><dt>Lượt</dt><dd className="dash-figure">{eventCount || analytics?.attempts || 0}</dd></div>
-        </dl>
-      </div>
-
-      <div className="dash-readiness" aria-label="Độ sẵn sàng theo kỹ năng">
-        {readinessRows.map(item => (
-          <div key={item.key} className="dash-readiness-cell" data-tone={skillTone(item.value)}>
-            <span>{item.label}</span>
-            <strong className="dash-figure">{hasData ? `${item.value}%` : '-'}</strong>
-            <div className="dash-meter"><span style={{ width: `${hasData ? item.value : 0}%` }} /></div>
+    <section
+      className="dash-stats dash-insights"
+      aria-label="Phân tích dữ liệu người học"
+      aria-busy={analyticsState?.tone === 'loading'}
+      data-analytics-state={analyticsState?.tone || 'live'}
+    >
+      {analyticsState && (
+        <div className={`dash-analytics-status dash-analytics-status--${analyticsState.tone}`} role="status" aria-live={analyticsState.tone === 'loading' ? 'polite' : undefined}>
+          <AlertCircle size={17} strokeWidth={1.6} aria-hidden="true" />
+          <div>
+            <strong>{analyticsState.label}</strong>
+            <span>{analyticsState.detail}</span>
           </div>
-        ))}
-      </div>
-
-      {/* Chưa có dữ liệu: bốn ô trên đều hiện '-', nên nói rõ cần làm gì để có số
-          thay vì để người mới nhìn một hàng ô rỗng. */}
-      {!hasData && (
-        <p className="dash-ai-hint">
-          Bốn chỉ số trên cần dữ liệu thật. Làm một phiên bất kỳ là chúng bắt đầu hiện.
-        </p>
+        </div>
       )}
+      <header className="dash-stats-head">
+        <div className="dash-stats-title">
+          <span className="dash-eyebrow">Tiến độ học tập</span>
+          <h2>Mỗi phiên học, hiểu mình hơn</h2>
+          <p>{hasData ? 'Nhìn lại kết quả, nhận ra phần cần luyện và chọn bước tiếp theo.' : 'Hoàn thành một phiên để bắt đầu theo dõi tiến độ của bạn.'}</p>
+        </div>
+        <div className="dash-milestone">
+          <div className="dash-ring" aria-hidden="true">
+            <svg width="64" height="64" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="28" fill="none" stroke="var(--dash-hair)" strokeWidth="5" />
+              {completionPercent !== null && (
+                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--jade)" strokeWidth="5" strokeDasharray="175" strokeDashoffset={175 - (175 * completionPercent / 100)} transform="rotate(-90 32 32)" strokeLinecap="round" />
+              )}
+            </svg>
+            <b>{completionPercent !== null ? <>{completionPercent}<i>%</i></> : '—'}</b>
+          </div>
+          <div>
+            <strong>Mốc 50 câu</strong>
+            <span>{hasData && eventCount !== null ? `${eventCount} câu đã ghi nhận` : 'Chưa có tổng số câu'}</span>
+          </div>
+        </div>
+      </header>
 
-      {/* Hai cột lệch 3:2 thay vì lưới đều — cột trái là bảng kỹ năng, cột phải
-          xếp dọc xu hướng và phổ HSK. */}
-      <div className="dash-grid">
-        <div className="dash-skills">
+      <dl className="dash-kpis" aria-label="Tổng quan kết quả học">
+        <div>
+          <dt><CheckCircle2 size={16} strokeWidth={1.6} aria-hidden="true" />Độ chính xác</dt>
+          <dd className="dash-figure">{accuracy !== null ? <>{accuracy}<i>%</i></> : '—'}</dd>
+          <dd className="dash-kpi-note">Trên các câu đã trả lời</dd>
+        </div>
+        <div>
+          <dt><RotateCcw size={16} strokeWidth={1.6} aria-hidden="true" />Đến hạn ôn</dt>
+          <dd className="dash-figure">{dueCount !== null ? dueCount : '—'}</dd>
+          <dd className="dash-kpi-note">Từ cần được nhắc lại</dd>
+        </div>
+        <div>
+          <dt><ShieldCheck size={16} strokeWidth={1.6} aria-hidden="true" />Độ vững</dt>
+          <dd className="dash-figure">{confidenceAvg !== null ? confidenceAvg.toFixed(1) : '—'}</dd>
+          <dd className="dash-kpi-note">Mức trung bình đã ghi nhận</dd>
+        </div>
+        <div>
+          <dt><Layers size={16} strokeWidth={1.6} aria-hidden="true" />Lượt luyện tập</dt>
+          <dd className="dash-figure">{attemptCount !== null ? attemptCount : '—'}</dd>
+          <dd className="dash-kpi-note">Tích lũy trong lịch sử</dd>
+        </div>
+      </dl>
+
+      <div className="dash-progress-grid">
+        <article className="dash-trend" aria-label="Xu hướng học tập">
           <div className="dash-block-head">
             <div>
-              <span className="dash-eyebrow">Skill Map</span>
-              <h3>Hiệu suất theo dạng bài</h3>
+              <span className="dash-eyebrow">Qua từng phiên</span>
+              <h3>Độ chính xác gần đây</h3>
             </div>
-            <span className="dash-tag dash-tag--strong">{bestType ? `Điểm mạnh: Phản xạ ${bestType.label}` : 'Đang đo'}</span>
+            <span className="dash-trend-count">{chartRows.length ? `${chartRows.length} phiên có dữ liệu` : 'Chờ phiên đầu tiên'}</span>
           </div>
-          <div className="dash-skill-list">
-            {typeRows.map(item => {
-              const value = clampPercent(item.accuracy);
-              return (
-                <div className="dash-skill-row" key={item.quiz_type} data-tone={skillTone(value)}>
-                  <div className="dash-skill-name">
-                    <strong>{item.label}</strong>
-                    <span>{item.answered ? `${item.answered} câu` : 'Chưa luyện'}</span>
-                  </div>
-                  <div className="dash-meter">
-                    <span style={{ width: `${item.answered ? value : 0}%` }} />
-                  </div>
-                  <b className="dash-figure">{item.answered ? `${value}%` : '-'}</b>
+          <div className="dash-trend-chart-wrap">
+            {chartRows.length ? (
+              <>
+                <div className="dash-trend-plot">
+                  <div className="dash-trend-scale" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
+                  <svg
+                    className="dash-trend-chart"
+                    viewBox="0 0 200 100"
+                    preserveAspectRatio="none"
+                    role="group"
+                    aria-label="Xu hướng độ chính xác"
+                    onPointerMove={handleTrendPointerMove}
+                    onPointerLeave={handleTrendPointerLeave}
+                  >
+                    <defs>
+                      <linearGradient id="dashTrendArea" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="var(--jade)" stopOpacity="0.18" />
+                        <stop offset="100%" stopColor="var(--jade)" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <line x1="12" y1="18" x2="188" y2="18" className="dash-trend-grid" strokeDasharray="2 4" />
+                    <line x1="12" y1="54" x2="188" y2="54" className="dash-trend-grid" strokeDasharray="2 4" />
+                    <line x1="12" y1="90" x2="188" y2="90" className="dash-trend-axis" />
+                    {trendAreaPath && <path className="dash-trend-fill" d={trendAreaPath} />}
+                    {trendPath && <path className="dash-trend-line" d={trendPath} />}
+                    {activeTrendPoint && (
+                      <line
+                        className="dash-trend-crosshair"
+                        x1={activeTrendPoint.x}
+                        y1="18"
+                        x2={activeTrendPoint.x}
+                        y2="90"
+                        aria-hidden="true"
+                      />
+                    )}
+                    {trendPointsList.map((item, index) => (
+                      <g
+                        key={`${item.label}-${index}`}
+                        className={`dash-trend-point${activeTrendIndex === index ? ' is-active' : ''}`}
+                        onFocus={() => handleTrendFocus(index)}
+                        onBlur={handleTrendBlur}
+                      >
+                        <circle cx={item.x} cy={item.y} r="11" className="dash-trend-hit" tabIndex={0} role="img" aria-label={`${item.label}: ${item.accuracy}% chính xác, ${item.score} trên ${item.total}`} />
+                        <circle cx={item.x} cy={item.y} r="1.8" className="dash-trend-dot" aria-hidden="true" />
+                      </g>
+                    ))}
+                  </svg>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="dash-side">
-          <div className="dash-trend">
-            <div className="dash-block-head">
-              <div>
-                <span className="dash-eyebrow">Trend</span>
-                <h3>8 phiên gần nhất</h3>
+                <div className="dash-trend-endpoints" aria-hidden="true">
+                  <span>{trendPointsList[0].label}</span>
+                  {trendPointsList.length > 1 && <span>{trendPointsList.at(-1).label}</span>}
+                </div>
+                <div className="dash-trend-readout" role="status" aria-live="polite">
+                  <strong>{readoutTrendPoint.label}</strong>
+                  <span><b>{readoutTrendPoint.accuracy}%</b> chính xác</span>
+                  <span>Điểm {readoutTrendPoint.score} / {readoutTrendPoint.total}</span>
+                </div>
+                <details className="dash-trend-details">
+                  <summary>Xem dữ liệu từng phiên <ChevronDown size={16} strokeWidth={1.6} aria-hidden="true" /></summary>
+                  <div className="dash-trend-table-wrap" role="region" aria-label="Bảng kết quả từng phiên" tabIndex={0}>
+                    <table className="dash-trend-table">
+                      <caption>Chi tiết các phiên gần nhất</caption>
+                      <thead>
+                        <tr><th scope="col">Phiên</th><th scope="col">Độ chính xác</th><th scope="col">Điểm</th><th scope="col">Tổng</th></tr>
+                      </thead>
+                      <tbody>
+                        {trendPointsList.map((item, index) => (
+                          <tr key={`${item.label}-detail-${index}`}>
+                            <th scope="row">{item.label}</th>
+                            <td>{item.accuracy}%</td>
+                            <td>{item.score}</td>
+                            <td>{item.total}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </>
+            ) : (
+              <div className="dash-trend-empty" role="status">
+                <TrendingUp size={28} strokeWidth={1.5} aria-hidden="true" />
+                <div>
+                  <strong>Chưa có xu hướng để hiển thị</strong>
+                  <p>Hoàn thành một phiên học để bắt đầu theo dõi độ chính xác. Dữ liệu mới sẽ xuất hiện tại đây.</p>
+                </div>
               </div>
-              <span className="dash-tag dash-tag--weak">{weakType ? `Cần chú ý: ${weakType.label} (chưa vững ngữ cảnh)` : 'Chưa có'}</span>
-            </div>
-            <svg className="dash-trend-chart" viewBox="0 0 200 100" preserveAspectRatio="none" role="img" aria-label="Xu hướng độ chính xác">
-              <defs>
-                <linearGradient id="dashTrendArea" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="var(--jade)" stopOpacity="0.18" />
-                  <stop offset="100%" stopColor="var(--jade)" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {/* Lưới mảnh 1px: chỉ đủ để đọc mốc, không cạnh tranh với đường dữ liệu */}
-              <line x1="12" y1="18" x2="188" y2="18" className="dash-trend-grid" strokeDasharray="2 4" />
-              <line x1="12" y1="54" x2="188" y2="54" className="dash-trend-grid" strokeDasharray="2 4" />
-              <line x1="12" y1="90" x2="188" y2="90" className="dash-trend-axis" />
-              {trendAreaPath && <path className="dash-trend-fill" d={trendAreaPath} />}
-              {trendPath && <path className="dash-trend-line" d={trendPath} />}
-              {trendPointsList.map((item, index) => (
-                <circle key={`${item.label}-${index}`} cx={item.x} cy={item.y} r="2.6" className="dash-trend-dot" />
-              ))}
-            </svg>
-            <div className="dash-trend-labels">
-              {chartRows.slice(-4).map((item, index) => (
-                <span key={`${item.label}-${index}`}>{item.label}<b className="dash-figure">{item.accuracy}%</b></span>
-              ))}
-            </div>
+            )}
           </div>
+        </article>
 
-          <div className="dash-levels">
-            <span className="dash-eyebrow">HSK Focus</span>
-            <div className="dash-level-bars">
-              {levelRows.map(item => {
-                const value = clampPercent(item.accuracy);
+        <article className="dash-readiness-panel" aria-label="Mức sẵn sàng">
+          <div className="dash-readiness-intro">
+            <span className="dash-eyebrow">Bản đồ năng lực</span>
+            <h3>Sẵn sàng dùng tiếng Trung</h3>
+            <p>Bốn góc nhìn về cách bạn ghi nhớ và vận dụng kiến thức đã học.</p>
+          </div>
+          <div className="dash-readiness" aria-label="Độ sẵn sàng theo kỹ năng">
+            {readinessRows.map(item => (
+              <div key={item.key} className="dash-readiness-cell" data-tone={skillTone(item.value)}>
+                <div className="dash-readiness-topline">
+                  <span>{item.label}</span>
+                  <strong className="dash-figure">{item.value !== null ? `${item.value}%` : '—'}</strong>
+                </div>
+                <small>{item.detail}</small>
+                <div className="dash-meter"><span style={{ width: `${item.value ?? 0}%` }} /></div>
+              </div>
+            ))}
+          </div>
+          {!hasData && <p className="dash-section-note">Các chỉ số sẽ xuất hiện khi có dữ liệu luyện tập tương ứng.</p>}
+        </article>
+      </div>
+
+      <section className="dash-breakdown" aria-label="Kết quả theo kỹ năng và cấp độ">
+        <header className="dash-section-heading">
+          <div><span className="dash-eyebrow">Hiểu kết quả</span><h3>Bạn đang vững ở đâu?</h3></div>
+          <p>Đối chiếu độ chính xác với số câu đã luyện. Dấu — là phần chưa có đủ dữ liệu.</p>
+        </header>
+        <div className="dash-grid">
+          <article className="dash-skills">
+            <div className="dash-block-head"><h4>Theo dạng bài</h4><span>Độ chính xác</span></div>
+            <div className="dash-skill-list">
+              {typeRows.map(item => {
+                const answered = numericMetric(item.answered) ?? 0;
+                const value = answered > 0 && numericMetric(item.accuracy) !== null ? clampPercent(item.accuracy) : null;
+                const SkillIcon = QUIZ_TYPES.find(type => type.id === item.quiz_type)?.icon || BookOpen;
                 return (
-                  <div key={item.level}>
-                    <em className="dash-figure">{item.answered ? `${value}%` : '-'}</em>
-                    <strong data-empty={item.answered ? 'false' : 'true'} style={{ height: `${item.answered ? Math.max(6, value) : 3}%` }} />
-                    <span>{item.level}</span>
+                  <div className="dash-skill-row" key={item.quiz_type} data-tone={skillTone(value)}>
+                    <span className="dash-skill-icon" aria-hidden="true"><SkillIcon size={19} strokeWidth={1.6} /></span>
+                    <div className="dash-skill-name"><strong>{item.label}</strong><span>{answered > 0 ? `${answered} câu đã trả lời` : 'Chưa luyện'}</span></div>
+                    <b className="dash-figure">{value !== null ? `${value}%` : '—'}</b>
+                    <div className="dash-meter"><span style={{ width: `${value ?? 0}%` }} /></div>
                   </div>
                 );
               })}
             </div>
-          </div>
+            {(bestType || weakType) && (
+              <div className="dash-skill-summary">
+                {bestType && <span><CheckCircle2 size={15} strokeWidth={1.6} aria-hidden="true" />Cao nhất: <strong>{bestType.label}</strong></span>}
+                {weakType && weakType.quiz_type !== bestType?.quiz_type && <span><TrendingUp size={15} strokeWidth={1.6} aria-hidden="true" />Cần luyện thêm: <strong>{weakType.label}</strong></span>}
+              </div>
+            )}
+          </article>
+          <article className="dash-levels">
+            <div className="dash-block-head"><h4>Theo cấp HSK</h4><span>Độ chính xác</span></div>
+            <div className="dash-level-list">
+              {levelRows.map(item => {
+                const answered = numericMetric(item.answered) ?? 0;
+                const value = answered > 0 && numericMetric(item.accuracy) !== null ? clampPercent(item.accuracy) : null;
+                return (
+                  <div className="dash-level-row" key={item.level} data-empty={value === null ? 'true' : 'false'}>
+                    <strong className="dash-level-name">HSK {item.level}</strong>
+                    <span className="dash-level-count">{answered > 0 ? `${answered} câu đã trả lời` : 'Chưa luyện'}</span>
+                    <b className="dash-figure">{value !== null ? `${value}%` : '—'}</b>
+                    <div className="dash-meter"><span style={{ width: `${value ?? 0}%` }} /></div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="dash-section-note">Kết quả từ các bài đã làm, không phải chứng nhận trình độ HSK.</p>
+          </article>
         </div>
-      </div>
+      </section>
+
+      <section className="dash-next" aria-label="Gợi ý luyện tập">
+        <header className="dash-section-heading">
+          <div><span className="dash-eyebrow">Bước tiếp theo</span><h3>Luyện đúng phần bạn cần</h3></div>
+          <p>Một đề bài phù hợp và những từ nên dành thêm thời gian.</p>
+        </header>
+        <div className="dash-bottom">
+          <article className="dash-reco">
+            <div className="dash-reco-copy">
+              <span className="dash-eyebrow"><BookOpen size={16} strokeWidth={1.6} aria-hidden="true" />Đề bài gợi ý</span>
+              <h4>{recommendation.title}</h4>
+              <p>{recommendation.reason}</p>
+              <div className="dash-reco-meta"><span>{strategyLabel(recommendedStrategy)}</span><span>{latencyLabel}</span></div>
+            </div>
+            <button className="btn-primary" type="button" onClick={() => onStartRecommended({ ...recommendation, recommended_strategy: recommendedStrategy })}><Play size={16} strokeWidth={1.5} aria-hidden="true" /> Luyện đề này</button>
+          </article>
+          <article className="dash-recent">
+            <div className="dash-block-head"><h4>{weakWords.length ? 'Từ cần củng cố' : 'Từ gợi ý'}</h4><span>{reviewWords.length ? `${reviewWords.length} từ` : 'Chưa có từ'}</span></div>
+            {reviewWords.length ? (
+              <ul className="dash-review-words">
+                {reviewWords.map((item, index) => (
+                  <li key={`${item.hanzi}-${item.pinyin}-${index}`}>
+                    <strong lang="zh-CN">{item.hanzi}</strong>
+                    {item.pinyin && <TonedPinyin pinyin={item.pinyin} />}
+                    {item.meaning_vi && <span className="dash-review-meaning">{item.meaning_vi}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="dash-recent-empty">Sau vài lượt luyện tập, những từ cần củng cố sẽ được tập hợp ở đây.</p>
+            )}
+          </article>
+        </div>
+      </section>
 
       {aiAvailable && (
-        <div className="dash-ai">
+        <section className="dash-ai" aria-label="Cố vấn AI">
           <div className="dash-block-head">
-            <div>
-              <span className="dash-eyebrow">Cố vấn AI</span>
-              <h3>Phân tích toàn diện dữ liệu học của bạn</h3>
+            <div className="dash-ai-heading">
+              <span className="dash-ai-icon" aria-hidden="true"><Sparkles size={22} strokeWidth={1.5} /></span>
+              <div><span className="dash-eyebrow">Cố vấn AI · khi bạn cần</span><h3>Thêm một góc nhìn cho lộ trình</h3><p>Phân tích điểm mạnh, phần cần cải thiện và gợi ý bước tiếp theo từ dữ liệu học.</p></div>
             </div>
-            <button className="btn-primary" type="button" onClick={runAiAnalysis} disabled={aiLoading || !hasData}>
-              {aiLoading ? <><Loader2 className="spin" size={16} strokeWidth={1.5} /> Đang phân tích</> : <><Sparkles size={16} strokeWidth={1.5} /> Phân tích với AI</>}
+            <button className="btn-secondary" type="button" onClick={runAiAnalysis} disabled={aiLoading || !hasData}>
+              {aiLoading ? <><Loader2 className="spin" size={16} strokeWidth={1.5} aria-hidden="true" /> Đang phân tích</> : <><Sparkles size={16} strokeWidth={1.5} aria-hidden="true" /> Phân tích với AI</>}
             </button>
           </div>
           {!hasData && <p className="dash-ai-hint">Hãy học vài phiên để AI có dữ liệu phân tích.</p>}
           {aiError && (
-            <p className="dash-ai-error" role="alert">
-              <AlertTriangle size={15} strokeWidth={1.5} aria-hidden="true" /> {aiError}
-            </p>
+            <p className="dash-ai-error" role="alert"><AlertTriangle size={15} strokeWidth={1.5} aria-hidden="true" /> {aiError}</p>
           )}
           {aiLoading && !aiResult && (
-            // Skeleton khớp đúng hình dạng kết quả thật: 1 đoạn tóm tắt + 3 nhóm gạch đầu dòng.
-            <div className="dash-ai-skeleton" aria-hidden="true">
-              <span className="dash-sk dash-sk--wide" />
-              <span className="dash-sk dash-sk--wide" />
-              <span className="dash-sk dash-sk--half" />
-            </div>
+            <div className="dash-ai-skeleton" aria-hidden="true"><span className="dash-sk dash-sk--wide" /><span className="dash-sk dash-sk--wide" /><span className="dash-sk dash-sk--half" /></div>
           )}
           {aiResult && (
             <div className="dash-ai-result">
               {aiResult.summary && <p className="dash-ai-summary">{aiResult.summary}</p>}
               <div className="dash-ai-groups">
                 {aiResult.strengths?.length > 0 && (
-                  <div className="dash-ai-group dash-ai-group--strong">
-                    <span className="dash-eyebrow">Điểm mạnh</span>
-                    <ul>{aiResult.strengths.map((item, i) => <li key={`s-${i}`}>{item}</li>)}</ul>
-                  </div>
+                  <div className="dash-ai-group dash-ai-group--strong"><span className="dash-eyebrow">Điểm mạnh</span><ul>{aiResult.strengths.map((item, i) => <li key={`s-${i}`}>{item}</li>)}</ul></div>
                 )}
                 {aiResult.weaknesses?.length > 0 && (
-                  <div className="dash-ai-group dash-ai-group--weak">
-                    <span className="dash-eyebrow">Cần cải thiện</span>
-                    <ul>{aiResult.weaknesses.map((item, i) => <li key={`w-${i}`}>{item}</li>)}</ul>
-                  </div>
+                  <div className="dash-ai-group dash-ai-group--weak"><span className="dash-eyebrow">Cần cải thiện</span><ul>{aiResult.weaknesses.map((item, i) => <li key={`w-${i}`}>{item}</li>)}</ul></div>
                 )}
                 {aiResult.roadmap?.length > 0 && (
-                  <div className="dash-ai-group dash-ai-group--next">
-                    <span className="dash-eyebrow">Lộ trình tiếp theo</span>
-                    <ol>{aiResult.roadmap.map((item, i) => <li key={`r-${i}`}>{item}</li>)}</ol>
-                  </div>
+                  <div className="dash-ai-group dash-ai-group--next"><span className="dash-eyebrow">Lộ trình tiếp theo</span><ol>{aiResult.roadmap.map((item, i) => <li key={`r-${i}`}>{item}</li>)}</ol></div>
                 )}
               </div>
             </div>
           )}
-        </div>
+        </section>
       )}
-
-      <div className="dash-bottom">
-        <div className="dash-reco">
-          <div className="dash-reco-copy">
-            <span className="dash-eyebrow">Đề bài phù hợp</span>
-            <h3>{recommendation.title}</h3>
-            <p>{recommendation.reason}</p>
-            <div className="dash-reco-meta">
-              <span>{strategyLabel(recommendedStrategy)}</span>
-              <span>{latencyLabel}</span>
-            </div>
-          </div>
-          <button className="btn-primary" onClick={() => onStartRecommended({ ...recommendation, recommended_strategy: recommendedStrategy })}><Play size={16} strokeWidth={1.5} /> Thực chiến ngay</button>
-        </div>
-        <div className="dash-recent">
-          <span className="dash-eyebrow">Từ vựng vừa ôn</span>
-          <div className="dash-recent-chips">
-            {(weakWords.length ? weakWords : recommendation.focus_words?.map(word => ({ hanzi: word, pinyin: '', meaning_vi: '', accuracy: 0 })) || []).slice(0, 6).map(item => (
-              <div key={`${item.hanzi}-${item.pinyin}`} className="dash-recent-chip">
-                <strong>{item.hanzi}</strong>
-                <TonedPinyin pinyin={item.pinyin} />
-              </div>
-            ))}
-            {!weakWords.length && !recommendation.focus_words?.length && <span className="dash-recent-empty">Chưa có dữ liệu. Hãy học thêm.</span>}
-          </div>
-        </div>
-      </div>
     </section>
   );
 }
@@ -806,7 +970,26 @@ function LearningFocusPanel({ focusLevel, focusLevels, showFirstRun, onSelectLev
 
 function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
   const [nudgeMuted, setNudgeMuted] = useState(() => window.localStorage.getItem('behaviorNudgeMuted') === '1');
-  if (!plan) return null;
+  if (!plan) {
+    return (
+      <section className="dash-today dash-today--pending" aria-label="Kế hoạch học hôm nay" aria-busy="true">
+        <div className="dash-today-head">
+          <div className="dash-today-title">
+            <span className="dash-eyebrow">Hôm nay</span>
+            <h2>Đang chuẩn bị phiên học</h2>
+            <p>Đang đồng bộ kế hoạch và các từ đến hạn của bạn.</p>
+          </div>
+        </div>
+        <div className="dash-today-pending" role="status" aria-live="polite">
+          <span className="dash-today-pending-mark" aria-hidden="true" />
+          <div>
+            <strong>Chưa thể bắt đầu ngay</strong>
+            <span>Kế hoạch sẽ xuất hiện khi dữ liệu học đã sẵn sàng.</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
   const mode = plan.mode;
   const missions = Array.isArray(plan.missions) ? plan.missions : [];
   const focusWords = Array.isArray(plan.focusWords) ? plan.focusWords : [];
@@ -1039,7 +1222,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
   const [primaryQuestions, setPrimaryQuestions] = useState([]);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
-  const [pendingLatency, setPendingLatency] = useState(null);
+  const [answerError, setAnswerError] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [result, setResult] = useState(null);
@@ -1055,6 +1238,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
   const answersRef = useRef([]);
   const questionStartedAtRef = useRef(0);
   const loadIdRef = useRef(0);
+  const submittingRef = useRef(false);
 
   const item = quizItems[index];
   const question = item?.question;
@@ -1065,6 +1249,18 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
   const isRepair = item?.type === 'repair_card';
   const isListeningMode = activeQuizType === 'listening' || activeQuizType === 'dialogue';
   const progress = quizItems.length ? Math.round(((index + 1) / quizItems.length) * 100) : 0;
+  const ordering = useMemo(() => {
+    if (activeQuizType !== 'drag_drop') return null;
+    try {
+      return normalizeOrdering(question?.metadata_json);
+    } catch (error) {
+      if (error instanceof OrderingError) return null;
+      throw error;
+    }
+  }, [activeQuizType, question?.metadata_json]);
+  const dragSegments = ordering?.segments || [];
+  const dragCorrectOrder = ordering?.correct_order || [];
+  const dragScrambledIndices = ordering?.scrambled_indices || [];
 
   const resetQuizState = useCallback(() => {
     setSession(null);
@@ -1072,7 +1268,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     setPrimaryQuestions([]);
     setIndex(0);
     setSelected(null);
-    setPendingLatency(null);
+    setAnswerError('');
     setFeedback(null);
     setAnswers([]);
     setResult(null);
@@ -1083,6 +1279,8 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     setDragOrder([]);
     setVoiceDone(false);
     answersRef.current = [];
+    submittingRef.current = false;
+    setSubmitting(false);
     stopSpeech();
   }, []);
 
@@ -1226,6 +1424,10 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
           rows.push({
             question_id: answer.question_id,
             selected_index: answer.selected_index,
+            ...(answer.selected_order ? {
+              selected_order: [...answer.selected_order],
+              ordering_version: answer.ordering_version,
+            } : {}),
             latency_ms: answer.latency_ms,
             confidence: answer.confidence,
             error_tag: answer.error_tag || null,
@@ -1260,14 +1462,20 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     }
   }, [level, primaryQuestions, refreshStats, session, userId]);
 
-  const answerQuestion = useCallback(async (choiceIndex, eventTimeStamp) => {
-    if (!question || selected !== null || submitting || feedback || loading) return;
-    setSelected(choiceIndex);
+  const answerQuestion = useCallback(async (choiceIndex, eventTimeStamp, selectedOrder = null) => {
+    if (!question || selected !== null || submittingRef.current || submitting || feedback || loading) return;
+    const loadId = loadIdRef.current;
     const latency = Math.max(0, eventTimeStamp - questionStartedAtRef.current);
-    setPendingLatency(latency);
+    const orderingFields = activeQuizType === 'drag_drop' ? {
+      selected_order: selectedOrder ? [...selectedOrder] : null,
+      ordering_version: ordering?.ordering_version,
+    } : {};
+    submittingRef.current = true;
+    setSelected(choiceIndex);
+    setAnswerError('');
     setSubmitting(true);
     try {
-      const itemType = isRepair ? 'repair_card' : sessionItemType(question, false);
+      const itemType = sessionItemType(question, isRepair);
       // confidence KHÔNG còn do người học bấm: recordLearningEvent tự suy từ
       // đúng/sai + độ trễ so với ngân sách dạng bài + tiền sử SRS của từ, rồi trả
       // về trong review để lịch ôn và tổng kết dùng chung một con số.
@@ -1276,15 +1484,18 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
         session_id: session?.id,
         question_id: question.id,
         selected_index: choiceIndex,
+        ...orderingFields,
         latency_ms: latency,
         item_type: itemType,
       }, question);
+      if (loadIdRef.current !== loadId) return;
       const confidenceValue = review.confidence ?? (review.correct ? 3 : 2);
       const answerRecord = {
         question_id: question.id,
         quiz_type: activeQuizType,
         item_type: itemType,
         selected_index: choiceIndex,
+        ...orderingFields,
         confidence: confidenceValue,
         latency_ms: latency,
         correct: review.correct,
@@ -1303,10 +1514,17 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
         queueRepairItem(review, choiceIndex, confidenceValue);
       }
       setFeedback({ review, confidence: confidenceValue, selectedIndex: choiceIndex });
+    } catch {
+      if (loadIdRef.current !== loadId) return;
+      setSelected(null);
+      setAnswerError('Không thể ghi nhận câu trả lời. Vui lòng thử lại.');
     } finally {
-      setSubmitting(false);
+      if (loadIdRef.current === loadId) {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
     }
-  }, [activeQuizType, feedback, isRepair, loading, question, queueRepairItem, selected, session?.id, submitting, userId]);
+  }, [activeQuizType, feedback, isRepair, loading, ordering, question, queueRepairItem, selected, session, submitting, userId]);
 
   const continueQuiz = useCallback(() => {
     if (index + 1 >= quizItems.length) {
@@ -1315,7 +1533,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
     }
     setIndex(current => current + 1);
     setSelected(null);
-    setPendingLatency(null);
+    setAnswerError('');
     setFeedback(null);
     setAudioPlaying(false);
     setAudioPlayed(false);
@@ -1359,35 +1577,15 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
   }, [feedback, submitting, loading, continueQuiz, selected, activeQuizType, question, answerQuestion]);
 
   // ---- Drag-drop handlers ----
-  // Backward compat: câu cũ có segments/correct_order đều là string array.
-  // Format mới: segments = string array (thứ tự đúng), correct_order = index array,
-  // scrambled_indices = index array (thứ tự xáo trộn để hiển thị).
-  const { dragSegments, dragCorrectOrder, dragScrambledIndices, isNewFormat } = useMemo(() => {
-    const rawSegments = question?.metadata_json?.segments || [];
-    const rawCorrectOrder = question?.metadata_json?.correct_order || [];
-    const isNewFormat = rawCorrectOrder.length > 0 && typeof rawCorrectOrder[0] === 'number';
-    const segments = rawSegments;
-    const correctOrder = isNewFormat ? rawCorrectOrder : rawSegments.map((_, i) => i);
-    const scrambledIndices = isNewFormat
-      ? (question?.metadata_json?.scrambled_indices || rawSegments.map((_, i) => i))
-      : (() => {
-          // Format cũ: segments đã là scrambled, cần map ngược về index gốc.
-          // Dùng greedy matching vì có thể có token trùng.
-          const used = new Set();
-          return rawSegments.map(token => {
-            const idx = rawCorrectOrder.findIndex((t, i) => t === token && !used.has(i));
-            if (idx >= 0) { used.add(idx); return idx; }
-            // Không tìm thấy → trả về -1 thay vì 0 để tránh duplicate sai
-            return -1;
-          });
-        })();
-    return { dragSegments: segments, dragCorrectOrder: correctOrder, dragScrambledIndices: scrambledIndices, isNewFormat };
-  }, [question?.metadata_json]);
-
-  // Set cho O(1) lookup khi render drag chips
   const dragOrderSet = useMemo(() => new Set(dragOrder), [dragOrder]);
+  const duplicateDragOrdinal = (tokenIndex) => {
+    const token = dragSegments[tokenIndex];
+    if (dragSegments.indexOf(token) === dragSegments.lastIndexOf(token)) return null;
+    return dragSegments.slice(0, tokenIndex + 1).filter(segment => segment === token).length;
+  };
 
   const toggleDragToken = (tokenIndex) => {
+    if (!ordering || submittingRef.current || submitting || feedback || loading) return;
     setDragOrder(prev => {
       if (prev.includes(tokenIndex)) {
         return prev.filter(i => i !== tokenIndex);
@@ -1397,56 +1595,9 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
   };
 
   const submitDragDrop = () => {
-    if (dragOrder.length !== dragCorrectOrder.length) return;
-    const isCorrect = dragOrder.every((idx, i) => idx === dragCorrectOrder[i]);
-    setSelected(isCorrect ? 0 : 1);
-    setPendingLatency(Math.max(0, now() - questionStartedAtRef.current));
-    setTimeout(() => handleQuizAnswer(isCorrect), 300);
-  };
-
-  // Unified answer submission — dùng cho drag_drop và voice (tự chấm ở client,
-  // không có selected_index thật). directResult là kết quả đã chấm; confidence do
-  // recordLearningEvent suy, không hardcode theo đúng/sai nữa.
-  const handleQuizAnswer = async (directResult = null) => {
-    if (!question || submitting) return;
-    setSubmitting(true);
-    try {
-      const selectedIndex = directResult !== null ? (directResult ? 0 : 1) : selected;
-      const review = await recordLearningEvent({
-        user_id: userId,
-        session_id: session?.id,
-        question_id: question.id,
-        selected_index: selectedIndex,
-        latency_ms: pendingLatency,
-        item_type: sessionItemType(question, isRepair),
-      }, question);
-      const confidenceValue = review.confidence ?? (review.correct ? 3 : 2);
-      const answerRecord = {
-        question_id: question.id,
-        quiz_type: activeQuizType,
-        item_type: sessionItemType(question, isRepair),
-        selected_index: selectedIndex,
-        confidence: confidenceValue,
-        latency_ms: pendingLatency,
-        correct: review.correct,
-        correct_index: review.correct_index,
-        explanation: review.explanation || question.explanation || '',
-        next_review_at: review.next_review_at,
-        error_tag: review.error_tag || null,
-        prompt: question.prompt,
-        word: question.word || null,
-        is_repair: isRepair,
-      };
-      const nextAnswers = [...answersRef.current, answerRecord];
-      answersRef.current = nextAnswers;
-      setAnswers(nextAnswers);
-      if (!isRepair && (!review.correct || confidenceValue <= 2)) {
-        queueRepairItem(review, selectedIndex, confidenceValue);
-      }
-      setFeedback({ review, confidence: confidenceValue, selectedIndex });
-    } finally {
-      setSubmitting(false);
-    }
+    if (!ordering || dragOrder.length !== dragCorrectOrder.length) return;
+    // selected_index chỉ là placeholder; review chấm theo identity trong selected_order.
+    answerQuestion(0, now(), [...dragOrder]);
   };
 
   if (result) {
@@ -1601,14 +1752,17 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
                   <span className="drag-hint">Bấm vào từ bên dưới để ghép câu…</span>
                 ) : (
                   dragOrder.map((tokenIndex, pos) => (
-                    <Fragment key={`ans-${pos}`}>
+                    <Fragment key={`ans-${tokenIndex}`}>
                       {pos > 0 && <span className="drag-slash">/</span>}
                       <button
                         className="drag-chip drag-chip--selected"
                         onClick={() => toggleDragToken(tokenIndex)}
+                        disabled={submitting || Boolean(feedback) || loading}
+                        aria-label={`Bỏ ${dragSegments[tokenIndex]}${duplicateDragOrdinal(tokenIndex) ? ` (${duplicateDragOrdinal(tokenIndex)})` : ''}`}
                         title="Bấm để bỏ ra"
                       >
                         {dragSegments[tokenIndex]}
+                        {duplicateDragOrdinal(tokenIndex) && <small> {duplicateDragOrdinal(tokenIndex)}</small>}
                       </button>
                     </Fragment>
                   ))
@@ -1618,17 +1772,18 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
               {/* Vùng nguồn — các chip chưa chọn, hiển thị theo thứ tự xáo trộn */}
               <div className="drag-source-zone">
                 {dragScrambledIndices.map((origIndex, pos) => {
-                  const used = origIndex >= 0 && dragOrderSet.has(origIndex);
+                  const used = dragOrderSet.has(origIndex);
                   return (
-                    <Fragment key={`src-${pos}`}>
+                    <Fragment key={`src-${origIndex}`}>
                       {pos > 0 && <span className={`drag-slash ${used ? 'drag-slash--faded' : ''}`}>/</span>}
                       <button
                         className={`drag-chip ${used ? 'drag-chip--used' : 'drag-chip--available'}`}
                         onClick={() => !used && toggleDragToken(origIndex)}
-                        disabled={used}
-                        aria-label={used ? `${dragSegments[origIndex]} (đã chọn)` : `Chọn ${dragSegments[origIndex]}`}
+                        disabled={used || submitting || Boolean(feedback) || loading}
+                        aria-label={used ? `${dragSegments[origIndex]} (đã chọn)` : `Chọn ${dragSegments[origIndex]}${duplicateDragOrdinal(origIndex) ? ` (${duplicateDragOrdinal(origIndex)})` : ''}`}
                       >
                         {dragSegments[origIndex]}
+                        {duplicateDragOrdinal(origIndex) && <small> {duplicateDragOrdinal(origIndex)}</small>}
                       </button>
                     </Fragment>
                   );
@@ -1688,7 +1843,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
                     <button
                       key={option}
                       className={`voice-rating-btn ${optionIndex === 0 ? 'voice-rating-btn--done' : ''}`}
-                      onClick={() => { setSelected(optionIndex); setTimeout(() => handleQuizAnswer(optionIndex === 0), 200); }}
+                      onClick={(event) => answerQuestion(optionIndex, event.timeStamp)}
                       disabled={submitting}
                     >
                       {option}
@@ -1727,6 +1882,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
           )}
 
 
+          {answerError && <p role="alert" className="feedback-error-tag">{answerError}</p>}
           {feedback && (
             <div className={`feedback-panel ${feedback.review.correct ? 'feedback-panel--correct' : 'feedback-panel--wrong'}`}>
               <div className="feedback-head">
@@ -1741,9 +1897,7 @@ function Quiz({ levels, setLevels, quizType, setQuizType, refreshStats, autoStar
               {!feedback.review.correct && (
                 <small>Đáp án: {
                   activeQuizType === 'drag_drop'
-                    ? (isNewFormat
-                        ? (question.metadata_json?.segments || []).join('')
-                        : (question.metadata_json?.correct_order || []).join(''))
+                    ? dragCorrectOrder.map(tokenIndex => dragSegments[tokenIndex]).join('')
                     : (question.options[feedback.review.correct_index] || '-')
                 }</small>
               )}
@@ -3440,7 +3594,16 @@ function HandwritingPad({ targetWord, theme }) {
  */
 
 function StreakPage({ onNavigateToQuiz }) {
-  const { currentStreak, longestStreak, studiedToday, broken, loading, last7Days } = useStreakData();
+  const {
+    currentStreak,
+    longestStreak,
+    studiedToday,
+    broken,
+    freezesRemaining,
+    loading,
+    last7Days,
+    refresh,
+  } = useStreakData();
   const { entries, me, loading: lbLoading, userId, isAuthenticated } = useLeaderboard({ limit: 20 });
   const [lbTab, setLbTab] = useState('all');
 
@@ -3466,9 +3629,11 @@ function StreakPage({ onNavigateToQuiz }) {
           longestStreak={longestStreak}
           studiedToday={studiedToday}
           broken={broken}
+          freezesRemaining={freezesRemaining}
           last7Days={last7Days}
           loading={loading}
           onStudyComplete={onNavigateToQuiz}
+          onFreezeUsed={refresh}
         />
       )}
 
@@ -3836,7 +4001,7 @@ export default function App() {
           {!generalCheckLevel && activeTab === 'voicechat' && <VoiceChat />}
           {!generalCheckLevel && activeTab === 'livecall' && <LiveCall onExit={() => setActiveTab('voicechat')} />}
           {!generalCheckLevel && activeTab === 'plan' && <StreakPage onNavigateToQuiz={() => setActiveTab('quiz')} />}
-          {!generalCheckLevel && activeTab === 'merge-game' && <MergeGame />}
+          {!generalCheckLevel && GAME_ENABLED && activeTab === 'merge-game' && MergeGame && <MergeGame />}
           {!generalCheckLevel && activeTab === 'session' && <LearningSession plan={activeSessionPlan || todayPlan} fallbackLevel={level} onExit={closeLearningSession} onComplete={refreshStats} />}
           </Suspense>
         </ErrorBoundary>

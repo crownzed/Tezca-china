@@ -391,7 +391,12 @@ def _score_pronunciation_new(
                 audio_bytes, target_syls, actual_syls,
                 predecoded=predecoded,
                 precomputed_f0=extract_output["f0_contour"] if extract_output else None,
-                precomputed_segments=extract_output["segments"] if extract_output else None,
+                precomputed_segment_frame_ranges=(
+                    extract_output["segment_frame_ranges"] if extract_output else None
+                ),
+                precomputed_frame_step_sec=(
+                    extract_output["frame_step_sec"] if extract_output else None
+                ),
             )
     except Exception as e:
         logger.info("New pipeline: phoneme verifier failed (%s)", e)
@@ -528,6 +533,7 @@ def _score_pronunciation_new(
         "dimension_scores": explain_output.get("dimension_scores"),
         "per_syllable_explanation": fuse_result.get("per_syllable_explanation"),
         "confidence_breakdown": fuse_result.get("confidence_breakdown"),
+        "divergence_warning": fuse_result.get("divergence_warning", ""),
     }
 
 

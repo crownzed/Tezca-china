@@ -119,24 +119,21 @@ def _in_formant_range(
 
 def _extract_formants_at_midpoint(
     audio_bytes: bytes,
-    segment_indices: list[tuple[int, int]],
-    framerate: int,
+    segment_frame_ranges: list[tuple[int, int]],
+    frame_step_sec: float,
     *,
     predecoded: tuple[list[float], int] | None = None,
+    formant_factory=None,
 ) -> list[tuple[float, float, float] | None]:
-    """Extract F1, F2, F3 at the temporal midpoint of each syllable segment.
+    """Extract F1, F2, F3 at each syllable's midpoint in the F0 timeline.
 
-    Returns list of (F1, F2, F3) tuples, or None if formant tracking failed
-    for that segment. Uses Burg method via parselmouth.
-
-    Args:
-        audio_bytes: WAV PCM bytes (used only if predecoded is None).
-        segment_indices: (start_sample, end_sample) pairs per syllable.
-        framerate: Sample rate in Hz (used only if predecoded is None).
-        predecoded: Optional (samples, sr) tuple to skip redundant WAV decode.
+    ``segment_frame_ranges`` indexes the original F0 contour, not PCM samples.
+    Multiplying its midpoint by ``frame_step_sec`` preserves unvoiced gaps and
+    maps the query to the actual audio time. ``formant_factory`` is a test seam
+    that receives decoded samples and their sample rate.
     """
-    import numpy as np
-    import parselmouth  # type: ignore[import-untyped]
+    if frame_step_sec <= 0:
+        return [None] * len(segment_frame_ranges)
 
     if predecoded is not None:
         samples, sr = predecoded
@@ -146,18 +143,27 @@ def _extract_formants_at_midpoint(
         try:
             samples, sr = decode_wav(audio_bytes)
         except Exception:
-            return [None] * len(segment_indices)
-        # Use the passed framerate if decode didn't provide sr
-        if sr <= 0:
-            sr = framerate
+            return [None] * len(segment_frame_ranges)
 
-    sound = parselmouth.Sound(np.asarray(samples, dtype=np.float64), sampling_frequency=sr)
-    formant = sound.to_formant_burg()
+    if formant_factory is None:
+        import numpy as np
+        import parselmouth  # type: ignore[import-untyped]
+
+        formant_factory = lambda values, rate: parselmouth.Sound(
+            np.asarray(values, dtype=np.float64), sampling_frequency=rate,
+        ).to_formant_burg()
+    try:
+        formant = formant_factory(samples, sr)
+    except Exception:
+        return [None] * len(segment_frame_ranges)
 
     results: list[tuple[float, float, float] | None] = []
-    for start_idx, end_idx in segment_indices:
-        mid_idx = (start_idx + end_idx) // 2
-        time_sec = mid_idx / sr
+    for start_frame, end_frame in segment_frame_ranges:
+        if end_frame <= start_frame:
+            results.append(None)
+            continue
+        midpoint_frame = (start_frame + end_frame) / 2
+        time_sec = midpoint_frame * frame_step_sec
         try:
             f1 = formant.get_value_at_time(1, time_sec)
             f2 = formant.get_value_at_time(2, time_sec)
@@ -242,6 +248,8 @@ def verify_phonemes(
     predecoded: tuple[list[float], int] | None = None,
     precomputed_f0: list[float] | None = None,
     precomputed_segments: list[list[float]] | None = None,
+    precomputed_segment_frame_ranges: list[tuple[int, int]] | None = None,
+    precomputed_frame_step_sec: float | None = None,
 ) -> PhonemeVerifyOutput:
     """Verify ASR transcription against acoustic evidence.
 
@@ -251,7 +259,9 @@ def verify_phonemes(
         asr_pinyin: ASR-transcribed pinyin syllables.
         predecoded: Optional (samples, sr) tuple to skip redundant WAV decode.
         precomputed_f0: Optional F0 contour from prior extraction (skips Praat).
-        precomputed_segments: Optional syllable segments from prior extraction.
+        precomputed_segments: Deprecated value-only segments retained for caller compatibility.
+        precomputed_segment_frame_ranges: Absolute F0-frame [start, end) ranges.
+        precomputed_frame_step_sec: Seconds per F0 frame from prior extraction.
 
     Returns:
         PhonemeVerifyOutput with per-syllable confidence and corrections.
@@ -269,25 +279,40 @@ def verify_phonemes(
     count_mismatch = abs(len(asr_pinyin) - estimated_count) > 1
 
     # Step 2: Extract F0 segments to know where syllables are temporally.
-    # Reuse precomputed F0/segments if available (avoids redundant Praat call).
-    from .tone_dsp_extractor import extract_f0, decode_wav, split_syllables
+    # Reuse the full precomputed contour when available; its frame ranges are
+    # valid only when their cardinality matches ASR output.
+    from .tone_dsp_extractor import decode_wav, extract_f0, split_syllable_ranges
 
     try:
-        if precomputed_f0 is not None and precomputed_segments is not None:
+        if precomputed_f0 is not None:
             contour = precomputed_f0
-            segments = precomputed_segments
-            # Need samples/sr for formant extraction
             if predecoded is not None:
-                samples, sr = predecoded
+                _samples, sr = predecoded
             else:
-                samples, sr = decode_wav(audio_bytes)
+                _samples, sr = decode_wav(audio_bytes)
         else:
             if predecoded is not None:
-                samples, sr = predecoded
+                _samples, sr = predecoded
             else:
-                samples, sr = decode_wav(audio_bytes)
-            contour = extract_f0(samples, sr)
-            segments = split_syllables(contour, len(asr_pinyin))
+                _samples, sr = decode_wav(audio_bytes)
+            contour = extract_f0(_samples, sr)
+
+        if precomputed_frame_step_sec and precomputed_frame_step_sec > 0:
+            frame_step = precomputed_frame_step_sec
+        else:
+            duration_sec = len(_samples) / sr if sr > 0 else 0.0
+            frame_step = duration_sec / len(contour) if contour else 0.0
+
+        # Precomputed ranges describe the extractor's target segmentation. They
+        # are only reusable when ASR has the same number of syllables; otherwise
+        # segment the original contour again so every ASR item gets a real range.
+        if (
+            precomputed_segment_frame_ranges
+            and len(precomputed_segment_frame_ranges) == len(asr_pinyin)
+        ):
+            segment_ranges = list(precomputed_segment_frame_ranges)
+        else:
+            segment_ranges = split_syllable_ranges(contour, len(asr_pinyin))
     except Exception:
         # If extraction fails, trust ASR fully
         return PhonemeVerifyOutput(
@@ -297,20 +322,17 @@ def verify_phonemes(
             phoneme_score=0.7,
         )
 
-    # Build segment index ranges for formant extraction
-    seg_indices: list[tuple[int, int]] = []
-    pos = 0
-    for seg in segments:
-        seg_indices.append((pos, pos + len(seg)))
-        pos += len(seg)
-
-    # Pad if fewer segments than syllables
-    while len(seg_indices) < len(asr_pinyin):
-        seg_indices.append((0, 0))
+    # Keep one formant result per ASR syllable. Missing ranges mean that no
+    # temporal evidence exists, rather than inventing a position from lengths.
+    while len(segment_ranges) < len(asr_pinyin):
+        segment_ranges.append((len(contour), len(contour)))
 
     # Step 3: Extract formants at each syllable midpoint
     formants = _extract_formants_at_midpoint(
-        audio_bytes, seg_indices[:len(asr_pinyin)], sr, predecoded=predecoded,
+        audio_bytes,
+        segment_ranges[:len(asr_pinyin)],
+        frame_step,
+        predecoded=predecoded,
     )
 
     # Step 4: Compare against expected formant ranges

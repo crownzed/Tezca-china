@@ -27,6 +27,7 @@ class ToneExtractOutput(TypedDict):
     """Output of tone feature extraction."""
     f0_contour: list[float]           # raw Hz, 0 = unvoiced
     segments: list[list[float]]       # per-syllable voiced segments (raw Hz)
+    segment_frame_ranges: list[tuple[int, int]]  # [start, end) positions in f0_contour
     normalized_segments: list[list[float]]  # shape-normalized (Chao units)
     frame_step_sec: float             # seconds per F0 frame
     duration_sec: float               # total clip duration
@@ -169,47 +170,61 @@ def extract_f0(samples: list[float], framerate: int) -> list[float]:
 # Syllable segmentation
 # ---------------------------------------------------------------------------
 
+def split_syllable_ranges(contour: list[float], n_syllables: int) -> list[tuple[int, int]]:
+    """Split an F0 contour into absolute [start_frame, end_frame) syllable ranges.
+
+    Ranges retain their position in the original contour, including unvoiced gaps.
+    That identity is required by consumers such as formant extraction; summing
+    voiced-frame lengths cannot reconstruct an audio timestamp after gaps were
+    removed. The reconciliation policy intentionally matches ``split_syllables``.
+    """
+    runs: list[tuple[int, int]] = []
+    start: int | None = None
+    for index, value in enumerate(contour):
+        if value > 0:
+            if start is None:
+                start = index
+        elif start is not None:
+            if index - start >= MIN_VOICED_FRAMES:
+                runs.append((start, index))
+            start = None
+    if start is not None and len(contour) - start >= MIN_VOICED_FRAMES:
+        runs.append((start, len(contour)))
+
+    if not runs:
+        return []
+
+    if len(runs) > n_syllables:
+        while len(runs) > n_syllables:
+            index = min(
+                range(len(runs) - 1),
+                key=lambda i: (runs[i][1] - runs[i][0]) + (runs[i + 1][1] - runs[i + 1][0]),
+            )
+            runs[index : index + 2] = [(runs[index][0], runs[index + 1][1])]
+    elif len(runs) < n_syllables:
+        while len(runs) < n_syllables:
+            index = max(range(len(runs)), key=lambda i: runs[i][1] - runs[i][0])
+            start, end = runs[index]
+            if end - start < 2:
+                break
+            midpoint = start + (end - start) // 2
+            runs[index : index + 1] = [(start, midpoint), (midpoint, end)]
+
+    return runs
+
+
 def split_syllables(contour: list[float], n_syllables: int) -> list[list[float]]:
     """Split a full F0 contour into ``n_syllables`` voiced segments.
 
     Mandarin syllables are separated by short unvoiced gaps. We segment on runs
     of voiced frames, then merge/split so the segment count matches the target
-    syllable count (best-effort).
+    syllable count (best-effort). Use ``split_syllable_ranges`` when the caller
+    also needs the segments' absolute time positions.
     """
-    # 1) group consecutive voiced frames into runs
-    runs: list[list[float]] = []
-    current: list[float] = []
-    for v in contour:
-        if v > 0:
-            current.append(v)
-        elif current:
-            if len(current) >= MIN_VOICED_FRAMES:
-                runs.append(current)
-            current = []
-    if len(current) >= MIN_VOICED_FRAMES:
-        runs.append(current)
-
-    if not runs:
-        return []
-
-    # 2) reconcile run count with the expected syllable count
-    if len(runs) == n_syllables:
-        return runs
-    if len(runs) > n_syllables:
-        while len(runs) > n_syllables:
-            idx = min(range(len(runs) - 1), key=lambda i: len(runs[i]) + len(runs[i + 1]))
-            runs[idx] = runs[idx] + runs[idx + 1]
-            del runs[idx + 1]
-        return runs
-    # fewer runs than syllables: split the longest runs evenly
-    while len(runs) < n_syllables:
-        idx = max(range(len(runs)), key=lambda i: len(runs[i]))
-        seg = runs[idx]
-        if len(seg) < 2:
-            break
-        mid = len(seg) // 2
-        runs[idx : idx + 1] = [seg[:mid], seg[mid:]]
-    return runs
+    return [
+        [value for value in contour[start:end] if value > 0]
+        for start, end in split_syllable_ranges(contour, n_syllables)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -334,8 +349,12 @@ def extract_tone_features_from_samples(
     if len(voiced) < MIN_VOICED_FRAMES:
         raise ToneDspExtractorError("Không phát hiện được giọng nói rõ (F0) trong đoạn ghi âm.")
 
-    segments = split_syllables(contour, n_target_syllables)
-    if not segments:
+    segment_frame_ranges = split_syllable_ranges(contour, n_target_syllables)
+    segments = [
+        [value for value in contour[start:end] if value > 0]
+        for start, end in segment_frame_ranges
+    ]
+    if not segments or len(segments) != len(segment_frame_ranges):
         raise ToneDspExtractorError("Không tách được âm tiết từ đường F0.")
 
     normalized_segments = [shape_normalize(seg) for seg in segments]
@@ -346,6 +365,7 @@ def extract_tone_features_from_samples(
     return ToneExtractOutput(
         f0_contour=[round(v, 1) for v in contour],
         segments=segments,
+        segment_frame_ranges=segment_frame_ranges,
         normalized_segments=normalized_segments,
         frame_step_sec=fs,
         duration_sec=duration_sec,
