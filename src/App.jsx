@@ -28,7 +28,7 @@ import { loadAllFlashcards } from './vocab-loader';
 import { captureWordReview } from './srs-capture.js';
 import { ClickableChineseText, TonedPinyin } from './components/chinese-text.jsx';
 import HskLevelPicker from './components/HskLevelPicker.jsx';
-import { primaryLevel, normalizeLevels, levelMatches, levelsLabel, readStoredLevels } from './hsk-levels.js';
+import { ALL_LEVELS, primaryLevel, normalizeLevels, levelMatches, levelsLabel, readStoredLevels } from './hsk-levels.js';
 import { StreakLeaderboard } from './components/StreakDisplay.jsx';
 import { StreakHero } from './components/streak/StreakHero.jsx';
 import { LeaderboardPodium } from './components/streak/LeaderboardPodium.jsx';
@@ -51,7 +51,7 @@ const QUIZ_TYPES = [
   { id: 'cloze', label: 'Điền từ', icon: ScrollText },
   { id: 'drag_drop', label: 'Sắp xếp câu', icon: PenTool },
 ];
-const FOCUS_LEVELS = [1, 2, 3, 4];
+const FOCUS_LEVELS = ALL_LEVELS;
 // drag_drop là bài sắp xếp token, chỉ render đúng trong Quiz. GeneralCheck là
 // lưới trắc nghiệm thuần nên loại drag_drop ra (nếu không sẽ lộ đáp án ở
 // option A + hiện chuỗi placeholder __drag_drop_dummy__).
