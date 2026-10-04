@@ -2658,14 +2658,18 @@ tự nhiên và dịu mắt.
 
   /* Scoped Tokens cho Landing Page tự nhiên & sang trọng */
   --landing-bg-top: #F9F8F4;
-  --landing-bg-bottom: #F2EFE7;
+  --landing-bg-bottom: #F1EDE3;
   --landing-paper: #FFFFFF;
+  --landing-ink: #1a1e1c;
   --landing-accent: #1B4D3E;
   --landing-accent-soft: rgba(27, 77, 62, 0.07);
   --landing-accent-hover: rgba(27, 77, 62, 0.12);
+  --landing-cinnabar: #C2402F;
+  --landing-gold: #9a7b33;
   --landing-border: rgba(30, 40, 35, 0.08);
   --landing-border-strong: rgba(27, 77, 62, 0.22);
   --landing-shadow: 0 8px 30px rgba(27, 35, 30, 0.04), 0 2px 6px rgba(27, 35, 30, 0.02);
+  --landing-shadow-lg: 0 24px 56px rgba(27, 45, 38, 0.10), 0 6px 18px rgba(27, 45, 38, 0.05);
   /* Viền sáng trong 1px: mô phỏng khúc xạ cạnh của vật liệu, thay cho quầng sáng. */
   --landing-inner-light: rgba(255, 255, 255, 0.9);
   /* Font riêng cho landing: Geist. App vẫn dùng --font (Inter) như cũ. */
@@ -2674,27 +2678,36 @@ tự nhiên và dịu mắt.
   /* Cột nội dung + easing dùng chung cho mọi transition của landing. */
   --landing-max: 1240px;
   --landing-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Nhịp dọc: base 8px — section gap, block gap, item gap. */
+  --landing-sec-gap: clamp(48px, 7vw, 112px);
+  --landing-block-gap: clamp(20px, 3vw, 32px);
 
   font-family: var(--landing-font);
+  color: var(--landing-ink);
 
   background:
     radial-gradient(1200px 700px at 50% -10%, rgba(27, 77, 62, 0.05), transparent 70%),
     linear-gradient(180deg, var(--landing-bg-top), var(--landing-bg-bottom));
-  color: var(--text);
+  color: var(--landing-ink);
 }
 
 [data-theme='dark'] .landing{
   --landing-bg-top: #141615;
   --landing-bg-bottom: #191B1A;
   --landing-paper: #1E201F;
-  --landing-accent: #38A382;
+  --landing-ink: #E9ECE7;
+  --landing-accent: #4FBB93;
   --landing-accent-soft: rgba(56, 163, 130, 0.12);
   --landing-accent-hover: rgba(56, 163, 130, 0.2);
+  --landing-cinnabar: #E07A5F;
+  --landing-gold: #CBA763;
   --landing-border: rgba(255, 255, 255, 0.08);
-  --landing-border-strong: rgba(56, 163, 130, 0.28);
+  --landing-border-strong: rgba(79, 187, 147, 0.28);
   --landing-shadow: 0 10px 32px rgba(0, 0, 0, 0.25);
+  --landing-shadow-lg: 0 28px 64px rgba(0, 0, 0, 0.4), 0 8px 20px rgba(0, 0, 0, 0.25);
   --landing-inner-light: rgba(255, 255, 255, 0.06);
-}/* Watermark rồng phượng: chìm hẳn dịu nhẹ vào nền giấy/đá mộc. */
+}/* Watermark rồng phượng: hơi lộ ra trên nền giấy, đủ thấy ở vùng trống
+   nhưng không đọc lên nội dung. */
 .landing::before{
   content: '';
   position: absolute;
@@ -2702,27 +2715,27 @@ tự nhiên và dịu mắt.
   z-index: 0;
   pointer-events: none;
   background-image: url('./assets/dragon-phoenix.webp');
-  background-size: cover;
-  background-position: center;
+  background-size: min(88vh, 940px);
+  background-position: center 12vh;
   background-repeat: no-repeat;
   mix-blend-mode: multiply;
-  opacity: 0.01;
+  opacity: 0.05;
   filter:
     grayscale(100%)
-    brightness(1.1)
-    contrast(0.7)
-    blur(1px);
+    brightness(1.05)
+    contrast(0.78)
+    blur(0.4px);
 }
 
 [data-theme='dark'] .landing::before{
   mix-blend-mode: soft-light;
-  opacity: 0.01;
+  opacity: 0.055;
   filter:
     grayscale(100%)
     invert(100%)
-    brightness(0.75)
-    contrast(0.6)
-    blur(1px);
+    brightness(0.8)
+    contrast(0.65)
+    blur(0.4px);
 }/* Nội dung nằm trên watermark. */
 .landing-top,
 .landing > main,
@@ -2736,8 +2749,10 @@ tự nhiên và dịu mắt.
 hạ tải xuống. */
 @media (max-width: 767px){
   .landing::before {
-    opacity: 0.06;
-    filter: grayscale(100%) brightness(1.2) contrast(0.6) blur(2px);
+    background-size: 120vw;
+    background-position: center 6vh;
+    opacity: 0.07;
+    filter: grayscale(100%) brightness(1.1) contrast(0.62) blur(1.4px);
   }
 
   [data-theme='dark'] .landing::before {
@@ -2753,7 +2768,7 @@ có nền mờ để
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px clamp(16px, 4vw, 48px);
+  padding: 13px clamp(16px, 4vw, 48px);
   border-bottom: 1px solid var(--landing-border);
   background: color-mix(in srgb, var(--landing-bg-top) 82%, transparent);
   backdrop-filter: blur(14px) saturate(120%);
@@ -2770,32 +2785,72 @@ có nền mờ để
 }
 
 .landing-brand img{
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
   object-fit: cover;
   flex: 0 0 auto;
+  box-shadow: 0 0 0 1px var(--landing-border), 0 2px 6px rgba(20, 30, 25, 0.1);
 }
 
 .landing-brand span{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.92rem;
 }
 
 .landing-top-actions{
   display: flex;
   gap: 8px;
   flex: 0 0 auto;
+}
+
+/* Hai nút nav trên landing: tách khỏi .btn-primary/.btn-secondary dùng chung
+   cho app — landing cần kích thước nhỏ hơn, bo pill và tông mực riêng. */
+.landing-nav-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--landing-border);
+  background: var(--landing-paper);
+  color: var(--landing-ink);
+  font-weight: 600;
+  font-size: 0.88rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 200ms var(--landing-ease), background 200ms var(--landing-ease), transform 200ms var(--landing-ease);
+}
+
+.landing-nav-btn:hover{
+  background: var(--landing-accent-soft);
+  border-color: var(--landing-accent);
+  transform: translateY(-1px);
+}
+
+.landing-nav-btn--primary{
+  background: linear-gradient(135deg, #189874, var(--landing-accent));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(27, 77, 62, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.landing-nav-btn--primary:hover{
+  background: linear-gradient(135deg, #1ba97f, #21584a);
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(27, 77, 62, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }/* Hero lệch trục: cột chữ hẹp hơn cột demo và neo lệch trái,
 thay cho bố cục
    50/50 căn giữa. Demo được đẩy xuống nửa dòng để hai cột không thẳng hàng đầu. */
 .landing-hero{
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: clamp(24px, 5vw, 72px);
-  align-items: start;
-  padding: clamp(32px, 7vw, 92px) clamp(16px, 4vw, 48px) clamp(24px, 4vw, 56px);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: clamp(28px, 5vw, 80px);
+  align-items: center;
+  padding: clamp(44px, 7.5vw, 110px) clamp(16px, 4vw, 48px) clamp(36px, 5vw, 72px);
   max-width: var(--landing-max);
   margin: 0 auto;
   width: 100%;
@@ -2804,7 +2859,7 @@ thay cho bố cục
 .landing-hero-copy{
   min-width: 0;
   display: grid;
-  gap: 18px;
+  gap: 20px;
   justify-items: start;
   /* Khoảng trắng bất đối xứng: chữ thụt vào so với lề cột. */
   padding-right: clamp(0px, 3vw, 40px);
@@ -2813,18 +2868,22 @@ có điểm nhấn nhịp thở chậm. */
 .landing-eyebrow{
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   margin: 0;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--landing-border-strong);
+  background: var(--landing-accent-soft);
   color: var(--landing-accent);
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 .landing-eyebrow-dot{
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--landing-accent);
   animation: landingBreathe 2.8s ease-in-out infinite;
@@ -2832,61 +2891,132 @@ có điểm nhấn nhịp thở chậm. */
 
 @keyframes landingBreathe {
   0%, 100% { opacity: 0.35; transform: scale(0.82); }
-  50% { opacity: 1; transform: scale(1); }}/* Hierarchy bằng độ đậm và khoảng chữ,
-không phóng H1 quá cỡ. */
+  50% { opacity: 1; transform: scale(1); }}/* Hierarchy bằng độ đậm và khoảng chữ:
+H1 đủ lớn để làm trục thị giác, balance để không gãy xấu. */
 .landing-hero-copy h1{
   margin: 0;
-  max-width: 20ch;
-  font-size: clamp(1.85rem, 3.9vw, 2.75rem);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.028em;
+  max-width: 17ch;
+  font-size: clamp(2.2rem, 4.6vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -0.034em;
   text-wrap: balance;
 }
 
 .landing-hero-lede{
   margin: 0;
-  max-width: 48ch;
+  max-width: 46ch;
   color: var(--muted);
+  font-size: clamp(1rem, 1.4vw, 1.08rem);
   line-height: var(--line-readable, 1.65);
-}/* Danh sách điểm chính: kẻ 1px phân tách,
+}/* Nhóm CTA chính của hero: nút primary to + link phụ dạng text. */
+.landing-hero-ctas{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 6px;
+}
+
+.landing-hero-primary{
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #189874, var(--landing-accent));
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
+  box-shadow: 0 10px 26px rgba(27, 77, 62, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: transform 220ms var(--landing-ease), box-shadow 220ms var(--landing-ease), filter 220ms var(--landing-ease);
+}
+
+.landing-hero-primary:hover{
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow: 0 16px 34px rgba(27, 77, 62, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.landing-hero-primary:active{
+  transform: translateY(0);
+}
+
+.landing-hero-secondary{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--landing-border-strong);
+  background: var(--landing-paper);
+  color: var(--landing-ink);
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color 200ms var(--landing-ease), background 200ms var(--landing-ease), transform 200ms var(--landing-ease);
+}
+
+.landing-hero-secondary:hover{
+  background: var(--landing-accent-soft);
+  border-color: var(--landing-accent);
+  transform: translateY(-1px);
+}
+
+/* Danh sách điểm chính: kẻ 1px phân tách,
 bỏ dấu tròn trang trí. */
 .landing-points{
-  margin: 4px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
   display: grid;
   gap: 0;
   width: 100%;
-  max-width: 46ch;
+  max-width: 48ch;
   border-top: 1px solid var(--landing-border);
 }
 
 .landing-points li{
   position: relative;
-  padding: 11px 0 11px 26px;
+  padding: 12px 0 12px 28px;
   border-bottom: 1px solid var(--landing-border);
-  color: var(--text);
-  font-size: 0.92rem;
+  color: var(--landing-ink);
+  font-size: 0.94rem;
   line-height: 1.5;
 }/* Dấu tick vẽ bằng border,
 không dùng ký tự emoji. */
 .landing-points li::before{
   content: '';
   position: absolute;
-  left: 3px;
+  left: 4px;
   top: 1.05em;
-  width: 9px;
-  height: 5px;
-  border-left: 1.5px solid var(--landing-accent);
-  border-bottom: 1.5px solid var(--landing-accent);
+  width: 10px;
+  height: 6px;
+  border-left: 1.6px solid var(--landing-accent);
+  border-bottom: 1.6px solid var(--landing-accent);
   transform: rotate(-45deg);
 }
 
 .landing-hero-demo{
+  position: relative;
   min-width: 0;
   /* Lệch trục dọc so với cột chữ, chỉ ở khổ rộng. */
   margin-top: clamp(0px, 2vw, 28px);
+}
+
+/* Khối gợi ý ẩn sau card: tạo chiều sâu vật lý thay cho drop shadow đơn thuần. */
+.landing-hero-demo::before{
+  content: '';
+  position: absolute;
+  inset: auto -14px -16px 18px;
+  height: 72%;
+  border-radius: 26px;
+  background: linear-gradient(160deg, var(--landing-accent-soft), transparent 60%);
+  border: 1px solid var(--landing-border);
+  z-index: -1;
 }/* --- Demo phát âm --- */
 .hero-demo{
   display: grid;
@@ -2902,12 +3032,14 @@ không dùng ký tự emoji. */
 
 .hero-demo-head h3{
   margin: 0;
-  font-size: 1.12rem;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .hero-demo-sub{
   margin: 0;
-  color: var(--muted);
+  color: var(--dim);
   font-size: 0.88rem;
 }/* Thẻ demo là tâm điểm hero nên là bề mặt duy nhất được nâng khỏi nền:
    viền trong 1px + inset shadow mô phỏng khúc xạ cạnh,
@@ -2916,19 +3048,19 @@ shadow ngoài nhuộm
 .hero-demo-card{
   display: grid;
   gap: 14px;
-  padding: clamp(18px, 2.2vw, 26px);
-  border-radius: 22px;
+  padding: clamp(22px, 2.6vw, 32px);
+  border-radius: 24px;
   background: var(--landing-paper);
   border: 1px solid var(--landing-border);
   box-shadow:
-    var(--landing-shadow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    var(--landing-shadow-lg),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
   min-width: 0;
 }
 
 [data-theme='dark'] .hero-demo-card{
   box-shadow:
-    var(--landing-shadow),
+    var(--landing-shadow-lg),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -3060,7 +3192,8 @@ shadow ngoài nhuộm
 @media (max-width: 900px) {
   .landing-hero{
     grid-template-columns: minmax(0, 1fr);
-    padding-top: clamp(24px, 6vw, 48px);
+    padding-top: clamp(28px, 6vw, 56px);
+    padding-bottom: clamp(28px, 6vw, 52px);
   }/* Giữ neo trái khi về một cột: căn giữa làm mất trục đọc của khối chữ. */
   .landing-hero-copy{
     justify-items: start;
@@ -3068,13 +3201,20 @@ shadow ngoài nhuộm
     padding-right: 0;
   }
 
-  .landing-hero-copy h1,
-.landing-points{
+  .landing-hero-copy h1{
+    max-width: 19ch;
+  }
+
+  .landing-points{
     max-width: none;
   }
 
   .landing-hero-demo{
-    margin-top: 0;
+    margin-top: 4px;
+  }
+
+  .landing-hero-demo::before{
+    inset: auto -8px -12px 12px;
   }}
 
 @media (max-width: 480px) {
@@ -3083,22 +3223,70 @@ shadow ngoài nhuộm
   }
 
   .hero-demo-card{
-    padding: 16px 14px;
+    padding: 18px 14px;
+    border-radius: 20px;
+  }
+
+  .landing-hero-primary{
+    width: 100%;
+    justify-content: center;
+  }
+
+  .landing-hero-secondary{
+    width: 100%;
+    justify-content: center;
   }}/* ===== Landing: các mục giới thiệu bên dưới hero ===== */
 
 .landing-section{
   max-width: var(--landing-max);
   margin: 0 auto;
   width: 100%;
-  padding: clamp(36px, 6vw, 88px) clamp(16px, 4vw, 48px);
-}/* Tiêu đề mục neo lệch trái và giới hạn theo ch để không kéo ngang cả cột. */
+  padding: var(--landing-sec-gap) clamp(16px, 4vw, 48px);
+  padding-top: calc(var(--landing-sec-gap) * 0.72);
+  padding-bottom: calc(var(--landing-sec-gap) * 0.72);
+}/* Tiêu đề mục neo lệch trái và giới hạn theo ch để không kéo ngang cả cột;
+   có kicker nhỏ phía trên để mỗi mục đọc như một "chương". */
+.landing-section-head{
+  display: grid;
+  gap: 12px;
+  margin: 0 0 clamp(26px, 3.6vw, 44px);
+}
+
+.landing-kicker{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--landing-accent);
+  font-family: var(--landing-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.landing-kicker::before{
+  content: '';
+  width: 26px;
+  height: 1px;
+  background: var(--landing-accent);
+}
+
 .landing-section-title{
-  margin: 0 0 clamp(22px, 3.4vw, 40px);
+  margin: 0;
   max-width: 24ch;
-  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
-  font-weight: 700;
-  line-height: 1.18;
-  letter-spacing: -0.022em;
+  font-size: clamp(1.5rem, 2.8vw, 2.15rem);
+  font-weight: 800;
+  line-height: 1.14;
+  letter-spacing: -0.026em;
+  text-wrap: balance;
+}
+
+.landing-section-sub{
+  margin: 0;
+  max-width: 56ch;
+  color: var(--muted);
+  font-size: 0.96rem;
+  line-height: var(--line-readable, 1.65);
 }/* Reveal khi cuộn: chỉ transform + opacity,
 con xếp trễ theo --reveal-index.
    Mặc định (chưa gắn is-revealed) đã hiện sẵn nếu JS không chạy — tránh
@@ -3122,18 +3310,25 @@ con xếp trễ theo --reveal-index.
     opacity: 1;
     transform: none;
     transition: none;
-  }}/* --- Dải số liệu: không bọc thẻ,
-chỉ kẻ 1px ngăn cột --- */
+  }}/* --- Dải số liệu: một khối giấy nổi,
+mỗi số là một ô có nhấn ---
+   Viền ngoài dùng border-strong để dải đọc như một "con dấu" dữ liệu. */
 .landing-stats{
-  padding-top: clamp(12px, 2vw, 24px);
+  padding-top: clamp(8px, 1.6vw, 18px);
+  padding-bottom: calc(var(--landing-sec-gap) * 0.5);
 }
 
 .landing-stats-row{
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
-  border-top: 1px solid var(--landing-border);
-  border-bottom: 1px solid var(--landing-border);
+  border-radius: 18px;
+  border: 1px solid var(--landing-border-strong);
+  background: var(--landing-paper);
+  box-shadow:
+    var(--landing-shadow),
+    inset 0 1px 0 var(--landing-inner-light);
+  overflow: hidden;
 }
 
 .landing-stat{
@@ -3141,69 +3336,119 @@ chỉ kẻ 1px ngăn cột --- */
   flex-direction: column-reverse;
   align-items: flex-start;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  padding: clamp(18px, 2.6vw, 30px) clamp(14px, 2vw, 26px);
+  padding: clamp(20px, 2.8vw, 32px) clamp(18px, 2.2vw, 30px);
   border-left: 1px solid var(--landing-border);
+  position: relative;
 }
 
 .landing-stat:first-child{
   border-left: 0;
-  padding-left: 0;
+}
+
+/* Vạch mực trên đỉnh ô: chi tiết "seal" của hệ màu landing. */
+.landing-stat::before{
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--landing-accent), transparent 70%);
+  opacity: 0.55;
+}
+
+.landing-stat:nth-child(2)::before{
+  background: linear-gradient(90deg, var(--landing-gold), transparent 70%);
+}
+
+.landing-stat:nth-child(3)::before{
+  background: linear-gradient(90deg, var(--landing-cinnabar), transparent 70%);
+}
+
+.landing-stat:nth-child(4)::before{
+  background: linear-gradient(90deg, var(--landing-accent), transparent 70%);
+  opacity: 0.35;
 }/* Số dùng mono + tabular để các mốc thẳng cột khi đọc nhanh. */
 .landing-stat dd{
   margin: 0;
-  color: var(--text);
+  color: var(--landing-ink);
   font-family: var(--landing-mono);
-  font-size: clamp(1.45rem, 3vw, 2rem);
-  font-weight: 600;
+  font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
 }
 
 .landing-stat dt{
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   line-height: 1.4;
   text-wrap: balance;
-}/* --- Trụ dẫn đề: panel giấy khổ rộng,
+}/* --- Trụ dẫn đề: panel giấy khổ rộng có watermark chữ,
 icon tách cột trái --- */
 .landing-pillar-lead{
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: clamp(16px, 2.4vw, 28px);
+  gap: clamp(18px, 2.6vw, 32px);
   align-items: start;
-  padding: clamp(22px, 3vw, 38px);
-  border-radius: 22px;
+  padding: clamp(26px, 3.4vw, 44px);
+  border-radius: 24px;
   border: 1px solid var(--landing-border-strong);
   background:
     linear-gradient(135deg, var(--landing-accent-soft), transparent 46%),
     var(--landing-paper);
   box-shadow:
-    var(--landing-shadow),
+    var(--landing-shadow-lg),
     inset 0 1px 0 var(--landing-inner-light);
+  overflow: hidden;
+}
+
+/* Hán tự chìm ở góc phải panel dẫn đề: dấu ấn văn hoá, không đọc được — cố ý. */
+.landing-pillar-lead::after{
+  content: '音';
+  position: absolute;
+  right: clamp(14px, 3vw, 40px);
+  bottom: -0.32em;
+  font-family: var(--font-cn);
+  font-size: clamp(6rem, 12vw, 11rem);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--landing-accent);
+  opacity: 0.06;
+  pointer-events: none;
+  user-select: none;
+}
+
+[data-theme='dark'] .landing-pillar-lead::after{
+  opacity: 0.08;
 }
 
 .landing-pillar-lead-text{
   min-width: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .landing-pillar-lead-text h3{
   margin: 0;
-  font-size: clamp(1.08rem, 1.9vw, 1.3rem);
+  font-size: clamp(1.2rem, 2vw, 1.45rem);
   font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.018em;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  color: var(--landing-ink);
 }
 
 .landing-pillar-lead-text p{
   margin: 0;
-  max-width: 66ch;
+  max-width: 62ch;
   color: var(--muted);
-  font-size: 0.94rem;
+  font-size: 0.96rem;
   line-height: var(--line-readable, 1.65);
 }/* --- Ba trụ còn lại: cột lệch 1.25/1/1,
 nhóm bằng kẻ trên,
@@ -3212,46 +3457,49 @@ không bọc thẻ.
 .landing-pillar-rest{
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: clamp(18px, 2.6vw, 40px);
-  margin-top: clamp(28px, 4vw, 56px);
+  gap: clamp(20px, 2.8vw, 44px);
+  margin-top: clamp(30px, 4.4vw, 60px);
 }
 
 .landing-pillar{
   min-width: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   align-content: start;
-  padding-top: 18px;
-  border-top: 1px solid var(--landing-border-strong);
+  padding-top: 20px;
+  border-top: 2px solid var(--landing-border-strong);
 }
 
 .landing-pillar:first-child{
   margin-top: clamp(0px, 3vw, 34px);
+  border-top-color: var(--landing-accent);
 }
 
 .landing-pillar-icon{
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 12px;
   color: var(--landing-accent);
   background: var(--landing-accent-soft);
+  border: 1px solid var(--landing-border);
 }
 
 .landing-pillar h3{
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.02rem;
+  font-weight: 700;
   line-height: 1.3;
-  letter-spacing: -0.012em;
+  letter-spacing: -0.014em;
+  color: var(--landing-ink);
 }
 
 .landing-pillar p{
   margin: 0;
   max-width: 44ch;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   line-height: var(--line-readable, 1.65);
 }/* --- Ba bước: trục dọc có đường nối,
 số lấy từ <ol> qua counter --- */
@@ -3336,8 +3584,9 @@ cắt ở mốc cuối. */
   height: 34px;
   border-radius: 50%;
   color: var(--landing-accent);
-  background: var(--landing-bg-top);
-  border: 1px solid var(--landing-border-strong);
+  background: var(--landing-paper);
+  border: 1.5px solid var(--landing-border-strong);
+  box-shadow: var(--landing-shadow);
 }/* --- Chiều sâu phương pháp: danh sách chia bằng kẻ,
 icon cột trái --- */
 .landing-method-list{
@@ -3349,41 +3598,43 @@ icon cột trái --- */
 .landing-method-item{
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: clamp(14px, 2.2vw, 28px);
+  gap: clamp(16px, 2.4vw, 30px);
   align-items: start;
-  padding: clamp(20px, 2.8vw, 32px) 0;
+  padding: clamp(22px, 3vw, 34px) 0;
   border-bottom: 1px solid var(--landing-border);
 }
 
 .landing-method-icon{
   display: inline-grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   color: var(--landing-accent);
   background: var(--landing-accent-soft);
+  border: 1px solid var(--landing-border);
 }
 
 .landing-method-text{
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: 7px;
 }
 
 .landing-method-text h3{
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.02rem;
+  font-weight: 700;
   line-height: 1.3;
-  letter-spacing: -0.012em;
+  letter-spacing: -0.014em;
+  color: var(--landing-ink);
 }
 
 .landing-method-text p{
   margin: 0;
-  max-width: 68ch;
+  max-width: 66ch;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.93rem;
   line-height: var(--line-readable, 1.65);
 }/* --- FAQ: <details> gốc,
 chia bằng kẻ thay vì từng thẻ bo góc --- */
@@ -3407,12 +3658,14 @@ chia bằng kẻ thay vì từng thẻ bo góc --- */
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 17px 2px;
+  padding: 18px 4px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.98rem;
+  line-height: 1.4;
+  color: var(--landing-ink);
   list-style: none;
-  transition: color 200ms var(--landing-ease);
+  transition: color 200ms var(--landing-ease), background 200ms var(--landing-ease);
 }
 
 .landing-faq-item summary::-webkit-details-marker{
@@ -3437,6 +3690,7 @@ chia bằng kẻ thay vì từng thẻ bo góc --- */
 .landing-faq-item summary:hover{
   background: var(--landing-accent-soft);
   color: var(--landing-accent);
+  border-radius: 10px;
 }
 
 .landing-faq-item summary:focus-visible{
@@ -3451,48 +3705,107 @@ chia bằng kẻ thay vì từng thẻ bo góc --- */
   color: var(--muted);
   font-size: 0.92rem;
   line-height: var(--line-readable, 1.65);
-}/* --- CTA đóng trang: chữ trái,
-nút phải,
-không căn giữa --- */
+}/* --- CTA đóng trang: panel giấy lớn căn giữa,
+nút primary nổi bật ---
+   Khác với closing dạng chữ-trái/nút-phải cũ: panel này kết trang
+   như một "con dấu" cuối — chữ giữa, nút giữa, watermark mờ phía sau. */
 .landing-closing{
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: clamp(18px, 3vw, 48px);
-  align-items: end;
-  border-top: 1px solid var(--landing-border-strong);
-  margin-top: clamp(8px, 2vw, 24px);
+  justify-items: center;
+  gap: clamp(18px, 2.6vw, 28px);
+  padding: clamp(44px, 6vw, 80px) clamp(22px, 4vw, 56px);
+  border-radius: 26px;
+  border: 1px solid var(--landing-border-strong);
+  background:
+    linear-gradient(155deg, var(--landing-accent-soft), transparent 55%),
+    var(--landing-paper);
+  box-shadow:
+    var(--landing-shadow-lg),
+    inset 0 1px 0 var(--landing-inner-light);
+  text-align: center;
+  overflow: hidden;
+}
+
+.landing-closing::before{
+  content: '語';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -52%);
+  font-family: var(--font-cn);
+  font-size: clamp(9rem, 20vw, 16rem);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--landing-accent);
+  opacity: 0.05;
+  pointer-events: none;
+  user-select: none;
+}
+
+[data-theme='dark'] .landing-closing::before{
+  opacity: 0.07;
 }
 
 .landing-closing-text{
+  position: relative;
   min-width: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  justify-items: center;
 }
 
 .landing-closing h2{
   margin: 0;
-  max-width: 22ch;
-  font-size: clamp(1.3rem, 2.4vw, 1.8rem);
-  font-weight: 700;
-  line-height: 1.18;
-  letter-spacing: -0.022em;
+  max-width: 20ch;
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.028em;
+  color: var(--landing-ink);
+  text-wrap: balance;
 }
 
 .landing-closing p{
   margin: 0;
-  max-width: 52ch;
+  max-width: 50ch;
   color: var(--muted);
+  font-size: 0.98rem;
   line-height: var(--line-readable, 1.65);
 }
 
 .landing-closing-btn{
-  flex: 0 0 auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 15px 26px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #189874, var(--landing-accent));
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  box-shadow: 0 12px 30px rgba(27, 77, 62, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: transform 220ms var(--landing-ease), box-shadow 220ms var(--landing-ease), filter 220ms var(--landing-ease);
   white-space: nowrap;
+}
+
+.landing-closing-btn:hover{
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow: 0 18px 40px rgba(27, 77, 62, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.landing-closing-btn:active{
+  transform: translateY(0);
 }/* --- Footer --- */
 .landing-footer{
   position: relative;
   z-index: 1;
-  padding: 22px clamp(16px, 4vw, 48px) 32px;
+  padding: 26px clamp(16px, 4vw, 48px) 36px;
   border-top: 1px solid var(--landing-border);
 }
 
@@ -3501,6 +3814,17 @@ không căn giữa --- */
   margin: 0 auto;
   color: var(--dim);
   font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing-footer p::before{
+  content: '';
+  width: 20px;
+  height: 1px;
+  background: var(--landing-border-strong);
+  flex: 0 0 auto;
 }/* --- Thu gọn theo bề ngang: mọi bố cục lệch trục đổ về một cột --- */
 @media (max-width: 900px){
   .landing-pillar-rest {
@@ -3525,28 +3849,34 @@ không căn giữa --- */
   }/* Ô thứ 3 mở hàng mới nên phải bỏ kẻ trái, giống ô đầu. */
   .landing-stat:nth-child(3) {
     border-left: 0;
-    padding-left: 0;
   }
 
   .landing-stat:nth-child(1),
   .landing-stat:nth-child(2) {
     border-bottom: 1px solid var(--landing-border);
-  }
-
-  .landing-closing {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
   }}
 
 @media (max-width: 560px) {
   .landing-stats-row{
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 16px;
   }
 
   .landing-stat{
+    padding: 16px 14px;
+  }
+
+  .landing-stat dd{
+    font-size: 1.4rem;
+  }}
+
+@media (max-width: 380px) {
+  .landing-stats-row{
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-stat:nth-child(2){
     border-left: 0;
-    padding-left: 0;
-    padding-right: 0;
   }
 
   .landing-stat:not(:last-child){
@@ -3557,6 +3887,11 @@ không căn giữa --- */
   .landing-pillar-lead,
 .landing-method-item{
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-pillar-lead::after{
+    font-size: 5.4rem;
+    right: 10px;
   }
 
   .landing-step{

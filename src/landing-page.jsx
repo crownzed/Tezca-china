@@ -1,4 +1,4 @@
-import { BarChart3, Blocks, BookOpen, CalendarCheck, Layers, LineChart, LogIn, Mic, Play, ScrollText, Shuffle, UserPlus } from 'lucide-react';
+import { ArrowRight, BarChart3, Blocks, BookOpen, CalendarCheck, Layers, LineChart, LogIn, Mic, Play, ScrollText, Shuffle, UserPlus } from 'lucide-react';
 import HeroPronunciationDemo from './components/HeroPronunciationDemo.jsx';
 import useRevealOnScroll from './components/useRevealOnScroll.js';
 
@@ -108,7 +108,6 @@ const FAQ = [
   },
 ];
 
-// Số liệu: không bọc thẻ, chỉ ngăn bằng 1px và để số thở trong khoảng trắng.
 function StatsBand() {
   const ref = useRevealOnScroll();
   return (
@@ -128,6 +127,8 @@ function StatsBand() {
 
 // Trụ dẫn đề đứng riêng một khối rộng; ba trụ còn lại xếp so le hai cột lệch
 // (2fr/1fr) và chỉ dùng đường kẻ trên để nhóm, thay cho ba thẻ bằng nhau.
+// Trụ đầu là điểm khác biệt lớn nhất nên tách hẳn thành panel dẫn đề (lead),
+// ba trụ còn lại xếp so le bên dưới.
 function Pillars() {
   const [lead, ...rest] = PILLARS;
   const LeadIcon = lead.icon;
@@ -135,7 +136,10 @@ function Pillars() {
 
   return (
     <section className="landing-section" aria-labelledby="landing-pillars-title">
-      <h2 id="landing-pillars-title" className="landing-section-title">Bốn phần bạn sẽ dùng nhiều nhất</h2>
+      <div className="landing-section-head">
+        <span className="landing-kicker">Tính năng cốt lõi</span>
+        <h2 id="landing-pillars-title" className="landing-section-title">Bốn phần bạn sẽ dùng nhiều nhất</h2>
+      </div>
 
       <article className="landing-pillar-lead">
         <span className="landing-pillar-icon" aria-hidden="true"><LeadIcon size={22} strokeWidth={1.5} /></span>
@@ -163,7 +167,10 @@ function Steps() {
   const ref = useRevealOnScroll();
   return (
     <section className="landing-section landing-steps-section" aria-labelledby="landing-steps-title">
-      <h2 id="landing-steps-title" className="landing-section-title">Một phiên học diễn ra thế nào</h2>
+      <div className="landing-section-head">
+        <span className="landing-kicker">Quy trình</span>
+        <h2 id="landing-steps-title" className="landing-section-title">Một phiên học diễn ra thế nào</h2>
+      </div>
       <ol className="landing-step-rail landing-reveal" ref={ref}>
         {STEPS.map(({ icon: Icon, title, body }) => (
           <li key={title} className="landing-step">
@@ -183,7 +190,10 @@ function Method() {
   const ref = useRevealOnScroll();
   return (
     <section className="landing-section" aria-labelledby="landing-method-title">
-      <h2 id="landing-method-title" className="landing-section-title">Cách hệ thống quyết định bạn ôn gì</h2>
+      <div className="landing-section-head">
+        <span className="landing-kicker">Thuật toán học tập</span>
+        <h2 id="landing-method-title" className="landing-section-title">Cách hệ thống quyết định bạn ôn gì</h2>
+      </div>
       <div className="landing-method-list landing-reveal" ref={ref}>
         {METHOD.map(({ icon: Icon, title, body }) => (
           <article key={title} className="landing-method-item">
@@ -203,7 +213,10 @@ function Method() {
 function Faq() {
   return (
     <section className="landing-section landing-faq-section" aria-labelledby="landing-faq-title">
-      <h2 id="landing-faq-title" className="landing-section-title">Câu hỏi thường gặp</h2>
+      <div className="landing-section-head">
+        <span className="landing-kicker">Giải đáp</span>
+        <h2 id="landing-faq-title" className="landing-section-title">Câu hỏi thường gặp</h2>
+      </div>
       <div className="landing-faq">
         {FAQ.map(item => (
           <details key={item.q} className="landing-faq-item">
@@ -224,8 +237,9 @@ function ClosingCta({ onEnter }) {
         <h2 id="landing-closing-title">Bắt đầu với cấp HSK bạn đang học</h2>
         <p>Tạo tài khoản để lưu lịch ôn từng từ và tiếp tục đúng chỗ đã dừng.</p>
       </div>
-      <button type="button" className="btn-primary landing-closing-btn" onClick={onEnter}>
-        <UserPlus size={18} strokeWidth={1.5} /> Đăng ký
+      <button type="button" className="landing-closing-btn" onClick={onEnter}>
+        <UserPlus size={18} strokeWidth={1.5} /> Đăng ký miễn phí
+        <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
       </button>
     </section>
   );
@@ -240,11 +254,11 @@ export default function LandingPage({ onEnter }) {
           <span>Học tiếng Trung theo cách của tôi</span>
         </div>
         <nav className="landing-top-actions" aria-label="Đăng nhập hoặc đăng ký">
-          <button type="button" className="btn-secondary" onClick={onEnter}>
-            <LogIn size={16} strokeWidth={1.5} /> Đăng nhập
+          <button type="button" className="landing-nav-btn" onClick={onEnter}>
+            <LogIn size={15} strokeWidth={1.5} /> Đăng nhập
           </button>
-          <button type="button" className="btn-primary" onClick={onEnter}>
-            <UserPlus size={16} strokeWidth={1.5} /> Đăng ký
+          <button type="button" className="landing-nav-btn landing-nav-btn--primary" onClick={onEnter}>
+            <UserPlus size={15} strokeWidth={1.5} /> Đăng ký
           </button>
         </nav>
       </header>
@@ -261,6 +275,15 @@ export default function LandingPage({ onEnter }) {
               AI nghe bạn đọc, so đường cao độ với người bản ngữ và chỉ ra chính xác
               thanh điệu nào bị lệch. Không cần cài đặt, không cần tài khoản để thử.
             </p>
+            <div className="landing-hero-ctas">
+              <button type="button" className="landing-hero-primary" onClick={onEnter}>
+                Bắt đầu miễn phí
+                <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
+              </button>
+              <button type="button" className="landing-hero-secondary" onClick={onEnter}>
+                Xem demo phát âm
+              </button>
+            </div>
             <ul className="landing-points">
               <li>Chấm điểm thanh điệu theo đường F0 thật, không chỉ đúng/sai</li>
               <li>Lộ trình HSK 1-6 kèm quiz, ngữ pháp và ôn thẻ ghi nhớ</li>
