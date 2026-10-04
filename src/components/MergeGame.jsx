@@ -271,6 +271,7 @@ export default function MergeGame() {
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
       resizeObserver.disconnect();
+      renderer.destroy?.();
       rendererRef.current = null;
     };
   }, []);

@@ -1,5 +1,6 @@
 """Offline tests for the opt-in Realtime provider configuration."""
 
+import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -39,7 +40,24 @@ class RealtimeConfigurationTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_realtime_uses_dedicated_keys_only(self):
         upstream = AsyncMock()
-        with patch.object(settings, "stepfun_realtime_enabled", True):
+        upstream.recv.side_effect = [
+            json.dumps({
+                "type": kind,
+                "session": {
+                    "id": "sess-dedicated-keys",
+                    "model": "stepaudio-3-realtime-preview",
+                    "input_audio_format": "pcm16",
+                    "output_audio_format": "pcm16",
+                },
+            })
+            for kind in ("session.created", "session.updated")
+        ]
+        with patch.multiple(
+            settings,
+            stepfun_realtime_enabled=True,
+            stepfun_realtime_input_sample_rate=16000,
+            stepfun_realtime_output_sample_rate=24000,
+        ):
             with patch.object(settings, "stepfun_api_keys", "general-key"):
                 with patch.object(
                     settings,

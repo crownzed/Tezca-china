@@ -55,6 +55,8 @@ backend/fly.secrets
 
 # Local pipeline artifacts + large media
 backend/data/
+# Full audit snapshots may contain private account data.
+backend/audit-reports/*.sqlite3*
 public/grok-video.mp4
 
 # Cache runtime cạnh dữ liệu có commit: phình dần theo mỗi phiên người dùng nên

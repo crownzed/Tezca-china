@@ -9,94 +9,33 @@ import { BASE_RECIPES } from './merge-data.js';
 import { getFishSpecies } from './fish-renderer.js';
 
 const STORAGE_KEY = 'merge-game-state';
-const MAX_FISH = 30; // Tăng giới hạn để có nhiều cơ hội merge hơn
-const SPAWN_INTERVAL_MS = 5000; // Cá mới mỗi 5 giây (nhanh hơn để giữ nhịp chơi)
+const MAX_FISH = 30;
+const SPAWN_INTERVAL_MS = 5000;
+const COMBO_WINDOW_MS = 7000;
 
-/** Bộ thủ khởi tạo cho người chơi mới — chọn các bộ có thể ghép được ngay */
+/** Bộ thủ khởi tạo có cả công thức hai cá và ba cá: 木 + 目 + 心 → 想. */
 const STARTER_RADICALS = [
-  // Cặp merge được ngay: 女+子→好, 日+月→明, 亻+尔→你, 木+目+心→想
   '女', '子', '日', '月', '亻', '尔', '木', '目', '心',
-  // Các bộ phổ biến dễ kết hợp
   '口', '门', '土', '山', '水', '火', '人', '大', '小', '白',
 ];
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const saved = JSON.parse(raw);
-
-    // Kiểm tra nếu cá bị kẹt ở góc (vị trí cũ) - reset game
-    if (saved.fish && saved.fish.length > 0) {
-      const cornerFish = saved.fish.filter(f =>
-        (f.x < 0.15 || f.x > 0.85) && (f.y < 0.15 || f.y > 0.85)
-      );
-      // Nếu hơn 50% cá ở góc, reset game
-      if (cornerFish.length > saved.fish.length * 0.5) {
-        console.log('Phát hiện cá kẹt ở góc, reset game...');
-        localStorage.removeItem(STORAGE_KEY);
-        return null;
-      }
-    }
-
-    return saved;
-  } catch {
-    return null;
-  }
-}
-
-function saveState(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // localStorage full hoặc không khả dụng — bỏ qua im lặng
-  }
-}
-
-function initState() {
-  const saved = loadState();
-  if (saved && saved.fish && saved.unlockedChars) {
-    // Restore từ localStorage
-    const maxId = saved.fish.reduce((max, f) => {
-      const num = parseInt(f.id.replace('fish_', ''), 10);
-      return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
-    resetFishIdCounter(maxId + 1);
-
-    return {
-      fish: saved.fish.map(f => {
-        const restored = { ...f, isDragging: false, isMerging: false };
-        // Backfill species cache cho save cũ
-        if (!restored.species) {
-          restored.species = getFishSpecies(restored);
-        }
-        return restored;
-      }),
-      unlockedChars: new Set(saved.unlockedChars || []),
-      mergeCount: saved.mergeCount || 0,
-      score: saved.score || 0,
-      totalXp: saved.totalXp || 0,
-    };
-  }
-
-  // Game mới: tạo cá starter phân bố đều trong bể
-  resetFishIdCounter(1);
-  const fish = STARTER_RADICALS.map((rad, i) => {
-    // Phân bố cá theo grid 5x4 ở giữa bể, tránh 4 góc
-    const col = i % 5;
-    const row = Math.floor(i / 5);
-    const x = 0.15 + col * 0.175;  // 0.15, 0.325, 0.5, 0.675, 0.85
-    const y = 0.2 + row * 0.2;    // 0.2, 0.4, 0.6, 0.8
-    return createFish(rad, {
-      x,
-      y,
-      vx: (Math.random() - 0.5) * 0.005,  // Vận tốc chậm hơn
-      vy: (Math.random() - 0.5) * 0.005,
-    });
-  });
-
+function starterPosition(index, count) {
+  const columns = 5;
+  const rows = Math.ceil(count / columns);
   return {
-    fish,
+    x: 0.15 + (index % columns) * 0.175,
+    y: 0.2 + (Math.floor(index / columns) / Math.max(1, rows - 1)) * 0.6,
+  };
+}
+
+function newGameState() {
+  resetFishIdCounter(1);
+  return {
+    fish: STARTER_RADICALS.map((radical, index) => createFish(radical, {
+      ...starterPosition(index, STARTER_RADICALS.length),
+      vx: (Math.random() - 0.5) * 0.005,
+      vy: (Math.random() - 0.5) * 0.005,
+    })),
     unlockedChars: new Set(),
     mergeCount: 0,
     score: 0,
@@ -104,280 +43,237 @@ function initState() {
   };
 }
 
-export function useGameState() {
+function initState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && Array.isArray(saved.fish)) {
+      const maxId = saved.fish.reduce((max, fish) => {
+        const num = Number(String(fish.id).replace('fish_', ''));
+        return Number.isFinite(num) ? Math.max(max, num) : max;
+      }, 0);
+      resetFishIdCounter(maxId + 1);
+      const isCorner = fish => (fish.x < 0.15 || fish.x > 0.85) && (fish.y < 0.15 || fish.y > 0.85);
+      const repairCorners = saved.fish.filter(isCorner).length > saved.fish.length * 0.5;
+
+      return {
+        fish: saved.fish.map((fish, index) => {
+          const restored = { ...fish, isDragging: false, isMerging: false, _dragStartTime: null };
+          // Save cũ bị kẹt góc: chỉ sửa vị trí, không xóa điểm/XP/bộ sưu tập.
+          if ((repairCorners && isCorner(fish)) || !Number.isFinite(fish.x) || !Number.isFinite(fish.y)) {
+            Object.assign(restored, starterPosition(index, saved.fish.length));
+          }
+          restored.species = getFishSpecies(restored);
+          return restored;
+        }),
+        unlockedChars: new Set(saved.unlockedChars),
+        mergeCount: saved.mergeCount || 0,
+        score: saved.score || 0,
+        totalXp: saved.totalXp || 0,
+      };
+    }
+  } catch {
+    // localStorage không khả dụng hoặc save hỏng: vẫn chơi được trong phiên này.
+  }
+  return newGameState();
+}
+
+function saveState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      fish: state.fish.map(fish => ({
+        id: fish.id,
+        radical: fish.radical,
+        name_vi: fish.name_vi,
+        tier: fish.tier,
+        species: fish.species,
+        x: fish.x,
+        y: fish.y,
+        vx: fish.vx,
+        vy: fish.vy,
+        isResult: fish.isResult,
+        resultChar: fish.resultChar,
+        canMergeAgain: fish.canMergeAgain,
+        createdAt: fish.createdAt,
+      })),
+      unlockedChars: [...state.unlockedChars],
+      mergeCount: state.mergeCount,
+      score: state.score,
+      totalXp: state.totalXp,
+    }));
+  } catch {
+    // localStorage đầy/bị chặn không được làm gián đoạn gameplay.
+  }
+}
+
+export function useGameState({ paused = false } = {}) {
   const [state, setState] = useState(initState);
+  const stateRef = useRef(state);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [lastMergeResult, setLastMergeResult] = useState(null);
   const [showAlbum, setShowAlbum] = useState(false);
-  const spawnTimerRef = useRef(null);
   const lastMergeTimeRef = useRef(0);
   const comboRef = useRef(0);
-
-  // Combo state (sync với MergeGame)
   const [combo, setCombo] = useState(0);
-
-  // Reset combo sau 7 giây
-  useEffect(() => {
-    if (combo > 0) {
-      const timer = setTimeout(() => {
-        setCombo(0);
-        comboRef.current = 0;
-      }, 7000);
-      return () => clearTimeout(timer);
-    }
-  }, [combo]);
-
-  // Persist state mỗi khi thay đổi quan trọng (merge, spawn, unlock)
-  // Position được sync riêng định kỳ để tránh trigger React mỗi frame
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      saveState({
-        fish: state.fish.map(f => ({
-          id: f.id,
-          radical: f.radical,
-          name_vi: f.name_vi,
-          tier: f.tier,
-          x: f.x,
-          y: f.y,
-          vx: f.vx,
-          vy: f.vy,
-          isResult: f.isResult,
-          resultChar: f.resultChar,
-          canMergeAgain: f.canMergeAgain,
-          createdAt: f.createdAt,
-        })),
-        unlockedChars: [...state.unlockedChars],
-        mergeCount: state.mergeCount,
-        score: state.score,
-        totalXp: state.totalXp,
-      });
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [state.fish, state.unlockedChars, state.mergeCount, state.score, state.totalXp]);
-
-  // Sync position định kỳ (mỗi 10s) để localStorage không quá cũ
-  // Dùng ref để đọc fish objects mutable mà không trigger re-render
-  const fishRef = useRef(state.fish);
-
-  useEffect(() => {
-    fishRef.current = state.fish;
-  }, [state.fish]);
-
-  useEffect(() => {
-    const syncInterval = setInterval(() => {
-      try {
-        const currentFish = fishRef.current;
-        if (!currentFish || currentFish.length === 0) return;
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        if (saved.fish && saved.fish.length === currentFish.length) {
-          // Chỉ update position, giữ nguyên các field khác. Match by ID để tránh
-          // sai lệch khi thứ tự cá thay đổi (spawn/merge giữa 2 lần sync).
-          const savedById = Object.fromEntries(saved.fish.map(sf => [sf.id, sf]));
-          currentFish.forEach(cf => {
-            const sf = savedById[cf.id];
-            if (sf) {
-              sf.x = cf.x;
-              sf.y = cf.y;
-              sf.vx = cf.vx;
-              sf.vy = cf.vy;
-            }
-          });
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-        }
-      } catch {
-        // ignore
-      }
-    }, 10000);
-    return () => clearInterval(syncInterval);
-  }, []);
-
-  // Auto-spawn cá mới định kỳ
-  useEffect(() => {
-    spawnTimerRef.current = setInterval(() => {
-      setState(prev => {
-        if (prev.fish.length >= MAX_FISH) return prev;
-
-        const availableRadicals = prev.fish.map(f => f.radical);
-        const radical = pickSpawnRadical(
-          prev.unlockedChars,
-          availableRadicals,
-          BASE_RECIPES
-        );
-
-        const newFish = createFish(radical, {
-          x: Math.random() * 0.6 + 0.2,  // Spawn ở giữa (0.2-0.8)
-          y: -0.05, // Spawn từ trên
-          vx: (Math.random() - 0.5) * 0.003,  // Vận tốc chậm
-          vy: Math.random() * 0.002 + 0.001,  // Rơi xuống nhẹ nhàng
-        });
-
-        return { ...prev, fish: [...prev.fish, newFish] };
-      });
-    }, SPAWN_INTERVAL_MS);
-
-    return () => clearInterval(spawnTimerRef.current);
-  }, []);
-
-  /** Toggle chọn cá */
-  const toggleSelect = useCallback((fishId) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(fishId)) {
-        next.delete(fishId);
-      } else {
-        next.add(fishId);
-      }
-      return next;
-    });
-  }, []);
-
   const [unviewedCount, setUnviewedCount] = useState(() => {
     try {
-      const saved = localStorage.getItem('merge-unviewed-count');
-      return saved ? parseInt(saved, 10) || 0 : 0;
+      return Math.max(0, parseInt(localStorage.getItem('merge-unviewed-count'), 10) || 0);
     } catch {
       return 0;
     }
   });
 
-  /** Mở/đóng album và xóa badge chữ mới chưa xem */
+  // Event/timer là nơi duy nhất commit gameplay. Không đặt cấp ID, tính combo,
+  // ghi storage hoặc setState khác trong updater mà StrictMode có thể chạy lại.
+  const commitState = useCallback(next => {
+    stateRef.current = next;
+    setState(next);
+  }, []);
+
+  useEffect(() => {
+    if (!combo) return;
+    const timer = setTimeout(() => {
+      setCombo(0);
+      comboRef.current = 0;
+    }, Math.max(0, COMBO_WINDOW_MS - (Date.now() - lastMergeTimeRef.current)));
+    return () => clearTimeout(timer);
+  }, [combo]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => saveState(stateRef.current), 500);
+    return () => clearTimeout(timer);
+  }, [state]);
+
+  useEffect(() => {
+    const persist = () => saveState(stateRef.current);
+    const interval = setInterval(persist, 10000);
+    window.addEventListener('pagehide', persist);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('pagehide', persist);
+      persist();
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('merge-unviewed-count', String(unviewedCount));
+    } catch { /* storage có thể bị chặn */ }
+  }, [unviewedCount]);
+
+  useEffect(() => {
+    if (paused) return;
+    let active = true;
+    const timer = setInterval(() => {
+      if (!active) return;
+      const current = stateRef.current;
+      if (current.fish.length >= MAX_FISH) return;
+      const radical = pickSpawnRadical(
+        current.unlockedChars,
+        current.fish.map(fish => fish.resultChar || fish.radical),
+        BASE_RECIPES,
+      );
+      const fish = createFish(radical, {
+        x: Math.random() * 0.6 + 0.2,
+        y: 0.12,
+        vx: (Math.random() - 0.5) * 0.003,
+        vy: Math.random() * 0.002 + 0.001,
+      });
+      commitState({ ...current, fish: [...current.fish, fish] });
+    }, SPAWN_INTERVAL_MS);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [paused, commitState]);
+
+  const toggleSelect = useCallback(fishId => {
+    if (paused || !stateRef.current.fish.some(fish => fish.id === fishId)) return;
+    setSelectedIds(previous => {
+      const next = new Set(previous);
+      if (next.has(fishId)) next.delete(fishId);
+      else next.add(fishId);
+      return next;
+    });
+  }, [paused]);
+
+  const clearSelection = useCallback(() => {
+    if (!paused) setSelectedIds(new Set());
+  }, [paused]);
+
   const openAlbum = useCallback((open = true) => {
     setShowAlbum(open);
-    if (open) {
-      setUnviewedCount(0);
-      try {
-        localStorage.setItem('merge-unviewed-count', '0');
-      } catch {
-        // ignore
-      }
-    }
+    if (open) setUnviewedCount(0);
   }, []);
 
-  /** Clear selection */
-  const clearSelection = useCallback(() => {
+  const mergeFish = useCallback(ids => {
+    if (paused) return null;
+    const current = stateRef.current;
+    const uniqueIds = new Set(ids);
+    const selected = current.fish.filter(fish => uniqueIds.has(fish.id));
+    // Bỏ qua event cũ nếu cá đã được tiêu thụ, thay vì tạo thêm một kết quả.
+    if (selected.length < 2 || selected.length !== uniqueIds.size) return null;
+    const result = tryMerge(selected);
+    const now = Date.now();
     setSelectedIds(new Set());
-  }, []);
-
-  // ── Shared merge reducer logic (pure function, không phụ thuộc closure) ──
-  function applyMergeResult(prev, fishToMerge) {
-    const result = tryMerge(fishToMerge);
 
     if (!result.success) {
-      setLastMergeResult({
-        success: false,
-        fishIds: fishToMerge.map(f => f.id),
-        timestamp: Date.now(),
-      });
-      return prev;
+      const feedback = { success: false, fishIds: selected.map(fish => fish.id), timestamp: now };
+      setLastMergeResult(feedback);
+      return feedback;
     }
 
-    const consumedSet = new Set(result.consumedIds);
-    const remainingFish = prev.fish.filter(f => !consumedSet.has(f.id));
-
-    const avgX = fishToMerge.reduce((s, f) => s + f.x, 0) / fishToMerge.length;
-    const avgY = fishToMerge.reduce((s, f) => s + f.y, 0) / fishToMerge.length;
-
-    const isNew = !prev.unlockedChars.has(result.result);
-
-    const canMergeAgain = Object.values(BASE_RECIPES).some(recipe =>
-      recipe.components.includes(result.result)
-    );
-
+    const x = selected.reduce((sum, fish) => sum + fish.x, 0) / selected.length;
+    const y = selected.reduce((sum, fish) => sum + fish.y, 0) / selected.length;
+    const isNew = !current.unlockedChars.has(result.result);
     const resultFish = createFish(result.result, {
-      x: avgX,
-      y: avgY,
+      x,
+      y,
       isResult: true,
       resultChar: result.result,
-      canMergeAgain,
+      canMergeAgain: Object.values(BASE_RECIPES).some(recipe => recipe.components.includes(result.result)),
     });
-
-    const newUnlocked = new Set(prev.unlockedChars);
-    newUnlocked.add(result.result);
-
-    const now = Date.now();
-    const timeSinceLastMerge = now - lastMergeTimeRef.current;
-    const newCombo = timeSinceLastMerge < 7000 ? comboRef.current + 1 : 1;
-    comboRef.current = newCombo;
+    const nextCombo = now - lastMergeTimeRef.current < COMBO_WINDOW_MS ? comboRef.current + 1 : 1;
+    comboRef.current = nextCombo;
     lastMergeTimeRef.current = now;
-    setCombo(newCombo);
-
-    const comboMultiplier = Math.min(newCombo, 5);
-    const finalScore = (result.score || 100) * comboMultiplier;
-
-    if (isNew) {
-      setUnviewedCount(c => {
-        const next = c + 1;
-        try { localStorage.setItem('merge-unviewed-count', String(next)); } catch { /* ignore */ }
-        return next;
-      });
-    }
-
-    setLastMergeResult({
-      success: true,
-      char: result.result,
-      recipe: result.recipe,
-      isNew,
-      x: avgX,
-      y: avgY,
-      score: finalScore,
-      combo: comboMultiplier,
-      timestamp: Date.now(),
+    setCombo(nextCombo);
+    const multiplier = Math.min(nextCombo, 5);
+    const score = (result.score || 100) * multiplier;
+    const unlockedChars = new Set(current.unlockedChars);
+    unlockedChars.add(result.result);
+    const consumed = new Set(result.consumedIds);
+    commitState({
+      fish: [...current.fish.filter(fish => !consumed.has(fish.id)), resultFish],
+      unlockedChars,
+      mergeCount: current.mergeCount + 1,
+      score: current.score + score,
+      totalXp: current.totalXp + score,
     });
-
-    return {
-      fish: [...remainingFish, resultFish],
-      unlockedChars: newUnlocked,
-      mergeCount: prev.mergeCount + 1,
-      score: prev.score + finalScore,
-      totalXp: prev.totalXp + finalScore,
+    if (isNew) setUnviewedCount(count => count + 1);
+    const feedback = {
+      success: true, char: result.result, recipe: result.recipe, isNew,
+      x, y, score, combo: multiplier, timestamp: now, resultFishId: resultFish.id,
     };
-  }
+    setLastMergeResult(feedback);
+    return feedback;
+  }, [paused, commitState]);
 
-  /** Thử merge các cá đang được chọn */
-  const attemptMerge = useCallback(() => {
-    setState(prev => {
-      const selected = prev.fish.filter(f => selectedIds.has(f.id));
-      return applyMergeResult(prev, selected);
-    });
-    setSelectedIds(new Set());
-  }, [selectedIds]);
+  const attemptMerge = useCallback(() => mergeFish(selectedIds), [mergeFish, selectedIds]);
+  const mergeTwoFish = useCallback((firstId, secondId) => mergeFish([firstId, secondId]), [mergeFish]);
+  const getMergeablePairs = useCallback(() => findMergeablePairs(state.fish), [state.fish]);
+  const getMergeTarget = useCallback(fish => fish ? findMergeTarget(fish, state.fish) : null, [state.fish]);
 
-  /** Merge trực tiếp 2 cá theo ID (dùng cho drag-drop, tránh race condition với selectedIds) */
-  const mergeTwoFish = useCallback((fishId1, fishId2) => {
-    setState(prev => {
-      const f1 = prev.fish.find(f => f.id === fishId1);
-      const f2 = prev.fish.find(f => f.id === fishId2);
-      if (!f1 || !f2) return prev;
-      return applyMergeResult(prev, [f1, f2]);
-    });
-    setSelectedIds(new Set());
-  }, []);
-
-  /** Lấy danh sách cặp cá có thể merge (hint system) */
-  const getMergeablePairs = useCallback(() => {
-    return findMergeablePairs(state.fish);
-  }, [state.fish]);
-
-  /** Tìm cá có thể merge với cá đang kéo */
-  const getMergeTarget = useCallback((draggedFish) => {
-    if (!draggedFish) return null;
-    return findMergeTarget(draggedFish, state.fish);
-  }, [state.fish]);
-
-  /** Reset toàn bộ game */
+  /** Chỉ gọi sau khi người chơi xác nhận trong hộp thoại reset. */
   const resetGame = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    resetFishIdCounter(1);
-    setState(initState());
+    const next = newGameState();
+    commitState(next);
+    saveState(next);
     setSelectedIds(new Set());
     setLastMergeResult(null);
+    setUnviewedCount(0);
     setCombo(0);
     comboRef.current = 0;
     lastMergeTimeRef.current = 0;
-  }, []);
-
-  const progress = calcProgress(state.unlockedChars, 162); // 162 single-char HSK1 target
-  const level = calcLevel(state.unlockedChars);
+  }, [commitState]);
 
   return {
     fish: state.fish,
@@ -385,9 +281,9 @@ export function useGameState() {
     mergeCount: state.mergeCount,
     score: state.score,
     totalXp: state.totalXp,
-    level,
+    level: calcLevel(state.unlockedChars),
     combo,
-    progress,
+    progress: calcProgress(state.unlockedChars, 162),
     selectedIds,
     lastMergeResult,
     showAlbum,

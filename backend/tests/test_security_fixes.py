@@ -262,20 +262,20 @@ class BannedUserTokenTest(unittest.TestCase):
 
         Viết ``not user.is_active`` sẽ đăng xuất đúng những hàng đó dù chưa ai khoá
         họ — "sửa sai làm khoá người dùng thật ra ngoài". Phải là so sánh identity
-        với False. Test này dựng lại chính DDL permissive kia để chứng minh.
+        với False. Test này giữ is_active nullable trong schema User đã migrate.
         """
         engine = create_engine(
             "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
         )
         with engine.begin() as conn:
-            # Khớp DDL trong create_fixed_account.mirror_to_turso: is_active KHÔNG NOT NULL.
+            # Giữ is_active nullable như mirror DDL; timezone có sau migration.
             conn.execute(
                 text(
                     "CREATE TABLE users ("
                     "id VARCHAR(36) PRIMARY KEY, username VARCHAR(64) UNIQUE NOT NULL, "
                     "email VARCHAR(128) UNIQUE NOT NULL, password_hash VARCHAR(256) NOT NULL, "
                     "display_name VARCHAR(64) NOT NULL, leaderboard_opt_in BOOLEAN DEFAULT 1, "
-                    "is_active BOOLEAN DEFAULT 1, last_seen_at DATETIME, created_at DATETIME)"
+                    "is_active BOOLEAN DEFAULT 1, last_seen_at DATETIME, timezone VARCHAR(64) DEFAULT 'Asia/Shanghai', created_at DATETIME)"
                 )
             )
             conn.execute(

@@ -909,28 +909,6 @@ const FISH_RADIUS_BASE = 0.045;
 // Tối thiểu 24px để đường kính đạt ≥48px (đáp ứng chuẩn mobile touch target ≥44px)
 const FISH_RADIUS_MIN_PX = 24;
 
-/** Kiểm tra chế độ prefers-reduced-motion của thiết bị (cached) */
-let _reducedMotionCached = null;
-function isReducedMotion() {
-  if (_reducedMotionCached !== null) return _reducedMotionCached;
-  if (typeof window === 'undefined' || !window.matchMedia) {
-    _reducedMotionCached = false;
-    return false;
-  }
-  const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-  _reducedMotionCached = mql.matches;
-  // Listen for changes (user toggles setting)
-  try {
-    mql.addEventListener('change', (e) => { _reducedMotionCached = e.matches; });
-  } catch {
-    // Older browsers fallback
-  }
-  return _reducedMotionCached;
-}
-
-// Eagerly initialize on module load để hot path chỉ đọc boolean, không gọi function
-const REDUCED_MOTION = isReducedMotion();
-
 /**
  * Khởi tạo renderer. Trả về object với các method render/update/effect.
  * @param {HTMLCanvasElement} canvas
@@ -940,6 +918,16 @@ export function createFishRenderer(canvas) {
   let width = 0;
   let height = 0;
   let dpr = 1;
+  let destroyed = false;
+  const motionQuery = typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
+  let reducedMotion = motionQuery?.matches || false;
+  const handleMotionChange = event => {
+    reducedMotion = event.matches;
+  };
+  motionQuery?.addEventListener?.('change', handleMotionChange);
+  const isReducedMotion = () => reducedMotion;
 
   // Visual effects list (ripple, flash, particles)
   const visualEffects = [];
@@ -990,7 +978,7 @@ export function createFishRenderer(canvas) {
 
   /** Tạo sóng nước tương tác khi chạm/click */
   function addWaterRipple(px, py) {
-    if (REDUCED_MOTION) return;
+    if (isReducedMotion()) return;
     if (waterRipples.length > 8) waterRipples.shift();
     waterRipples.push({
       x: px,
@@ -1024,7 +1012,7 @@ export function createFishRenderer(canvas) {
   /** Kích hoạt hiệu ứng Merge Success tại vị trí normalized x, y */
   function triggerMergeSuccess(nx, ny) {
     const pos = toPixel(nx, ny);
-    const reduced = REDUCED_MOTION;
+    const reduced = isReducedMotion();
     visualEffects.push({
       type: 'merge-success',
       x: pos.x,
@@ -1067,7 +1055,7 @@ export function createFishRenderer(canvas) {
 
   /** Thêm hạt vệt nước (trail) sau cá */
   function addTrail(px, py, r) {
-    if (REDUCED_MOTION) return;
+    if (isReducedMotion()) return;
     if (trails.length > 30) trails.shift();
     trails.push({
       x: px + (Math.random() - 0.5) * r * 0.4,
@@ -1134,7 +1122,7 @@ export function createFishRenderer(canvas) {
 
   /** Vẽ mạng lưới khúc xạ ánh sáng (Water Caustics) trên nền cát đáy biển */
   function drawWaterCaustics(time) {
-    if (REDUCED_MOTION) return;
+    if (isReducedMotion()) return;
     const reducedTime = time * 0.0008;
     const seabedY = height - 70;
 
@@ -1161,7 +1149,7 @@ export function createFishRenderer(canvas) {
 
   /** Vẽ sinh vật phù du phát quang (Bioluminescent Motes) */
   function drawBioluminescentMotes(time) {
-    const reduced = REDUCED_MOTION;
+    const reduced = isReducedMotion();
     for (const m of motes) {
       if (!reduced) {
         m.y += m.speedY;
@@ -1184,7 +1172,7 @@ export function createFishRenderer(canvas) {
 
   /** Vẽ đáy bể cá (lớp cát uốn lượn, rong biển đung đưa, san hô & sỏi) */
   function drawSeabed(time) {
-    const reduced = REDUCED_MOTION;
+    const reduced = isReducedMotion();
     const seabedY = height - 48;
 
     // 1. Lớp cát đáy biển (soft wavy sand dune)
@@ -1281,7 +1269,7 @@ export function createFishRenderer(canvas) {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    const reduced = REDUCED_MOTION;
+    const reduced = isReducedMotion();
 
     // 2. Tia sáng mặt trời rọi xuống nước (Sunbeams)
     const beamCount = 4;
@@ -1376,7 +1364,7 @@ export function createFishRenderer(canvas) {
     const baseR = fishRadius();
     const pos = toPixel(fish.x, fish.y);
     const colors = fish.isResult ? RESULT_COLOR : (TIER_COLORS[fish.tier] || TIER_COLORS[1]);
-    const reduced = REDUCED_MOTION;
+    const reduced = isReducedMotion();
 
     // Rung lắc khi merge fail (decay dần)
     let shakeOffset = 0;
@@ -1857,5 +1845,10 @@ export function createFishRenderer(canvas) {
     triggerMergeSuccess,
     triggerMergeFail,
     addWaterRipple,
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      motionQuery?.removeEventListener?.('change', handleMotionChange);
+    },
   };
 }
