@@ -21,14 +21,15 @@ export function useReducedMotion() {
 }
 
 /**
- * Hook phát hiện WebGL availability.
+ * Hook phát hiện WebGL2 availability.
+ * Three.js 0.185 / React Three Fiber requires WebGL2 for its renderer.
  */
 export function useWebGLSupport() {
   const [supported] = useState(() => {
     if (typeof document === 'undefined') return false;
     try {
       const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      const gl = canvas.getContext('webgl2');
       const available = Boolean(gl);
       gl?.getExtension('WEBGL_lose_context')?.loseContext();
       return available;

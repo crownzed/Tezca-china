@@ -4,12 +4,12 @@ import { useReducedMotion } from '../../hooks/useMotionPrefs';
 import { useHaptics } from '../../hooks/useHaptics';
 import { scheduleDailyReminder, cancelReminder, requestNotificationPermission } from '../../notifications';
 import { WeekChain } from './WeekChain';
-import { FlameCanvas3D } from './FlameCanvas3D';
 import { StreakCelebration } from './StreakCelebration';
 import { MilestoneBadges } from './MilestoneBadges';
 import { HapticsToggle } from './HapticsToggle';
 import { FreezeButton } from './FreezeButton';
 import { LivingFlame } from './LivingFlame';
+import { getStreakTier, getStreakTransition } from './flame-visual';
 
 /**
  * Milestone definitions — ngưỡng streak đáng chú ý.
@@ -54,9 +54,8 @@ export function StreakHero({
   const reducedMotion = useReducedMotion();
   const { triggerHaptic } = useHaptics();
   const [animate, setAnimate] = useState(false);
-  const prevStreakRef = useRef(currentStreak);
-  const [flameBurst, setFlameBurst] = useState(false);
-  const flameBurstTimerRef = useRef(null);
+  const prevStreakRef = useRef(loading ? null : currentStreak);
+  const [burstId, setBurstId] = useState(0);
 
   // M3-fix: Hourly tick so urgencyLevel recomputes when hour changes
   const [hourTick, setHourTick] = useState(() => new Date().getHours());
@@ -69,11 +68,12 @@ export function StreakHero({
   useEffect(() => {
     let timer;
     const frame = requestAnimationFrame(() => {
-      const increased = currentStreak > prevStreakRef.current && currentStreak > 0;
-      prevStreakRef.current = currentStreak;
+      const { baseline, increased } = getStreakTransition(prevStreakRef.current, currentStreak, loading);
+      prevStreakRef.current = baseline;
       setAnimate(increased);
       if (!increased) return;
 
+      setBurstId((previous) => previous + 1);
       triggerHaptic([15, 40, 20]); // Nhịp rung kép phản hồi haptic khi tăng streak
       timer = setTimeout(() => setAnimate(false), reducedMotion ? 150 : 1200);
     });
@@ -81,17 +81,10 @@ export function StreakHero({
       cancelAnimationFrame(frame);
       clearTimeout(timer);
     };
-  }, [currentStreak, reducedMotion, triggerHaptic]);
-
-  useEffect(() => () => clearTimeout(flameBurstTimerRef.current), []);
+  }, [currentStreak, loading, reducedMotion, triggerHaptic]);
 
   // M2: Streak tier for dynamic color theming
-  const streakTier = useMemo(() => {
-    if (currentStreak >= 100) return 'golden';
-    if (currentStreak >= 31) return 'inferno';
-    if (currentStreak >= 8) return 'flame';
-    return 'ember';
-  }, [currentStreak]);
+  const streakTier = getStreakTier(currentStreak);
 
   // M3: Urgency level based on hour of day (loss aversion)
   const urgencyLevel = useMemo(() => {
@@ -175,15 +168,9 @@ export function StreakHero({
     );
   }
 
-  // S3: Tapped flame bursts are replaced and cancelled so each tap owns its animation.
   const handleFlameTap = () => {
-    setFlameBurst(true);
+    setBurstId((previous) => previous + 1);
     triggerHaptic([20, 30]); // Phản hồi rung xúc giác khi chạm vào ngọn lửa
-    clearTimeout(flameBurstTimerRef.current);
-    flameBurstTimerRef.current = setTimeout(() => {
-      flameBurstTimerRef.current = null;
-      setFlameBurst(false);
-    }, 800);
   };
 
   // ── Active state ──
@@ -198,24 +185,17 @@ export function StreakHero({
       {/* Decorative background glow */}
       <div className="streak-hero-bg" aria-hidden="true" />
 
-      {/* 3D particle overlay — hạt lửa 3D xoáy đối lưu sống động */}
-      <FlameCanvas3D
-        active={currentStreak > 0 || studiedToday}
-        streakCount={currentStreak}
-        triggerBurst={animate || flameBurst}
-        studiedToday={studiedToday}
-      />
-
       {/* Celebration confetti */}
       <StreakCelebration trigger={animate} />
 
       <div className="streak-hero-main">
-        {/* LivingFlame: Ngọn lửa 3D đa tầng hữu cơ sống động */}
+        {/* LivingFlame: Ngọn lửa 2D đa tầng hữu cơ sống động */}
         <div className="streak-hero-flame-wrap">
           <LivingFlame
             studiedToday={studiedToday}
             currentStreak={currentStreak}
             tier={streakTier}
+            burstId={burstId}
             onFlameTap={handleFlameTap}
           />
         </div>
