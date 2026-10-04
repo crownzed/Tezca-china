@@ -1,0 +1,31 @@
+# Chỉ upload những gì Vercel cần để build frontend.
+# Loại bỏ backend, node_modules, và các thư mục không liên quan.
+node_modules/
+scripts/*
+!scripts/generate-hanzi-data.mjs
+!scripts/sync-exam-passages.mjs
+!scripts/validate-exam-passages.mjs
+!scripts/validate-grammar-pool.mjs
+!scripts/sync-grammar-pool.mjs
+!scripts/validate-grammar.mjs
+!scripts/validate-conversation-bank.mjs
+backend/*
+!backend/app/
+backend/app/*
+!backend/app/data/
+backend/app/data/*
+!backend/app/data/exam_passages.json
+!backend/app/data/grammar_pool.json
+!backend/app/data/conversation_scenarios.json
+!backend/app/data/words_export.json
+_nuxt/
+_gskcli/
+Tezca-Vault/
+examples/
+.claude/
+.git/
+*.log
+*.db
+.env*
+fly.toml
+dist/
