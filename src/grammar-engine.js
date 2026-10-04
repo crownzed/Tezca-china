@@ -11,6 +11,7 @@
 // (validator lúc build) — không phụ thuộc DOM.
 // ============================================================
 import { hsk1, hsk2, hsk3, hsk4, hsk5 } from './vocab-bank.js';
+import { ORDERING_VERSION, OrderingError, normalizeOrdering, scrambleOrder } from './ordering-contract.js';
 
 // ── Chỉ mục vocab theo cấp + loại từ ────────────────────────
 // Dùng để resolve slot ref dạng '@noun@', '@verb@'… — chỉ rút từ ở cấp
@@ -174,18 +175,31 @@ function fillText(text, combo) {
 }
 
 // ── Dựng từng loại câu ───────────────────────────────────────
-function permuteWrong(tokens, count, rng) {
-  const correct = tokens.join('');
+// Shuffle identities, then deduplicate by visible sentence for MCQ feedback.
+// Equal-looking chips remain distinct indices for drag/drop grading.
+function permuteWrong(segments, correctOrder, count, rng) {
+  const correct = correctOrder.map(index => segments[index]).join('');
   const seen = new Set([correct]);
   const out = [];
+  const add = indices => {
+    const sentence = indices.map(index => segments[index]).join('');
+    if (seen.has(sentence)) return;
+    seen.add(sentence);
+    out.push(sentence);
+  };
+  // Force one visibly wrong permutation, even when the RNG shuffles equal chips.
+  let scrambled;
+  try {
+    scrambled = scrambleOrder(segments, correctOrder, rng);
+  } catch (error) {
+    if (error instanceof OrderingError) return [];
+    throw error;
+  }
+  add(scrambled);
   let guard = 0;
   while (out.length < count && guard < 60) {
     guard += 1;
-    const shuffled = shuffleInPlace([...tokens], rng).join('');
-    if (!seen.has(shuffled)) {
-      seen.add(shuffled);
-      out.push(shuffled);
-    }
+    add(shuffleInPlace([...correctOrder], rng));
   }
   return out;
 }
@@ -222,15 +236,40 @@ function buildQuestion(template, combo, rng) {
       return { type: 'grammar_judge', question, options, correctIndex: 0, explanation: explain };
     }
     case 'sentence_order': {
-      const tokens = (template.tokens || []).map(t => fillText(t, combo)).filter(Boolean);
-      if (tokens.length < 2 || new Set(tokens).size < 2) return null;
-      const correct = tokens.join('');
-      // Dùng ASCII ':' và ' / ' đúng logic parse của GrammarLab.
-      const question = 'Sắp đúng: ' + tokens.join(' / ');
-      const wrong = permuteWrong(tokens, 3, rng);
+      if (!Array.isArray(template.tokens) || template.tokens.some(token => typeof token !== 'string')) return null;
+      const segments = template.tokens.map(token => fillText(token, combo));
+      const correctOrder = segments.map((_segment, index) => index);
+      let scrambledIndices;
+      try {
+        scrambledIndices = scrambleOrder(segments, correctOrder, rng);
+      } catch (error) {
+        if (error instanceof OrderingError) return null;
+        throw error;
+      }
+      const metadata_json = {
+        ordering_version: ORDERING_VERSION,
+        segments: [...segments],
+        correct_order: [...correctOrder],
+        scrambled_indices: [...scrambledIndices],
+      };
+      let ordering;
+      try {
+        ordering = normalizeOrdering(metadata_json);
+      } catch (error) {
+        if (error instanceof OrderingError) return null;
+        throw error;
+      }
+      const correct = ordering.correct_order.map(index => ordering.segments[index]).join('');
+      const wrong = permuteWrong(ordering.segments, ordering.correct_order, 3, rng);
       if (wrong.length < 1) return null;
       const options = [correct, ...wrong];
-      return { type: 'sentence_order', question, options, correctIndex: 0, explanation: explain };
+      if (new Set(options).size !== options.length) return null;
+      const scrambled = ordering.scrambled_indices.map(index => ordering.segments[index]);
+      const question = `Sắp đúng: ${scrambled.join(' / ')}`;
+      return {
+        type: 'sentence_order', question, options, correctIndex: 0, explanation: explain,
+        metadata_json: ordering,
+      };
     }
     default:
       return null;

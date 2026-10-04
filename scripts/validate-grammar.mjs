@@ -2,9 +2,8 @@
 // VALIDATE-GRAMMAR — Cổng kiểm tra lúc build
 //
 // Nở toàn bộ spec ngữ pháp qua engine và assert từng câu hỏi hợp lệ.
-// Mô phỏng CHÍNH XÁC logic parse của GrammarLab (dragSegments) cho
-// sentence_order để chặn câu ghép lại không khớp đáp án. Lỗi → exit 1,
-// chặn build (vite) trước khi ship spec hỏng.
+// Sentence ordering is validated against indexed metadata, never by parsing
+// question punctuation. Errors → exit 1 before invalid specs can ship.
 // ============================================================
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -17,6 +16,7 @@ async function main() {
   const engineUrl = pathToFileURL(join(root, 'src', 'grammar-engine.js')).href;
   const { allGrammarSpecs } = await import(specsUrl);
   const { expandLesson } = await import(engineUrl);
+  const { normalizeOrdering, ORDERING_VERSION } = await import(pathToFileURL(join(root, 'src', 'ordering-contract.js')).href);
 
   const errors = [];
   const warnings = [];
@@ -44,7 +44,7 @@ async function main() {
         errors.push(`${tag} options phải ≥2 phần tử`);
         return;
       }
-      if (typeof q.correctIndex !== 'number' || q.correctIndex < 0 || q.correctIndex >= q.options.length) {
+      if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex >= q.options.length) {
         errors.push(`${tag} correctIndex ngoài khoảng`);
       }
       if (new Set(q.options).size !== q.options.length) {
@@ -62,22 +62,32 @@ async function main() {
         errors.push(`${tag} còn placeholder chưa resolve: ${placeholderLeft}`);
       }
       if (q.type === 'sentence_order') {
-        // Tái hiện GrammarLab.dragSegments: substring sau ASCII ':' đầu tiên,
-        // split '/', trim, join('') phải === options[correctIndex].
-        const idx = q.question.indexOf(':');
-        if (idx === -1) {
-          errors.push(`${tag} sentence_order thiếu ':' — không parse được token`);
+        if (q.metadata_json?.ordering_version !== ORDERING_VERSION) {
+          errors.push(`${tag} thiếu ordering_version=${ORDERING_VERSION}`);
           return;
         }
-        if (q.question.includes('：')) {
-          errors.push(`${tag} dùng ':' full-width — GrammarLab không split được`);
+        let ordering;
+        try {
+          ordering = normalizeOrdering(q.metadata_json);
+        } catch (error) {
+          errors.push(`${tag} metadata ordering không hợp lệ: ${error.message}`);
+          return;
         }
-        const content = q.question.substring(idx + 1);
-        const tokens = content.split('/').map(s => s.trim()).filter(Boolean);
-        const joined = tokens.join('');
-        const correct = q.options[q.correctIndex];
-        if (joined !== correct) {
-          errors.push(`${tag} token ghép lại "${joined}" ≠ đáp án "${correct}"`);
+        const { segments, correct_order: correctOrder, scrambled_indices: scrambledIndices } = ordering;
+        const correct = correctOrder.map(index => segments[index]).join('');
+        const scrambled = scrambledIndices.map(index => segments[index]);
+        if (scrambled.join('') === correct) {
+          errors.push(`${tag} các chip chưa được xáo trộn rõ ràng`);
+        }
+        if (q.options[q.correctIndex] !== correct) {
+          errors.push(`${tag} đáp án đúng không khớp thứ tự chuẩn của metadata`);
+        }
+        if (!q.question.includes(scrambled.join(' / '))) {
+          errors.push(`${tag} question không hiển thị các chip theo thứ tự đã xáo trộn`);
+        }
+        if (q.options.slice(0, q.correctIndex).concat(q.options.slice(q.correctIndex + 1))
+          .some(option => option === correct)) {
+          errors.push(`${tag} đáp án sai hiển thị giống đáp án đúng`);
         }
       }
     });

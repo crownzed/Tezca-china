@@ -3,14 +3,15 @@
 // 4 view: overview (theo dõi tiến độ + điều hướng), theory (học lý
 // thuyết), practice (luyện theo bài), review (ôn tập thông minh).
 //
-// Chạy hoàn toàn local: chấm điểm cục bộ theo correctIndex, lưu tiến
-// độ qua grammar-progress (Leitner + mastery), KHÔNG đụng coreStats /
+// Chạy hoàn toàn local: MCQ chấm theo correctIndex, sắp xếp chấm theo index
+// chip; tiến độ qua grammar-progress (Leitner + mastery), KHÔNG đụng coreStats /
 // analytics của từ vựng.
 // ============================================================
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, BookOpen, Brain, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, GraduationCap, Library, Play, RotateCcw, Search, Sparkles, XCircle } from 'lucide-react';
 import { grammarLessons } from '../grammar-db.js';
 import { sampleN } from '../grammar-engine.js';
+import { gradeGrammarOrdering, normalizeGrammarOrdering } from '../grammar-ordering.js';
 import { getGrammarSummary, getLessonProgress, getDueLessons, recordGrammarResult } from '../grammar-progress.js';
 import { ClickableChineseText, TonedPinyin } from './chinese-text.jsx';
 import HskLevelPicker from './HskLevelPicker.jsx';
@@ -54,10 +55,16 @@ function shuffle(items) {
 // Xáo trộn thứ tự đáp án của một câu để đáp án đúng không luôn ở vị trí A,
 // đồng thời cập nhật lại correctIndex theo vị trí mới.
 function shuffleOptions(q) {
+  // Ordering answers are graded by chip identity, not MCQ option position.
+  if (q.type === 'sentence_order') return q;
   if (!Array.isArray(q.options) || q.options.length < 2) return q;
   const correctValue = q.options[q.correctIndex];
   const options = shuffle(q.options);
   return { ...q, options, correctIndex: options.indexOf(correctValue) };
+}
+
+function playableGrammarQuestion(q) {
+  return q.type !== 'sentence_order' || normalizeGrammarOrdering(q) !== null;
 }
 
 // ── Luồng luyện (dùng chung cho practice + review) ──────────
@@ -75,15 +82,18 @@ function PracticeRunner({ title, questions, onExit, onFinish }) {
   const progress = total ? Math.round(((index + 1) / total) * 100) : 0;
   const isCorrect = selected === q?.correctIndex;
 
-  const dragSegments = useMemo(() => {
-    if (!q || q.type !== 'sentence_order') return [];
-    const idx = q.question.indexOf(':');
-    const content = idx !== -1 ? q.question.substring(idx + 1) : q.question;
-    return content.split('/').map(s => s.trim()).filter(Boolean);
-  }, [q]);
+  const ordering = useMemo(() => normalizeGrammarOrdering(q), [q]);
+  const dragSegments = ordering?.segments || [];
+  // Identical text can represent different indexed chips. Give those chips a
+  // stable visible label so learners can distinguish identity-based answers.
+  const duplicateOrdinal = (tokenIndex) => {
+    const token = dragSegments[tokenIndex];
+    if (dragSegments.indexOf(token) === dragSegments.lastIndexOf(token)) return null;
+    return dragSegments.slice(0, tokenIndex + 1).filter(segment => segment === token).length;
+  };
 
   const toggleDragToken = (tokenIndex) => {
-    if (revealed) return;
+    if (revealed || !ordering) return;
     setDragOrder(prev => {
       if (prev.includes(tokenIndex)) {
         return prev.filter(i => i !== tokenIndex);
@@ -93,9 +103,8 @@ function PracticeRunner({ title, questions, onExit, onFinish }) {
   };
 
   const submitDragDrop = () => {
-    if (revealed) return;
-    const userSentence = dragOrder.map(i => dragSegments[i]).join('');
-    const isCorrectAns = userSentence === q.options[q.correctIndex];
+    if (revealed || !ordering || dragOrder.length !== dragSegments.length) return;
+    const isCorrectAns = gradeGrammarOrdering(q, dragOrder);
     setSelected(isCorrectAns ? q.correctIndex : -1);
     setRevealed(true);
     setAnswers(prev => [...prev, { lessonId: q.lessonId, correct: isCorrectAns }]);
@@ -129,10 +138,16 @@ function PracticeRunner({ title, questions, onExit, onFinish }) {
       </div>
       <div className="quiz-progress"><span style={{ width: `${progress}%` }} /></div>
 
-      {q.type === 'sentence_order' ? (
+      {q.type === 'sentence_order' && !ordering ? (
+        <div role="alert">
+          <p>Không thể tải câu sắp xếp này. Vui lòng chuyển sang câu tiếp theo.</p>
+          <button className="btn-primary" type="button" onClick={next}>{index + 1 >= total ? 'Xong' : 'Tiếp'}</button>
+        </div>
+      ) : q.type === 'sentence_order' ? (
         <div className="drag-drop-area">
           <div className="drag-drop-prompt">
             <h2 className="drag-drop-label">Sắp xếp các từ thành câu đúng:</h2>
+            <p>{q.metadata_json?.ordering_version ? q.question : `Sắp đúng: ${ordering.scrambled_indices.map(tokenIndex => dragSegments[tokenIndex]).join(' / ')}`}</p>
           </div>
           
           <div className="drag-answer-zone">
@@ -140,16 +155,17 @@ function PracticeRunner({ title, questions, onExit, onFinish }) {
               <span className="drag-hint">Bấm vào từ bên dưới để ghép câu…</span>
             ) : (
               dragOrder.map((tokenIndex, pos) => (
-                <Fragment key={`ans-${pos}`}>
+                <Fragment key={`ans-${tokenIndex}`}>
                   {pos > 0 && <span className="drag-slash">/</span>}
                   <button
                     type="button"
                     className="drag-chip drag-chip--selected"
                     onClick={() => toggleDragToken(tokenIndex)}
                     title="Bấm để bỏ ra"
+                    aria-label={`${dragSegments[tokenIndex]}${duplicateOrdinal(tokenIndex) ? ` (thẻ ${duplicateOrdinal(tokenIndex)})` : ''} — bỏ khỏi câu`}
                     disabled={revealed}
                   >
-                    {dragSegments[tokenIndex]}
+                    {dragSegments[tokenIndex]}{duplicateOrdinal(tokenIndex) && <small aria-hidden="true"> #{duplicateOrdinal(tokenIndex)}</small>}
                   </button>
                 </Fragment>
               ))
@@ -157,19 +173,20 @@ function PracticeRunner({ title, questions, onExit, onFinish }) {
           </div>
 
           <div className="drag-source-zone">
-            {dragSegments.map((token, i) => {
-              const used = dragOrder.includes(i);
+            {ordering.scrambled_indices.map((tokenIndex, position) => {
+              const token = dragSegments[tokenIndex];
+              const used = dragOrder.includes(tokenIndex);
               return (
-                <Fragment key={`src-${i}`}>
-                  {i > 0 && <span className={`drag-slash ${used ? 'drag-slash--faded' : ''}`}>/</span>}
+                <Fragment key={`src-${tokenIndex}`}>
+                  {position > 0 && <span className={`drag-slash ${used ? 'drag-slash--faded' : ''}`}>/</span>}
                   <button
                     type="button"
                     className={`drag-chip ${used ? 'drag-chip--used' : 'drag-chip--available'}`}
-                    onClick={() => !used && toggleDragToken(i)}
+                    onClick={() => !used && toggleDragToken(tokenIndex)}
                     disabled={used || revealed}
-                    aria-label={used ? `${token} (đã chọn)` : `Chọn ${token}`}
+                    aria-label={`${used ? '' : 'Chọn '}${token}${duplicateOrdinal(tokenIndex) ? ` (thẻ ${duplicateOrdinal(tokenIndex)})` : ''}${used ? ' (đã chọn)' : ''}`}
                   >
-                    {token}
+                    {token}{duplicateOrdinal(tokenIndex) && <small aria-hidden="true"> #{duplicateOrdinal(tokenIndex)}</small>}
                   </button>
                 </Fragment>
               );
@@ -407,7 +424,7 @@ export default function GrammarLab({ focusLevels }) {
     setRunnerTitle(lesson.title);
     // Kho câu ~100/bài — mỗi phiên rút ngẫu nhiên 14 câu để phiên vừa phải,
     // tránh học vẹt và tránh mastery bão hòa 100% chỉ sau 1 lượt.
-    const picked = sampleN(lesson.questions, 14);
+    const picked = sampleN(lesson.questions.filter(playableGrammarQuestion), 14);
     setRunnerQuestions(picked.map(qq => shuffleOptions({ ...qq, lessonId: lesson.id })));
     setResult(null);
     setView('practice');
@@ -419,7 +436,7 @@ export default function GrammarLab({ focusLevels }) {
     // Rút ~4 câu/bài đến hạn để phiên ôn tập không quá dài.
     const pool = grammarLessons
       .filter(lesson => dueIds.includes(lesson.id))
-      .flatMap(lesson => sampleN(lesson.questions, 4).map(qq => shuffleOptions({ ...qq, lessonId: lesson.id })));
+      .flatMap(lesson => sampleN(lesson.questions.filter(playableGrammarQuestion), 4).map(qq => shuffleOptions({ ...qq, lessonId: lesson.id })));
     setActiveLesson(null);
     setRunnerTitle('Ôn tập thông minh');
     setRunnerQuestions(shuffle(pool));
