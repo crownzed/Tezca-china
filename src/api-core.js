@@ -2,7 +2,7 @@ import { scopedKey } from './user-scope';
 import { recordWordReview } from './vocab-srs';
 import { inferConfidence } from './auto-confidence.js';
 import { loadAllFlashcards } from './vocab-loader';
-import { effectiveLevels, primaryLevel } from './hsk-levels';
+import { effectiveLevels } from './hsk-levels';
 import { buildExamQuestions } from './exam-items';
 import { ORDERING_VERSION, OrderingError, normalizeOrdering, gradeOrdering, scrambleOrder } from './ordering-contract.js';
 
@@ -268,14 +268,39 @@ function localDragDrop(card) {
   }
 }
 
+function optionValueFor(card, quizType, variantIndex = 0) {
+  if (quizType === 'vocab') return card.meaning;
+  if (quizType === 'listening') return listeningLine(card).vi;
+  if (quizType === 'dialogue') return dialogueLine(card, variantIndex).optionVi;
+  if (quizType === 'translation') return richParagraph(card, variantIndex).vi;
+  return card.character;
+}
+
+// Build choices from the answer first, then add three distinct distractors. This
+// guarantees the correct value survives shuffling and prevents duplicate visible
+// answers from creating multiple correct options.
+function buildQuizChoices(card, distractorPool, quizType, variantIndex) {
+  const answer = cleanText(optionValueFor(card, quizType, variantIndex));
+  if (!answer) return null;
+  const seen = new Set([answer]);
+  const distractors = [];
+  for (const candidate of shuffle(distractorPool)) {
+    const value = cleanText(optionValueFor(candidate, quizType, variantIndex));
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    distractors.push(value);
+    if (distractors.length === 3) break;
+  }
+  if (distractors.length < 3) return null;
+  return { answer, options: shuffle([answer, ...distractors]) };
+}
+
 async function localQuestions({ level, levels, quiz_type, limit }) {
   const allCards = await loadAllFlashcards();
   // Chấp nhận cả `levels` (mảng, chọn nhiều cấp) lẫn `level` (số, tương thích cũ).
   // effectiveLevels rỗng => toàn bộ HSK; ngược lại lọc theo tập đã chọn.
   const selectedLevels = effectiveLevels(levels ?? level);
   const levelSet = new Set(selectedLevels);
-  // Cấp đại diện cho các trường scalar (id/level của câu hỏi): cấp thấp nhất đã chọn.
-  const tagLevel = primaryLevel(levels ?? level, selectedLevels[0] || 1);
 
   // cloze/reading dùng ngân hàng đoạn văn chuẩn đề thi (选词填空 / 阅读理解).
   // Ngân hàng rỗng cho các cấp đã chọn => rơi về logic per-word bên dưới.
@@ -291,30 +316,21 @@ async function localQuestions({ level, levels, quiz_type, limit }) {
   }
 
   const cards = allCards.filter(card => levelSet.has(Number(card.hskLevel)));
-  const pool = cards.length >= 4 ? cards : allCards.slice(0, 80);
+  const pool = cards;
   const typeSeed = [...String(quiz_type)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100;
   return shuffle(pool).slice(0, limit).map((card, index) => {
-    const distractors = shuffle(pool.filter(item => item.id !== card.id)).slice(0, 3);
-    const paragraph = richParagraph(card, index);
     const dragData = quiz_type === 'drag_drop' ? localDragDrop(card) : null;
-    const byType = quiz_type === 'vocab'
-      ? [card.meaning, ...distractors.map(item => item.meaning)]
-      : quiz_type === 'listening'
-        ? [listeningLine(card).vi, ...distractors.map(item => listeningLine(item).vi)]
-        : quiz_type === 'dialogue'
-          ? [dialogueLine(card, index).optionVi, ...distractors.map((item, itemIndex) => dialogueLine(item, itemIndex).optionVi)]
-        : quiz_type === 'translation'
-          ? [paragraph.vi, ...distractors.map((item, itemIndex) => richParagraph(item, itemIndex).vi)]
-          : quiz_type === 'cloze'
-            ? [card.character, ...distractors.map(item => item.character)]
-          : quiz_type === 'drag_drop'
-            ? [card.character, ...distractors.map(item => item.character)]
-          : [card.character, ...distractors.map(item => item.character)];
-    const correctValue = byType[0];
-    const options = shuffle([...new Set(byType)]).slice(0, 4);
+    if (quiz_type === 'drag_drop' && !dragData) return null;
+    const choices = quiz_type === 'drag_drop'
+      ? { answer: card.character, options: [card.character] }
+      : buildQuizChoices(card, pool.filter(item => item.id !== card.id), quiz_type, index);
+    if (!choices) return null;
+    const paragraph = richParagraph(card, index);
+    const correctValue = choices.answer;
+    const options = choices.options;
     return {
-      id: Number(`${tagLevel}${typeSeed}${index + 1}${Date.now().toString().slice(-4)}`),
-      level: tagLevel,
+      id: Number(`${Number(card.hskLevel)}${typeSeed}${index + 1}${Date.now().toString().slice(-4)}`),
+      level: Number(card.hskLevel),
       local: true,
       offline: true,
       quiz_type,
@@ -350,6 +366,7 @@ async function localQuestions({ level, levels, quiz_type, limit }) {
         hanzi: card.character,
         pinyin: card.pinyin,
         meaning_vi: card.meaning,
+        level: Number(card.hskLevel),
         component_hint: card.mnemonic || '',
         confusable_words: [],
       },
@@ -361,7 +378,7 @@ async function localQuestions({ level, levels, quiz_type, limit }) {
         sentence_vi: dragData.sentence_vi,
       } : {},
     };
-  }).filter(q => q.quiz_type === 'drag_drop' ? Boolean(q.metadata_json?.correct_order?.length) : q.options.length === 4);
+  }).filter(q => q && (q.quiz_type === 'drag_drop' ? Boolean(q.metadata_json?.correct_order?.length) : q.options.length === 4));
 }
 
 export async function startQuiz(payload) {
