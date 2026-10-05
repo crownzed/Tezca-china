@@ -2,7 +2,9 @@
 // VOCAB-LOADER — Hợp nhất data.js + vocab-bank + mega-vocab
 // Có xử lý lỗi, fallback nếu generator fail
 // ============================================================
+import { flashcardsData } from './data';
 import { getWords } from './api-core';
+import { generateMegaVocab } from './mega-vocab';
 
 let cachedAllCards = null;
 // Guard in-flight: hai lời gọi loadAllFlashcards() đồng thời (vd nhiều component
@@ -79,13 +81,19 @@ function mapBackendWord(w) {
   };
 }
 
-// Nguồn sự thật là DB backend (/api/words). Trả thẳng khi lấy được đủ từ; nếu
-// backend lỗi/ngủ (Render cold start) hoặc trả rỗng thì degrade sạch về file JS
-// local để app vẫn dùng offline được.
+const VOCAB_PAGE_SIZE = 500;
+
+// Nguồn sự thật là DB backend (/api/words). Endpoint cố ý phân trang để không
+// gửi ~5.7k từ trong một response; nạp hết các trang trước khi cache để HSK 5/6
+// không bị mất chỉ vì đứng sau 500 từ đầu theo thứ tự cấp.
 async function loadFromBackend() {
-  const data = await getWords();
-  const words = data?.words || [];
-  const cards = words.map(mapBackendWord).filter(isReliableCard);
+  const cards = [];
+  for (let offset = 0; ; offset += VOCAB_PAGE_SIZE) {
+    const data = await getWords(undefined, { offset, limit: VOCAB_PAGE_SIZE });
+    const words = Array.isArray(data?.words) ? data.words : [];
+    cards.push(...words.map(mapBackendWord).filter(isReliableCard));
+    if (words.length < VOCAB_PAGE_SIZE) break;
+  }
   return cards;
 }
 
@@ -118,24 +126,18 @@ async function _loadAllFlashcards() {
   }
 
   try {
-    const [dataModule, bankModule, megaModule] = await Promise.all([
-      import('./data'),
-      import('./vocab-bank'),
-      import('./mega-vocab')
-    ]);
-
-    const richCards = dataModule.flashcardsData || [];
-    const bankSets = [bankModule.hsk1, bankModule.hsk2, bankModule.hsk3, bankModule.hsk4, bankModule.hsk5];
-    const bankCards = bankSets.flat();
+    const richCards = flashcardsData || [];
 
     let megaCards = [];
     try {
-      megaCards = megaModule.generateMegaVocab(5000) || [];
-    } catch (e) {
-      console.warn('Mega vocab failed, using smaller pool:', e.message);
+      megaCards = generateMegaVocab(5000) || [];
+    } catch (err) {
+      console.warn('Mega vocab failed, using smaller pool:', err.message);
     }
 
-    return dedupeCards(withLocalIds([...richCards, ...bankCards, ...megaCards]));
+    // mega-vocab là fallback sáu cấp đầy đủ. Không ghép vocab-bank ở đây: nó chỉ
+    // có HSK 1–5 và từng làm nhánh offline thiếu toàn bộ HSK 6.
+    return dedupeCards(withLocalIds([...richCards, ...megaCards]));
   } catch (err) {
     console.error('Vocab loader error:', err);
     return [];

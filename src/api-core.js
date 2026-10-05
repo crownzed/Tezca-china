@@ -126,14 +126,15 @@ async function request(path, options = {}, retry = RETRY_BACKOFFS_MS.length) {
 }
 
 // Danh sách từ vựng HSK từ DB backend (nguồn sự thật). Chỉ trả từ đã có
-// meaning_vi. Ném lỗi khi backend không tới được để tầng gọi (vocab-loader)
-// degrade sạch về file JS local.
-export async function getWords(level) {
+// meaning_vi. `offset`/`limit` phản chiếu phân trang server để vocab-loader có
+// thể nạp đầy đủ kho thay vì chỉ giữ 200 từ đầu theo thứ tự HSK.
+export async function getWords(level, { offset, limit } = {}) {
   // level có thể là số đơn hoặc mảng nhiều cấp. Mảng => lặp param ?level=..&level=..
   const levels = Array.isArray(level) ? level : (level ? [level] : []);
-  const query = levels.length
-    ? `?${levels.map(value => `level=${encodeURIComponent(value)}`).join('&')}`
-    : '';
+  const queryParts = levels.map(value => `level=${encodeURIComponent(value)}`);
+  if (offset !== undefined) queryParts.push(`offset=${encodeURIComponent(offset)}`);
+  if (limit !== undefined) queryParts.push(`limit=${encodeURIComponent(limit)}`);
+  const query = queryParts.length ? `?${queryParts.join('&')}` : '';
   return request(`/api/words${query}`);
 }
 
