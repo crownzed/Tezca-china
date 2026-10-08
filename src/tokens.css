@@ -149,7 +149,22 @@
   --sp-5: 24px;
   --sp-6: 32px;
   --sp-7: 40px;
-  --sp-8: 56px;
+  /* Scoped study-surface aliases. Target pages use these instead of mixing
+     legacy glass/card tokens with page-specific overrides. */
+  --study-surface: var(--paper);
+  --study-surface-muted: var(--control-bg);
+  --study-surface-soft: color-mix(in srgb, var(--paper) 72%, var(--control-bg));
+  --study-border: var(--line);
+  --study-border-soft: var(--line-soft);
+  --study-text: var(--text);
+  --study-muted: var(--muted);
+  --study-dim: var(--dim);
+  --study-accent: var(--jade);
+  --study-accent-soft: var(--jade-soft);
+  --study-radius: 14px;
+  --study-radius-sm: 10px;
+  --study-shadow: var(--shadow-sm);
+  --study-space: clamp(20px, 3vw, 32px);
 }
 
 /* Chỉ liệt kê token có giá trị KHÁC light. Token dẫn xuất như

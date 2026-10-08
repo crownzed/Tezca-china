@@ -29,31 +29,6 @@ const HSK_LEVELS = [1, 2, 3, 4, 5, 6];
 const COUNT_OPTIONS = [5, 10, 15];
 const VOCAB_PLACEHOLDER = '苹果\n香蕉\n电脑';
 
-const inputStyle = {
-  width: '100%',
-  minHeight: '180px',
-  padding: '1rem',
-  borderRadius: '8px',
-  border: '1px solid var(--line)',
-  background: 'var(--paper)',
-  color: 'var(--text)',
-  fontFamily: 'inherit',
-  resize: 'vertical',
-};
-
-// Dropdown dùng chung — biến theme thật (var cũ --border-color/--card-bg không
-// tồn tại nên trên mobile select hiện trong suốt, không bấm được).
-const selectStyle = {
-  padding: '0.6rem 0.85rem',
-  borderRadius: '8px',
-  border: '1px solid var(--line)',
-  background: 'var(--paper)',
-  color: 'var(--text)',
-  fontWeight: 600,
-  minHeight: '44px',
-  minWidth: '140px',
-};
-
 export default function CustomVocabInput({ onSessionCreated }) {
   const [source, setSource] = useState('vocab');
   const [vocabText, setVocabText] = useState('');
@@ -168,243 +143,224 @@ export default function CustomVocabInput({ onSessionCreated }) {
   };
 
   return (
-    <main className="core-page page-enter">
-      <section className="core-card core-section-head">
-        <span className="core-eyebrow">Trung tâm tạo bài tập</span>
-        <h1>Tự tạo Quiz</h1>
-        <p>Chọn nguồn dữ liệu, tùy chỉnh tham số rồi để AI sinh bài trắc nghiệm. Xem trước rồi làm ngay: phiên chạy trực tiếp, không lưu.</p>
+    <main className="core-page page-enter study-page study-page--custom" aria-busy={loading}>
+      <section className="core-card core-section-head custom-section-head">
+        <span className="core-eyebrow">Tạo bài tập</span>
+        <h1>Tự tạo quiz</h1>
+        <p>Chọn nguồn, chỉnh mức phù hợp rồi xem trước bài trước khi bắt đầu.</p>
       </section>
 
-      {/* Bước 1: Chọn nguồn dữ liệu */}
-      <section className="core-card">
-        <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 'bold' }}>1. Nguồn dữ liệu</label>
-        <div className="segmented-control" role="tablist" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
-          {SOURCES.map(s => {
-            const Icon = s.icon;
-            const active = source === s.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => { setSource(s.id); setError(''); resetResult(); }}
-                className={active ? 'btn-primary' : 'btn-secondary'}
-                style={{ flex: '1 1 180px', justifyContent: 'center' }}
-              >
-                <Icon size={16} /> {s.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {source === 'vocab' && (
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-              Danh sách từ vựng (mỗi từ một dòng, hoặc cách nhau bởi dấu phẩy):
-            </label>
-            <textarea
-              value={vocabText}
-              onChange={(e) => setVocabText(e.target.value)}
-              disabled={loading}
-              placeholder={VOCAB_PLACEHOLDER}
-              style={inputStyle}
-            />
+      <div className="custom-builder">
+        <section className="core-card custom-panel custom-panel--source" aria-labelledby="custom-source-title">
+          <div className="custom-panel-heading">
+            <strong id="custom-source-title">Nguồn nội dung</strong>
+            <span>Chọn một</span>
           </div>
-        )}
-
-        {source === 'topic' && (
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-              Chủ đề:
-            </label>
-            <input
-              type="text"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              disabled={loading}
-              placeholder="Ví dụ: thói quen hằng ngày, mua sắm, du lịch..."
-              style={{ ...inputStyle, minHeight: 'auto', padding: '0.85rem 1rem' }}
-            />
-            <p className="hide-mobile" style={{ marginTop: '0.5rem', opacity: 0.7, fontSize: '0.85rem' }}>
-              AI sẽ tự viết một đoạn văn tiếng Trung theo chủ đề và cấp HSK đã chọn, rồi sinh câu hỏi từ đoạn văn đó.
-            </p>
+          <div className="custom-source-tabs" role="group" aria-label="Chọn nguồn tạo bài tập">
+            {SOURCES.map(s => {
+              const Icon = s.icon;
+              const active = source === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => { setSource(s.id); setError(''); resetResult(); }}
+                  className="custom-source-button"
+                  disabled={loading}
+                >
+                  <Icon size={16} strokeWidth={1.6} aria-hidden="true" /> {s.label}
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        {source === 'passage' && (
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-              Đoạn văn tiếng Trung:
-            </label>
-            <textarea
-              value={passage}
-              onChange={(e) => setPassage(e.target.value)}
-              disabled={loading}
-              placeholder="Dán đoạn văn tiếng Trung của bạn vào đây..."
-              style={inputStyle}
-            />
-          </div>
-        )}
-      </section>
-
-      {/* Bước 2: Tùy chỉnh tham số */}
-      <section className="core-card">
-        <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 'bold' }}>2. Tùy chỉnh</label>
-
-        {usesQuestionTypes && (
-          <div style={{ marginBottom: '1.25rem' }}>
-            <span style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Dạng câu hỏi:</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.5rem' }}>
-              {QUESTION_TYPES.map(t => (
-                <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedTypes.includes(t.id)}
-                    onChange={() => toggleType(t.id)}
-                    disabled={loading}
-                  />
-                  <span>{t.label}</span>
-                </label>
-              ))}
+          {source === 'vocab' && (
+            <div className="custom-field">
+              <label htmlFor="custom-vocab-list">Danh sách từ vựng</label>
+              <textarea
+                id="custom-vocab-list"
+                className="custom-input"
+                value={vocabText}
+                onChange={(e) => setVocabText(e.target.value)}
+                disabled={loading}
+                placeholder={VOCAB_PLACEHOLDER}
+              />
+              <p className="custom-help">Mỗi từ một dòng hoặc ngăn cách bằng dấu phẩy. Tối đa 20 từ mỗi lần.</p>
             </div>
-          </div>
-        )}
+          )}
 
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600 }}>Độ khó</label>
-            <HskLevelPicker
-              value={hskLevels}
-              onChange={setHskLevels}
-              levels={HSK_LEVELS}
-              variant="chip"
-              disabled={loading || source === 'vocab'}
-              className="vocab-hsk-tabs"
-              buttonClassName=""
-              ariaLabel="Chọn cấp HSK cho bài AI tạo"
-            />
-            <small style={{ display: 'block', marginTop: '0.4rem', color: 'var(--muted, #888)' }}>
-              AI viết bài theo cấp thấp nhất đã chọn (HSK {primaryLevel(hskLevels)}).
-            </small>
+          {source === 'topic' && (
+            <div className="custom-field">
+              <label htmlFor="custom-topic">Chủ đề</label>
+              <input
+                id="custom-topic"
+                className="custom-input custom-input--single"
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                disabled={loading}
+                placeholder="Ví dụ: thói quen hằng ngày, mua sắm, du lịch"
+              />
+              <p className="custom-help">AI sẽ viết đoạn tiếng Trung theo chủ đề và cấp HSK đã chọn, sau đó tạo câu hỏi từ đoạn đó.</p>
+            </div>
+          )}
+
+          {source === 'passage' && (
+            <div className="custom-field">
+              <label htmlFor="custom-passage">Đoạn văn tiếng Trung</label>
+              <textarea
+                id="custom-passage"
+                className="custom-input"
+                value={passage}
+                onChange={(e) => setPassage(e.target.value)}
+                disabled={loading}
+                placeholder="Dán đoạn văn tiếng Trung của bạn vào đây"
+              />
+              <p className="custom-help">Đoạn văn cần có ít nhất vài câu và không vượt quá 2.000 ký tự.</p>
+            </div>
+          )}
+        </section>
+
+        <section className="core-card custom-panel custom-panel--settings" aria-labelledby="custom-settings-title">
+          <div className="custom-panel-heading">
+            <strong id="custom-settings-title">Thiết lập</strong>
+            <span>Điều chỉnh</span>
           </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600 }}>Số lượng câu hỏi</label>
-            <select
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-              disabled={loading || source === 'vocab'}
-              style={selectStyle}
-            >
-              {COUNT_OPTIONS.map(c => <option key={c} value={c}>{c} câu</option>)}
-            </select>
+
+          <div className="custom-settings">
+            {usesQuestionTypes && (
+              <div className="custom-field">
+                <span className="custom-field-label">Dạng câu hỏi</span>
+                <div className="custom-question-types">
+                  {QUESTION_TYPES.map(t => (
+                    <label key={t.id} className="custom-question-option">
+                      <input
+                        type="checkbox"
+                        checked={selectedTypes.includes(t.id)}
+                        onChange={() => toggleType(t.id)}
+                        disabled={loading}
+                      />
+                      <span>{t.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="custom-settings-row">
+              <div className="custom-field">
+                <label htmlFor="custom-hsk-levels">Độ khó</label>
+                <HskLevelPicker
+                  value={hskLevels}
+                  onChange={setHskLevels}
+                  levels={HSK_LEVELS}
+                  variant="chip"
+                  disabled={loading || source === 'vocab'}
+                  className="vocab-hsk-tabs custom-level-picker"
+                  buttonClassName=""
+                  ariaLabel="Chọn cấp HSK cho bài AI tạo"
+                />
+                <p id="custom-hsk-levels" className="custom-help">AI viết theo HSK {primaryLevel(hskLevels)}.</p>
+              </div>
+              <div className="custom-field">
+                <label htmlFor="custom-question-count">Số câu</label>
+                <select
+                  id="custom-question-count"
+                  className="custom-select"
+                  value={count}
+                  onChange={(e) => setCount(Number(e.target.value))}
+                  disabled={loading || source === 'vocab'}
+                >
+                  {COUNT_OPTIONS.map(c => <option key={c} value={c}>{c} câu</option>)}
+                </select>
+              </div>
+            </div>
+
+            {source === 'vocab' && (
+              <p className="custom-help">Với danh sách từ, hệ thống tự suy độ khó và số câu từ nội dung bạn nhập.</p>
+            )}
           </div>
-        </div>
-        {source === 'vocab' && (
-          <p className="hide-mobile" style={{ marginTop: '0.75rem', opacity: 0.7, fontSize: '0.85rem' }}>
-            Nguồn từ vựng sinh bài tập theo từng từ (cấp độ & số lượng tự suy ra từ danh sách).
-          </p>
-        )}
-      </section>
+        </section>
+
+        <section className="core-card custom-action-panel" aria-live="polite">
+          <span className="custom-help">Bản nháp sẽ xuất hiện bên dưới. Bạn có thể xem trước trước khi làm.</span>
+          <button
+            className="btn-primary custom-generate-button"
+            type="button"
+            onClick={handleGenerate}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 size={18} className="spin" aria-hidden="true" />
+                Đang tạo quiz...
+              </>
+            ) : (
+              <>
+                <Sparkles size={18} strokeWidth={1.6} aria-hidden="true" /> Tạo quiz
+              </>
+            )}
+          </button>
+          {loading && <span className="custom-help" role="status">Quá trình này có thể mất 10-30 giây.</span>}
+        </section>
+      </div>
 
       {error && (
-        <div className="feedback-panel feedback-panel--error" style={{ marginBottom: '1rem' }}>
-          <p>{error}</p>
-        </div>
+        <p className="custom-error" role="alert">{error}</p>
       )}
 
-      {/* Bước 3: Nút tạo */}
-      <section className="core-card">
-        <button
-          className="btn-primary"
-          type="button"
-          onClick={handleGenerate}
-          disabled={loading}
-          style={{ width: '100%', justifyContent: 'center' }}
-        >
-          {loading ? (
-            <>
-              <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-              Đang tạo quiz (có thể mất 10-30 giây)...
-            </>
-          ) : (
-            <>
-              <Sparkles size={18} /> Tạo Quiz ngay
-            </>
-          )}
-        </button>
-      </section>
-
-      {/* Xem trước + Làm ngay */}
-      {draft && (
-        <QuizPreview draft={draft} onStartLive={handleStartLive} />
-      )}
+      {draft && <QuizPreview draft={draft} onStartLive={handleStartLive} />}
     </main>
   );
 }
 
 function QuizPreview({ draft, onStartLive }) {
   return (
-    <section className="core-card">
-      <div className="core-section-head" style={{ marginBottom: '1rem' }}>
+    <section className="core-card custom-preview" aria-label="Xem trước bài quiz">
+      <header className="custom-preview-head">
         <span className="core-eyebrow">Xem trước</span>
-        <h2 style={{ margin: '0.25rem 0' }}>{draft.quiz_title || 'Bài quiz mới'}</h2>
-        <p>{draft.questions.length} câu hỏi. Xem qua rồi bắt đầu làm ngay.</p>
-      </div>
+        <h2>{draft.quiz_title || 'Bài quiz mới'}</h2>
+        <p>{draft.questions.length} câu hỏi. Kiểm tra nhanh trước khi bắt đầu.</p>
+      </header>
 
       {draft.partial && (
-        <div className="feedback-panel" role="status" style={{ marginBottom: '1rem' }}>
+        <p className="custom-preview-status" role="status">
           <strong>Đã tạo {draft.generated_count}/{draft.requested_count} câu hỏi hợp lệ.</strong>
-          <p>Bạn có thể bắt đầu với các câu hỏi hiện có, hoặc thử tạo lại / đổi nội dung để có thêm câu hỏi.</p>
-        </div>
+          Bạn có thể bắt đầu ngay hoặc thay nội dung để tạo lại.
+        </p>
       )}
 
       {draft.passage && (
-        <div className="feedback-panel" style={{ marginBottom: '1rem', whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
-          <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Đoạn văn nguồn:</strong>
+        <p className="custom-preview-source">
+          <strong>Đoạn văn nguồn</strong>
           {draft.passage}
-        </div>
+        </p>
       )}
 
-      <ol style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <ol className="custom-question-list">
         {draft.questions.map((q, i) => (
-          <li key={i}>
-            <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>{q.prompt}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.4rem' }}>
+          <li key={i} className="custom-question">
+            <p className="custom-question-prompt">{q.prompt}</p>
+            <div className="custom-options">
               {q.options.map((opt, oi) => {
                 const isCorrect = oi === q.correct_index;
                 return (
-                  <div
-                    key={oi}
-                    style={{
-                      padding: '0.5rem 0.75rem',
-                      borderRadius: '8px',
-                      border: `1px solid ${isCorrect ? 'var(--modern-zen-primary, #2bb673)' : 'var(--line)'}`,
-                      background: isCorrect ? 'rgba(43, 182, 115, 0.12)' : 'transparent',
-                      fontWeight: isCorrect ? 700 : 400,
-                    }}
-                  >
+                  <div key={oi} className={`custom-option${isCorrect ? ' is-correct' : ''}`}>
                     {String.fromCharCode(65 + oi)}. {opt}
-                    {isCorrect && <CheckCircle2 size={14} style={{ marginLeft: '0.4rem', verticalAlign: 'middle' }} />}
+                    {isCorrect && <CheckCircle2 size={14} strokeWidth={1.6} aria-label="Đáp án đúng" />}
                   </div>
                 );
               })}
             </div>
-            {q.explanation && (
-              <p style={{ marginTop: '0.4rem', opacity: 0.75, fontSize: '0.85rem' }}>💡 {q.explanation}</p>
-            )}
+            {q.explanation && <p className="custom-explanation">{q.explanation}</p>}
           </li>
         ))}
       </ol>
 
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
-        <button
-          className="btn-primary"
-          type="button"
-          onClick={onStartLive}
-          style={{ flex: '1 1 220px', justifyContent: 'center' }}
-        >
-          <Play size={18} /> Bắt đầu làm bài
+      <div className="custom-preview-actions">
+        <button className="btn-primary" type="button" onClick={onStartLive}>
+          <Play size={18} strokeWidth={1.6} aria-hidden="true" /> Bắt đầu làm bài
         </button>
       </div>
     </section>

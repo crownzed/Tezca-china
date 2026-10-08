@@ -1112,7 +1112,7 @@ function TodayQueuePanel({ plan, selectedMode, onSelectMode, onStartToday }) {
 
 function Dashboard({ analytics, focusLevel, focusLevels, todayPlan, selectedSessionMode, showFirstRun, onSelectLevel, onOpenLessons, onStartGeneralCheck, onSkipFirstRun, onStartRecommended, onSelectSessionMode, onStartToday }) {
   return (
-    <main className="dash-page">
+    <main className="dash-page study-page study-page--dashboard">
       <LearningFocusPanel
         focusLevel={focusLevel}
         focusLevels={focusLevels}
@@ -3246,8 +3246,17 @@ function VocabLibrary({ focusLevels, theme }) {
     setIsDrawerOpen(false);
   };
 
+  useEffect(() => {
+    if (!isDrawerOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') closeDrawer();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isDrawerOpen]);
+
   return (
-    <main className="core-page page-enter">
+    <main className="core-page page-enter study-page study-page--vocab">
       <section className="core-card core-section-head vocab-head">
         <div>
           <span className="core-eyebrow">Vocabulary</span>
@@ -3272,8 +3281,9 @@ function VocabLibrary({ focusLevels, theme }) {
         </div>
       </section>
 
-      <section className="vocab-workspace">
-        <div className="vocab-grid">
+      <section className="vocab-layout">
+        <section className="vocab-workspace" aria-label="Danh sách từ vựng">
+          <div className="vocab-grid">
           {loading && <div className="empty-inline"><Loader2 size={18} className="spin" /> Đang tải từ vựng</div>}
           {!loading && loadError && (
             <div className="empty-inline vocab-load-error">
@@ -3292,22 +3302,29 @@ function VocabLibrary({ focusLevels, theme }) {
             </button>
           ))}
           {!loading && !loadError && !filtered.length && <div className="empty-inline">Không có kết quả phù hợp.</div>}
-        </div>
-      </section>
+          </div>
+        </section>
 
-      {/* Slide-over Drawer & Backdrop */}
-      {selectedWord && isDrawerOpen && (
-        <>
-          <div className="vocab-drawer-backdrop" onClick={closeDrawer} />
-          <div className="vocab-drawer">
+        {(!selectedWord || !isDrawerOpen) && (
+          <aside className="vocab-inspector-empty" aria-label="Chi tiết từ vựng">
+            <Search size={22} strokeWidth={1.6} aria-hidden="true" />
+            <strong>Chọn một từ để xem chi tiết</strong>
+            <p>Tra bộ thủ, ví dụ, cách dùng và luyện viết trong cùng một khung.</p>
+          </aside>
+        )}
+
+        {selectedWord && isDrawerOpen && (
+          <>
+            <div className="vocab-drawer-backdrop" onClick={closeDrawer} />
+            <div className="vocab-drawer" role="dialog" aria-modal="true" aria-labelledby="vocab-drawer-title">
             <div className="vocab-drawer-header">
               <div>
                 <span className="core-eyebrow">HSK {selectedWord.level}</span>
-                <h2><TonedPinyin pinyin={selectedWord.pinyin} /></h2>
+                <h2 id="vocab-drawer-title"><TonedPinyin pinyin={selectedWord.pinyin} /></h2>
                 <p>{selectedWord.meaning_vi}</p>
               </div>
-              <button className="vocab-drawer-close" type="button" onClick={closeDrawer} aria-label="Đóng Drawer">
-                &times;
+              <button className="vocab-drawer-close" type="button" onClick={closeDrawer} aria-label="Đóng chi tiết từ vựng">
+                <X size={18} strokeWidth={1.6} aria-hidden="true" />
               </button>
             </div>
             
@@ -3410,8 +3427,9 @@ function VocabLibrary({ focusLevels, theme }) {
               <HandwritingPad key={selectedWord.key} targetWord={selectedWord} theme={theme} />
             </div>
           </div>
-        </>
-      )}
+          </>
+        )}
+      </section>
     </main>
   );
 }
